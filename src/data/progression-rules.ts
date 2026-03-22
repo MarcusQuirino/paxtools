@@ -1,8 +1,8 @@
 export const STAGES = [
-  { id: "pista", name: "Pista", blocksRequired: 0, blocksToNext: 4 },
-  { id: "trilha", name: "Trilha", blocksRequired: 4, blocksToNext: 4 },
-  { id: "rumo", name: "Rumo", blocksRequired: 8, blocksToNext: 5 },
-  { id: "travessia", name: "Travessia", blocksRequired: 13, blocksToNext: 5 },
+  { id: "pista", name: "Pista", image: "/pista.png", blocksRequired: 0, blocksToNext: 4 },
+  { id: "trilha", name: "Trilha", image: "/trilha.png", blocksRequired: 4, blocksToNext: 4 },
+  { id: "rumo", name: "Rumo", image: "/rumo.png", blocksRequired: 8, blocksToNext: 5 },
+  { id: "travessia", name: "Travessia", image: "/travessia.png", blocksRequired: 13, blocksToNext: 5 },
 ] as const;
 
 export type Stage = (typeof STAGES)[number];

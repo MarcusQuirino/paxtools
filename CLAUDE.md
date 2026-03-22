@@ -32,10 +32,13 @@ Fix any failures before considering the task done.
 
 This project uses [Changesets](https://github.com/changesets/changesets) for versioning and changelog management. It is not published to npm, so never use `bun run release`.
 
+**IMPORTANT: Always create a changeset before committing any feature, fix, or meaningful change.** Do not commit without one.
+
 Workflow:
-1. After completing a feature or fix, run `bun run changeset` to record the change (choose `patch`, `minor`, or `major` and write a short description).
-2. Before a release, run `bun run version` to consume pending changesets, bump `package.json`, and generate/update `CHANGELOG.md`.
-3. Commit the resulting changes.
+1. After completing a feature or fix, create a changeset file in `.changeset/` (choose `patch`, `minor`, or `major` and write a short description).
+2. Include the changeset file in the same commit as the code changes.
+3. Before a release, run `bun run version` to consume pending changesets, bump `package.json`, and generate/update `CHANGELOG.md`.
+4. Commit the resulting changes.
 
 <!-- convex-ai-start -->
 This project uses [Convex](https://convex.dev) as its backend.

@@ -50,15 +50,19 @@ export function getCompletedBlockIds(
   const completed = new Set<string>();
   const specialtyBlocos = new Set(completedSpecialties.map((s) => s.blocoId));
 
+  const customCompletedByBloco = new Map<string, number>();
+  for (const c of customActions) {
+    if (c.completed) {
+      customCompletedByBloco.set(c.blocoId, (customCompletedByBloco.get(c.blocoId) ?? 0) + 1);
+    }
+  }
+
   for (const eixo of eixos) {
     for (const bloco of eixo.blocos) {
-      const customCompleted = customActions.filter(
-        (c) => c.blocoId === bloco.id && c.completed,
-      ).length;
       const progress = getBlocoProgress(
         bloco,
         completedActionIds,
-        customCompleted,
+        customCompletedByBloco.get(bloco.id) ?? 0,
         specialtyBlocos.has(bloco.id),
       );
       if (progress.isComplete) {
