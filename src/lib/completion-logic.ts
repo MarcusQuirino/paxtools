@@ -1,5 +1,10 @@
 import type { Bloco, Eixo } from "@/data/types";
-import { STAGES, LIS_DE_OURO_BLOCKS, type Stage } from "@/data/progression-rules";
+import {
+  STAGES,
+  LIS_DE_OURO_BLOCKS,
+  LIS_DE_OURO_ITEMS,
+  type Stage,
+} from "@/data/progression-rules";
 
 export type BlocoProgress = {
   fixedDone: number;
@@ -83,6 +88,21 @@ export function getNextStage(completedBlocks: number): Stage | null {
   return null;
 }
 
-export function isLisDeOuroEligible(completedBlocks: number): boolean {
+export function getBlocksToLisDeOuro(completedBlocks: number): number {
+  return Math.max(0, LIS_DE_OURO_BLOCKS - completedBlocks);
+}
+
+export function allBlocksCompleted(completedBlocks: number): boolean {
   return completedBlocks >= LIS_DE_OURO_BLOCKS;
+}
+
+export function isLisDeOuroComplete(
+  completedBlocks: number,
+  completedLisItemIds: Set<string>,
+): boolean {
+  if (!allBlocksCompleted(completedBlocks)) return false;
+
+  return LIS_DE_OURO_ITEMS.every((item) =>
+    item.auto ? true : completedLisItemIds.has(item.id),
+  );
 }

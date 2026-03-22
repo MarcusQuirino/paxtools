@@ -6,11 +6,11 @@ export function AuthButton() {
   return (
     <>
       <AuthLoading>
-        <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
+        <div className="size-8 animate-pulse rounded-full bg-muted" />
       </AuthLoading>
       <Suspense
         fallback={
-          <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
+          <div className="size-8 animate-pulse rounded-full bg-muted" />
         }
       >
         <UserMenu />

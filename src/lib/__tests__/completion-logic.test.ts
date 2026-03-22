@@ -5,7 +5,9 @@ import {
   getCompletedBlockIds,
   getCurrentStage,
   getNextStage,
-  isLisDeOuroEligible,
+  getBlocksToLisDeOuro,
+  allBlocksCompleted,
+  isLisDeOuroComplete,
 } from "@/lib/completion-logic";
 
 // ── Test Fixtures ──────────────────────────────────────────────
@@ -369,22 +371,73 @@ describe("getNextStage", () => {
   });
 });
 
-// ── isLisDeOuroEligible ────────────────────────────────────────
+// ── getBlocksToLisDeOuro ──────────────────────────────────────
 
-describe("isLisDeOuroEligible", () => {
+describe("getBlocksToLisDeOuro", () => {
+  it("returns 18 at 0 blocks completed", () => {
+    expect(getBlocksToLisDeOuro(0)).toBe(18);
+  });
+
+  it("returns 5 at 13 blocks (just entered Travessia)", () => {
+    expect(getBlocksToLisDeOuro(13)).toBe(5);
+  });
+
+  it("returns 1 at 17 blocks", () => {
+    expect(getBlocksToLisDeOuro(17)).toBe(1);
+  });
+
+  it("returns 0 at 18 blocks", () => {
+    expect(getBlocksToLisDeOuro(18)).toBe(0);
+  });
+
+  it("returns 0 beyond 18 blocks", () => {
+    expect(getBlocksToLisDeOuro(20)).toBe(0);
+  });
+});
+
+// ── allBlocksCompleted ────────────────────────────────────────
+
+describe("allBlocksCompleted", () => {
   it("returns false at 0", () => {
-    expect(isLisDeOuroEligible(0)).toBe(false);
+    expect(allBlocksCompleted(0)).toBe(false);
   });
 
   it("returns false at 17", () => {
-    expect(isLisDeOuroEligible(17)).toBe(false);
+    expect(allBlocksCompleted(17)).toBe(false);
   });
 
   it("returns true at 18", () => {
-    expect(isLisDeOuroEligible(18)).toBe(true);
+    expect(allBlocksCompleted(18)).toBe(true);
   });
 
   it("returns true at 19", () => {
-    expect(isLisDeOuroEligible(19)).toBe(true);
+    expect(allBlocksCompleted(19)).toBe(true);
+  });
+});
+
+// ── isLisDeOuroComplete ──────────────────────────────────────
+
+describe("isLisDeOuroComplete", () => {
+  const allManualItems = new Set([
+    "lis_promessa",
+    "lis_jornada",
+    "lis_autoavaliacao",
+    "lis_corte_honra",
+  ]);
+
+  it("returns false when blocks incomplete even with all items done", () => {
+    expect(isLisDeOuroComplete(17, allManualItems)).toBe(false);
+  });
+
+  it("returns false when blocks complete but no checklist items done", () => {
+    expect(isLisDeOuroComplete(18, new Set())).toBe(false);
+  });
+
+  it("returns false when blocks complete but only some items done", () => {
+    expect(isLisDeOuroComplete(18, new Set(["lis_promessa"]))).toBe(false);
+  });
+
+  it("returns true when blocks complete and all manual items done", () => {
+    expect(isLisDeOuroComplete(18, allManualItems)).toBe(true);
   });
 });

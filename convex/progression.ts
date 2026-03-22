@@ -6,7 +6,13 @@ export const getMyCompletions = query({
   args: {},
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) return { actions: [], specialties: [], customActions: [] };
+    if (!userId)
+      return {
+        actions: [],
+        specialties: [],
+        customActions: [],
+        lisDeOuroItems: [],
+      };
 
     const actions = await ctx.db
       .query("actionCompletions")
@@ -23,7 +29,12 @@ export const getMyCompletions = query({
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .take(1000);
 
-    return { actions, specialties, customActions };
+    const lisDeOuroItems = await ctx.db
+      .query("lisDeOuroCompletions")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .take(10);
+
+    return { actions, specialties, customActions, lisDeOuroItems };
   },
 });
 
@@ -124,5 +135,30 @@ export const deleteCustomAction = mutation({
     if (!doc || doc.userId !== userId) throw new Error("Não encontrado");
 
     await ctx.db.delete(args.customActionId);
+  },
+});
+
+export const toggleLisDeOuroItem = mutation({
+  args: { itemId: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Não autenticado");
+
+    const existing = await ctx.db
+      .query("lisDeOuroCompletions")
+      .withIndex("by_userId_and_itemId", (q) =>
+        q.eq("userId", userId).eq("itemId", args.itemId),
+      )
+      .unique();
+
+    if (existing) {
+      await ctx.db.delete(existing._id);
+    } else {
+      await ctx.db.insert("lisDeOuroCompletions", {
+        userId,
+        itemId: args.itemId,
+        completedAt: Date.now(),
+      });
+    }
   },
 });

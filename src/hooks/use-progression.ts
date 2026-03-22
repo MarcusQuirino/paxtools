@@ -7,7 +7,8 @@ import {
   getCompletedBlockIds,
   getCurrentStage,
   getNextStage,
-  isLisDeOuroEligible,
+  allBlocksCompleted,
+  isLisDeOuroComplete,
 } from "@/lib/completion-logic";
 
 export function useProgression() {
@@ -31,10 +32,16 @@ export function useProgression() {
     [completedActionIds, data.customActions, data.specialties],
   );
 
+  const completedLisItemIds = useMemo(
+    () => new Set(data.lisDeOuroItems.map((i) => i.itemId)),
+    [data.lisDeOuroItems],
+  );
+
   const completedBlockCount = completedBlockIds.size;
   const stage = getCurrentStage(completedBlockCount);
   const nextStage = getNextStage(completedBlockCount);
-  const lisDeOuro = isLisDeOuroEligible(completedBlockCount);
+  const blocksComplete = allBlocksCompleted(completedBlockCount);
+  const lisDeOuro = isLisDeOuroComplete(completedBlockCount, completedLisItemIds);
 
   return {
     completedActionIds,
@@ -42,8 +49,10 @@ export function useProgression() {
     customActions: data.customActions,
     completedBlockIds,
     completedBlockCount,
+    completedLisItemIds,
     stage,
     nextStage,
+    blocksComplete,
     lisDeOuro,
   };
 }

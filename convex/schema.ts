@@ -39,4 +39,12 @@ export default defineSchema({
   })
     .index("by_userId", ["userId"])
     .index("by_userId_and_blocoId", ["userId", "blocoId"]),
+
+  lisDeOuroCompletions: defineTable({
+    userId: v.id("users"),
+    itemId: v.string(),
+    completedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_and_itemId", ["userId", "itemId"]),
 });
