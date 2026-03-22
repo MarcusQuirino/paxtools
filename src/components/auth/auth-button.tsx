@@ -1,20 +1,25 @@
 import { Suspense } from "react";
-import { AuthLoading } from "convex/react";
+import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
 import { UserMenu } from "./user-menu";
+
+const AvatarSkeleton = () => (
+  <div className="size-8 animate-pulse rounded-full bg-muted" />
+);
 
 export function AuthButton() {
   return (
     <>
       <AuthLoading>
-        <div className="size-8 animate-pulse rounded-full bg-muted" />
+        <AvatarSkeleton />
       </AuthLoading>
-      <Suspense
-        fallback={
-          <div className="size-8 animate-pulse rounded-full bg-muted" />
-        }
-      >
-        <UserMenu />
-      </Suspense>
+      <Unauthenticated>
+        <AvatarSkeleton />
+      </Unauthenticated>
+      <Authenticated>
+        <Suspense fallback={<AvatarSkeleton />}>
+          <UserMenu />
+        </Suspense>
+      </Authenticated>
     </>
   );
 }

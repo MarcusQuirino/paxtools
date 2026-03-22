@@ -80,7 +80,7 @@ export function getCurrentStage(completedBlocks: number): Stage {
       return stage;
     }
   }
-  return STAGES[0];
+  return STAGES[0]!;
 }
 
 export function getNextStage(completedBlocks: number): Stage | null {

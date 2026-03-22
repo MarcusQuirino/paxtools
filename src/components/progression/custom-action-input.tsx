@@ -59,7 +59,7 @@ export function CustomActionInput({
           <button
             type="button"
             onClick={() => onDelete(action._id)}
-            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity p-1"
+            className="text-muted-foreground hover:text-destructive transition-opacity p-1 sm:opacity-0 sm:group-hover:opacity-100"
             aria-label="Remover"
           >
             <Trash2 className="size-4" />

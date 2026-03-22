@@ -28,7 +28,7 @@ function Home() {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      navigate({ to: "/signin" });
+      void navigate({ to: "/signin" });
     }
   }, [isLoading, isAuthenticated, navigate]);
 
