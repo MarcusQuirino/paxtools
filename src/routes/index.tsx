@@ -11,6 +11,7 @@ import { StageBanner } from "@/components/progression/stage-banner";
 import { OverallProgress } from "@/components/progression/overall-progress";
 import { EixoSection } from "@/components/progression/eixo-section";
 import { LisDeOuroSection } from "@/components/progression/lis-de-ouro-section";
+import { Footer } from "@/components/footer";
 import { EIXOS } from "@/data/progression-data";
 
 export const Route = createFileRoute("/")({
@@ -55,6 +56,7 @@ function Home() {
           <AuthButton />
         </header>
         <Dashboard />
+        <Footer />
       </div>
     </div>
   );

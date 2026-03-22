@@ -8,7 +8,6 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import "../../styles/globals.css";
-import { Footer } from "@/components/footer";
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -96,7 +95,6 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
         <ErrorBoundary>
           {children}
         </ErrorBoundary>
-        <Footer />
         <Scripts />
       </body>
     </html>
