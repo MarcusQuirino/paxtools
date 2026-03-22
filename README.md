@@ -220,15 +220,35 @@ A logica de conclusao e calculada no cliente via funcoes puras em `src/lib/compl
 ## Desenvolvimento
 
 ### Pre-requisitos
-- [Bun](https://bun.sh) instalado
-- Conta no [Convex](https://convex.dev) com projeto configurado
-- Credenciais Google OAuth configuradas no Convex Auth
+- [Bun](https://bun.sh) (v1.0+)
+- [Node.js](https://nodejs.org) (v22.12+)
+- Conta no [Convex](https://convex.dev)
 
 ### Instalacao
 
 ```bash
+# Clone o repositorio
+git clone https://github.com/MarcusQuirino/paxtools.git
+cd paxtools
+
+# Instale dependencias
 bun install
+
+# Configure o Convex (cria .env.local automaticamente)
+bunx convex dev --once
 ```
+
+Ou copie o `.env.example` e preencha manualmente:
+```bash
+cp .env.example .env.local
+```
+
+### Configurando Google OAuth
+
+1. Crie um projeto no [Google Cloud Console](https://console.cloud.google.com)
+2. Ative a API Google OAuth 2.0
+3. Crie credenciais OAuth (tipo Web Application)
+4. Configure no dashboard do Convex: [documentacao Convex Auth](https://labs.convex.dev/auth)
 
 ### Servidor de desenvolvimento
 
@@ -236,23 +256,12 @@ bun install
 bun dev
 ```
 
-Isso inicia simultaneamente:
-- Servidor Convex (backend)
-- Servidor Vite (frontend na porta 3000)
+Inicia simultaneamente o backend Convex e o frontend Vite na porta 3000.
 
 ### Build para producao
 
 ```bash
 bun run build
-```
-
-### Variaveis de ambiente
-
-O arquivo `.env.local` deve conter:
-```
-CONVEX_DEPLOYMENT=dev:seu-projeto
-VITE_CONVEX_URL=https://seu-projeto.convex.cloud
-VITE_CONVEX_SITE_URL=https://seu-projeto.convex.site
 ```
 
 ## Cores dos eixos
@@ -264,3 +273,21 @@ VITE_CONVEX_SITE_URL=https://seu-projeto.convex.site
 | Paz e Desenvolvimento | Azul Escuro | `#1A237E` |
 | Saude e Bem-estar | Salmao | `#E57373` |
 | Tema geral | Verde Escoteiro | `#4CAF50` |
+
+## Contribuindo
+
+Contribuicoes sao bem-vindas! Veja [CONTRIBUTING.md](CONTRIBUTING.md) para detalhes sobre como contribuir.
+
+### Areas que precisam de ajuda
+
+- Testes automatizados
+- Suporte a modalidades (Mar e Ar)
+- PWA / modo offline
+- Temas claro/escuro
+- Exportacao de progresso em PDF
+- Dashboard para escotistas (lideres)
+- Acessibilidade (a11y)
+
+## Licenca
+
+Este projeto esta licenciado sob a [MIT License](LICENSE).
