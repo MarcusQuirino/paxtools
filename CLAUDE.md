@@ -16,6 +16,27 @@ Default to using Bun instead of Node.js.
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
 
+## GitHub
+
+Always use the `gh` CLI to interface with GitHub (PRs, issues, releases, etc.). Never use the GitHub web UI or direct API calls.
+
+## Quality Checks
+
+After any code changes, always run:
+1. `bun test` — run the test suite
+2. `bun run lint` — check for lint errors
+
+Fix any failures before considering the task done.
+
+## Changesets
+
+This project uses [Changesets](https://github.com/changesets/changesets) for versioning and changelog management. It is not published to npm, so never use `bun run release`.
+
+Workflow:
+1. After completing a feature or fix, run `bun run changeset` to record the change (choose `patch`, `minor`, or `major` and write a short description).
+2. Before a release, run `bun run version` to consume pending changesets, bump `package.json`, and generate/update `CHANGELOG.md`.
+3. Commit the resulting changes.
+
 <!-- convex-ai-start -->
 This project uses [Convex](https://convex.dev) as its backend.
 

@@ -8,6 +8,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import "../../styles/globals.css";
+import { Footer } from "@/components/footer";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -45,6 +46,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
       </head>
       <body>
         {children}
+        <Footer />
         <Scripts />
       </body>
     </html>
