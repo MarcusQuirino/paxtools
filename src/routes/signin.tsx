@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
 import { SignInWithGoogle } from "@/components/auth/sign-in";
+import { Footer } from "@/components/footer";
 import { Compass, Map, Award, TrendingUp } from "lucide-react";
 
 export const Route = createFileRoute("/signin")({
@@ -121,10 +122,7 @@ function LoginPage({ loading = false }: { loading?: boolean }) {
           </div>
         </div>
 
-        {/* Footer */}
-        <p className="text-center text-green-200/30 text-xs mt-6">
-          Sempre Alerta
-        </p>
+        <Footer className="mt-6 text-center text-xs text-green-200/40" />
       </div>
     </div>
   );

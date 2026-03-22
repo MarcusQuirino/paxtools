@@ -32,10 +32,10 @@ const bugReportUrl = `${REPO_URL}/issues/new?${new URLSearchParams({
   labels: "bug",
 }).toString()}`;
 
-export function Footer() {
+export function Footer({ className }: { className?: string }) {
   return (
-    <footer className="py-6 text-center text-xs text-muted-foreground">
-      <p className="mb-2 text-muted-foreground/70">
+    <footer className={className ?? "py-6 text-center text-xs text-muted-foreground"}>
+      <p className="mb-2 opacity-70">
         Este serviço não é afiliado à UEB ou ao Paxtu. É um projeto pessoal de
         terceiros.
       </p>
