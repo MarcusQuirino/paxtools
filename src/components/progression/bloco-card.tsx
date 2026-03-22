@@ -1,4 +1,4 @@
-import type { Bloco } from "@/data/types";
+import type { Bloco, CustomAction } from "@/data/types";
 import {
   AccordionItem,
   AccordionTrigger,
@@ -12,19 +12,13 @@ import { getBlocoProgress } from "@/lib/completion-logic";
 import { Check } from "lucide-react";
 import type { Id } from "../../../convex/_generated/dataModel";
 
-type CustomAction = {
-  _id: Id<"customActions">;
-  blocoId: string;
-  text: string;
-  completed: boolean;
-};
-
 type BlocoCardProps = {
   bloco: Bloco;
   completedActionIds: Set<string>;
   customActions: CustomAction[];
   completedSpecialties: { blocoId: string; specialtyName: string }[];
   color: string;
+  colorLight: string;
   onToggleAction: (actionId: string) => void;
   onToggleSpecialty: (blocoId: string, specialtyName: string) => void;
   onAddCustom: (blocoId: string, text: string) => void;
@@ -38,6 +32,7 @@ export function BlocoCard({
   customActions,
   completedSpecialties,
   color,
+  colorLight,
   onToggleAction,
   onToggleSpecialty,
   onAddCustom,
@@ -101,6 +96,7 @@ export function BlocoCard({
           customActions={customActions}
           hasSpecialtyAlternative={hasSpecialty}
           color={color}
+          colorLight={colorLight}
           onToggleAction={onToggleAction}
           onAddCustom={onAddCustom}
           onToggleCustom={onToggleCustom}

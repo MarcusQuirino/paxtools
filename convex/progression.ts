@@ -16,12 +16,12 @@ export const getMyCompletions = query({
     const specialties = await ctx.db
       .query("specialtyCompletions")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(100);
+      .take(500);
 
     const customActions = await ctx.db
       .query("customActions")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(200);
+      .take(1000);
 
     return { actions, specialties, customActions };
   },
@@ -60,16 +60,16 @@ export const toggleSpecialty = mutation({
 
     const existing = await ctx.db
       .query("specialtyCompletions")
-      .withIndex("by_userId_and_blocoId", (q) =>
-        q.eq("userId", userId).eq("blocoId", args.blocoId),
+      .withIndex("by_userId_and_blocoId_and_specialtyName", (q) =>
+        q
+          .eq("userId", userId)
+          .eq("blocoId", args.blocoId)
+          .eq("specialtyName", args.specialtyName),
       )
-      .take(20);
+      .unique();
 
-    const match = existing.find(
-      (s) => s.specialtyName === args.specialtyName,
-    );
-    if (match) {
-      await ctx.db.delete(match._id);
+    if (existing) {
+      await ctx.db.delete(existing._id);
     } else {
       await ctx.db.insert("specialtyCompletions", {
         userId,
@@ -87,10 +87,14 @@ export const addCustomAction = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Não autenticado");
 
+    const text = args.text.trim();
+    if (!text) throw new Error("Texto vazio");
+    if (text.length > 500) throw new Error("Texto muito longo");
+
     return await ctx.db.insert("customActions", {
       userId,
       blocoId: args.blocoId,
-      text: args.text,
+      text,
       completed: false,
       createdAt: Date.now(),
     });

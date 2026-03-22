@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { SignInWithGoogle } from "./sign-in";
 import { UserMenu } from "./user-menu";
@@ -12,7 +13,13 @@ export function AuthButton() {
         <SignInWithGoogle />
       </Unauthenticated>
       <Authenticated>
-        <UserMenu />
+        <Suspense
+          fallback={
+            <div className="h-9 w-24 animate-pulse rounded-md bg-muted" />
+          }
+        >
+          <UserMenu />
+        </Suspense>
       </Authenticated>
     </>
   );

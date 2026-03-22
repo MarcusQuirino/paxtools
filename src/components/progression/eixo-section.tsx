@@ -1,15 +1,8 @@
-import type { Eixo } from "@/data/types";
+import type { Eixo, CustomAction } from "@/data/types";
 import { Accordion } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
 import { BlocoCard } from "./bloco-card";
 import type { Id } from "../../../convex/_generated/dataModel";
-
-type CustomAction = {
-  _id: Id<"customActions">;
-  blocoId: string;
-  text: string;
-  completed: boolean;
-};
 
 type EixoSectionProps = {
   eixo: Eixo;
@@ -68,6 +61,7 @@ export function EixoSection({
             customActions={customActions}
             completedSpecialties={completedSpecialties}
             color={eixo.color}
+            colorLight={eixo.colorLight}
             onToggleAction={onToggleAction}
             onToggleSpecialty={onToggleSpecialty}
             onAddCustom={onAddCustom}

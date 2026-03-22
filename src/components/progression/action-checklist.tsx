@@ -1,14 +1,7 @@
-import type { Bloco } from "@/data/types";
+import type { Bloco, CustomAction } from "@/data/types";
 import { ActionItem } from "./action-item";
 import { CustomActionInput } from "./custom-action-input";
 import type { Id } from "../../../convex/_generated/dataModel";
-
-type CustomAction = {
-  _id: Id<"customActions">;
-  blocoId: string;
-  text: string;
-  completed: boolean;
-};
 
 type ActionChecklistProps = {
   bloco: Bloco;
@@ -16,6 +9,7 @@ type ActionChecklistProps = {
   customActions: CustomAction[];
   hasSpecialtyAlternative: boolean;
   color: string;
+  colorLight: string;
   onToggleAction: (actionId: string) => void;
   onAddCustom: (blocoId: string, text: string) => void;
   onToggleCustom: (id: Id<"customActions">) => void;
@@ -28,6 +22,7 @@ export function ActionChecklist({
   customActions,
   hasSpecialtyAlternative,
   color,
+  colorLight,
   onToggleAction,
   onAddCustom,
   onToggleCustom,
@@ -69,7 +64,7 @@ export function ActionChecklist({
       <div>
         <div
           className="text-xs font-semibold uppercase tracking-wider px-3 py-2 rounded-t-md flex items-center justify-between"
-          style={{ backgroundColor: color + "20", color }}
+          style={{ backgroundColor: colorLight, color }}
         >
           <span>Ações Variáveis</span>
           <span className="text-xs font-normal">

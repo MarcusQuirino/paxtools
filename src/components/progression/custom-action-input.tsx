@@ -3,14 +3,8 @@ import { Plus, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import type { CustomAction } from "@/data/types";
 import type { Id } from "../../../convex/_generated/dataModel";
-
-type CustomAction = {
-  _id: Id<"customActions">;
-  blocoId: string;
-  text: string;
-  completed: boolean;
-};
 
 type CustomActionInputProps = {
   blocoId: string;

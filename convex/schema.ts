@@ -27,7 +27,8 @@ export default defineSchema({
     completedAt: v.number(),
   })
     .index("by_userId", ["userId"])
-    .index("by_userId_and_blocoId", ["userId", "blocoId"]),
+    .index("by_userId_and_blocoId", ["userId", "blocoId"])
+    .index("by_userId_and_blocoId_and_specialtyName", ["userId", "blocoId", "specialtyName"]),
 
   customActions: defineTable({
     userId: v.id("users"),

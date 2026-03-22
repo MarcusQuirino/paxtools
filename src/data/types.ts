@@ -1,3 +1,5 @@
+import type { Id } from "../../convex/_generated/dataModel";
+
 export type ActionType = "fixed" | "variable";
 
 export type Action = {
@@ -27,6 +29,12 @@ export type Eixo = {
   name: string;
   color: string;
   colorLight: string;
-  icon: string;
   blocos: Bloco[];
+};
+
+export type CustomAction = {
+  _id: Id<"customActions">;
+  blocoId: string;
+  text: string;
+  completed: boolean;
 };

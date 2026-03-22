@@ -3,7 +3,9 @@ import { useMutation } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { Authenticated, Unauthenticated } from "convex/react";
 import { AuthButton } from "@/components/auth/auth-button";
+import { SignInWithGoogle } from "@/components/auth/sign-in";
 import { useProgression } from "@/hooks/use-progression";
 import { StageBanner } from "@/components/progression/stage-banner";
 import { OverallProgress } from "@/components/progression/overall-progress";
@@ -27,7 +29,21 @@ function Home() {
           <h1 className="text-lg font-bold text-green-800">Paxtools</h1>
           <AuthButton />
         </header>
-        <Dashboard />
+        <Authenticated>
+          <Dashboard />
+        </Authenticated>
+        <Unauthenticated>
+          <div className="text-center space-y-4 py-12">
+            <h2 className="text-xl font-semibold text-gray-800">
+              Bem-vindo ao Paxtools!
+            </h2>
+            <p className="text-gray-600">
+              Acompanhe sua progressão pessoal no Ramo Escoteiro. Faça login
+              para começar.
+            </p>
+            <SignInWithGoogle />
+          </div>
+        </Unauthenticated>
       </div>
     </div>
   );

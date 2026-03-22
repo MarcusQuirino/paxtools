@@ -17,7 +17,6 @@ export const EIXOS: Eixo[] = [
     name: "Habilidades para a Vida",
     color: "#E91E63",
     colorLight: "#FCE4EC",
-    icon: "cog",
     blocos: [
       {
         id: "aprendizagem-continua",
@@ -129,7 +128,6 @@ export const EIXOS: Eixo[] = [
     name: "Meio Ambiente",
     color: "#4CAF50",
     colorLight: "#E8F5E9",
-    icon: "leaf",
     blocos: [
       {
         id: "consumo-responsavel",
@@ -254,7 +252,6 @@ export const EIXOS: Eixo[] = [
     name: "Paz e Desenvolvimento",
     color: "#1A237E",
     colorLight: "#E8EAF6",
-    icon: "dove",
     blocos: [
       {
         id: "comunidade",
@@ -382,7 +379,6 @@ export const EIXOS: Eixo[] = [
     name: "Saúde e Bem-estar",
     color: "#E57373",
     colorLight: "#FFEBEE",
-    icon: "heart-handshake",
     blocos: [
       {
         id: "cuidado-com-o-corpo",

@@ -1,11 +1,12 @@
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useQuery } from "convex/react";
+import { convexQuery } from "@convex-dev/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { api } from "../../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 
 export function UserMenu() {
   const { signOut } = useAuthActions();
-  const user = useQuery(api.users.viewer);
+  const { data: user } = useSuspenseQuery(convexQuery(api.users.viewer, {}));
 
   if (!user) return null;
 
