@@ -18,7 +18,7 @@ export function OverallProgress({ completedBlockIds }: OverallProgressProps) {
         return (
           <div
             key={eixo.id}
-            className="rounded-lg border p-3 space-y-2"
+            className="rounded-lg border bg-card p-3 space-y-2"
             style={{ borderLeftWidth: 4, borderLeftColor: eixo.color }}
           >
             <p className="text-xs font-semibold truncate">{eixo.name}</p>

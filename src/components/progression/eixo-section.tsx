@@ -35,7 +35,7 @@ export function EixoSection({
   const percent = (completedInEixo / eixo.blocos.length) * 100;
 
   return (
-    <section className="rounded-xl overflow-hidden border shadow-sm">
+    <section className="rounded-xl overflow-hidden border bg-card shadow-sm">
       <div
         className="px-4 py-3 text-white"
         style={{ backgroundColor: eixo.color }}
