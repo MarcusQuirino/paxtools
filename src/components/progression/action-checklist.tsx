@@ -1,4 +1,4 @@
-import type { Bloco, CustomAction } from "@/data/types";
+import type { Bloco, CustomAction, CompletionStatus } from "@/data/types";
 import { ActionItem } from "./action-item";
 import { CustomActionInput } from "./custom-action-input";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -6,6 +6,7 @@ import type { Id } from "../../../convex/_generated/dataModel";
 type ActionChecklistProps = {
   bloco: Bloco;
   completedActionIds: Set<string>;
+  actionStatusMap: Map<string, CompletionStatus>;
   customActions: CustomAction[];
   hasSpecialtyAlternative: boolean;
   color: string;
@@ -19,6 +20,7 @@ type ActionChecklistProps = {
 export function ActionChecklist({
   bloco,
   completedActionIds,
+  actionStatusMap,
   customActions,
   hasSpecialtyAlternative,
   color,
@@ -53,6 +55,7 @@ export function ActionChecklist({
                 id={action.id}
                 text={action.text}
                 checked={completedActionIds.has(action.id)}
+                status={actionStatusMap.get(action.id)}
                 onToggle={() => onToggleAction(action.id)}
                 color={color}
               />
@@ -80,6 +83,7 @@ export function ActionChecklist({
               id={action.id}
               text={action.text}
               checked={completedActionIds.has(action.id)}
+              status={actionStatusMap.get(action.id)}
               onToggle={() => onToggleAction(action.id)}
               color={color}
             />

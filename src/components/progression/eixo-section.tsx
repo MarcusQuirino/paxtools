@@ -1,4 +1,4 @@
-import type { Eixo, CustomAction } from "@/data/types";
+import type { Eixo, CustomAction, CompletionStatus } from "@/data/types";
 import { Accordion } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
 import { BlocoCard } from "./bloco-card";
@@ -6,10 +6,17 @@ import type { Id } from "../../../convex/_generated/dataModel";
 
 type EixoSectionProps = {
   eixo: Eixo;
-  completedActionIds: Set<string>;
+  approvedActionIds: Set<string>;
+  pendingActionIds: Set<string>;
+  actionStatusMap: Map<string, CompletionStatus>;
   completedBlockIds: Set<string>;
+  pendingBlockIds: Set<string>;
   customActions: CustomAction[];
-  completedSpecialties: { blocoId: string; specialtyName: string }[];
+  completedSpecialties: {
+    blocoId: string;
+    specialtyName: string;
+    status: CompletionStatus;
+  }[];
   onToggleAction: (actionId: string) => void;
   onToggleSpecialty: (blocoId: string, specialtyName: string) => void;
   onAddCustom: (blocoId: string, text: string) => void;
@@ -19,8 +26,11 @@ type EixoSectionProps = {
 
 export function EixoSection({
   eixo,
-  completedActionIds,
+  approvedActionIds,
+  pendingActionIds,
+  actionStatusMap,
   completedBlockIds,
+  pendingBlockIds,
   customActions,
   completedSpecialties,
   onToggleAction,
@@ -29,10 +39,16 @@ export function EixoSection({
   onToggleCustom,
   onDeleteCustom,
 }: EixoSectionProps) {
-  const completedInEixo = eixo.blocos.filter((b) =>
+  const approvedInEixo = eixo.blocos.filter((b) =>
     completedBlockIds.has(b.id),
   ).length;
-  const percent = (completedInEixo / eixo.blocos.length) * 100;
+  const pendingInEixo = eixo.blocos.filter((b) =>
+    pendingBlockIds.has(b.id),
+  ).length;
+  const total = eixo.blocos.length;
+
+  const approvedPercent = (approvedInEixo / total) * 100;
+  const pendingPercent = (pendingInEixo / total) * 100;
 
   return (
     <section className="rounded-xl overflow-hidden border bg-card shadow-sm">
@@ -43,12 +59,14 @@ export function EixoSection({
         <div className="flex items-center justify-between">
           <h2 className="font-bold text-base">{eixo.name}</h2>
           <span className="text-xs opacity-90">
-            {completedInEixo}/{eixo.blocos.length} blocos
+            {approvedInEixo}/{total} blocos
+            {pendingInEixo > 0 && ` (+${pendingInEixo} pendente${pendingInEixo > 1 ? "s" : ""})`}
           </span>
         </div>
         <Progress
-          value={percent}
-          className="mt-2 h-1.5 bg-white/30 [&>[data-slot=progress-indicator]]:bg-white"
+          value={approvedPercent}
+          pendingValue={pendingPercent}
+          className="mt-2 h-1.5 bg-white/30 [&>[data-slot=progress-indicator]]:bg-white [&>[data-slot=progress-indicator-pending]]:bg-white"
         />
       </div>
 
@@ -57,7 +75,9 @@ export function EixoSection({
           <BlocoCard
             key={bloco.id}
             bloco={bloco}
-            completedActionIds={completedActionIds}
+            approvedActionIds={approvedActionIds}
+            pendingActionIds={pendingActionIds}
+            actionStatusMap={actionStatusMap}
             customActions={customActions}
             completedSpecialties={completedSpecialties}
             color={eixo.color}

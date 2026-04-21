@@ -5,26 +5,32 @@ import {
   LIS_DE_OURO_ITEMS,
   LIS_DE_OURO_COLOR,
 } from "@/data/progression-rules";
-import { Check, Lock, Trophy } from "lucide-react";
+import { Check, Clock, Lock, Trophy } from "lucide-react";
 
 type LisDeOuroSectionProps = {
   blocksComplete: boolean;
-  completedLisItemIds: Set<string>;
+  approvedLisItemIds: Set<string>;
+  pendingLisItemIds: Set<string>;
   lisDeOuro: boolean;
   onToggleItem: (itemId: string) => void;
 };
 
 export function LisDeOuroSection({
   blocksComplete,
-  completedLisItemIds,
+  approvedLisItemIds,
+  pendingLisItemIds,
   lisDeOuro,
   onToggleItem,
 }: LisDeOuroSectionProps) {
-  const completedCount = LIS_DE_OURO_ITEMS.filter((item) =>
-    item.auto ? blocksComplete : completedLisItemIds.has(item.id),
+  const approvedCount = LIS_DE_OURO_ITEMS.filter((item) =>
+    item.auto ? blocksComplete : approvedLisItemIds.has(item.id),
+  ).length;
+  const pendingCount = LIS_DE_OURO_ITEMS.filter(
+    (item) => !item.auto && pendingLisItemIds.has(item.id),
   ).length;
   const totalCount = LIS_DE_OURO_ITEMS.length;
-  const percent = (completedCount / totalCount) * 100;
+  const approvedPercent = (approvedCount / totalCount) * 100;
+  const pendingPercent = (pendingCount / totalCount) * 100;
 
   return (
     <section className="rounded-xl overflow-hidden border bg-card shadow-sm">
@@ -44,13 +50,15 @@ export function LisDeOuroSection({
             </Badge>
           ) : (
             <span className="text-xs opacity-90">
-              {completedCount}/{totalCount} requisitos
+              {approvedCount}/{totalCount} requisitos
+              {pendingCount > 0 && ` (+${pendingCount})`}
             </span>
           )}
         </div>
         <Progress
-          value={percent}
-          className="mt-2 h-1.5 bg-white/30 [&>[data-slot=progress-indicator]]:bg-white"
+          value={approvedPercent}
+          pendingValue={pendingPercent}
+          className="mt-2 h-1.5 bg-white/30 [&>[data-slot=progress-indicator]]:bg-white [&>[data-slot=progress-indicator-pending]]:bg-white"
         />
       </div>
 
@@ -66,9 +74,11 @@ export function LisDeOuroSection({
 
         {LIS_DE_OURO_ITEMS.map((item) => {
           const isAutoItem = item.auto;
-          const isChecked = isAutoItem
+          const isApproved = isAutoItem
             ? blocksComplete
-            : completedLisItemIds.has(item.id);
+            : approvedLisItemIds.has(item.id);
+          const isPending = !isAutoItem && pendingLisItemIds.has(item.id);
+          const isChecked = isApproved || isPending;
           const isDisabled = !blocksComplete;
 
           return (
@@ -94,15 +104,25 @@ export function LisDeOuroSection({
                     ? {
                         backgroundColor: LIS_DE_OURO_COLOR,
                         borderColor: LIS_DE_OURO_COLOR,
+                        opacity: isPending ? 0.4 : 1,
                       }
                     : undefined
                 }
               />
               <span
-                className={`text-sm leading-relaxed ${isChecked ? "line-through text-muted-foreground" : ""}`}
+                className={`text-sm leading-relaxed flex-1 ${
+                  isChecked
+                    ? isPending
+                      ? "text-muted-foreground/60"
+                      : "line-through text-muted-foreground"
+                    : ""
+                }`}
               >
                 {item.text}
               </span>
+              {isPending && (
+                <Clock className="size-3.5 text-amber-500 mt-0.5 shrink-0" />
+              )}
             </label>
           );
         })}

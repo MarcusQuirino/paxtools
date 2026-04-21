@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -27,13 +27,37 @@ function Home() {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      void navigate({ to: "/signin" });
-    }
-  }, [isLoading, isAuthenticated, navigate]);
+  const { data: user } = useSuspenseQuery(convexQuery(api.users.viewer, {}));
 
-  if (isLoading || !isAuthenticated) {
+  // Redirect based on auth/role state
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (!isAuthenticated) {
+      void navigate({ to: "/signin" });
+      return;
+    }
+
+    if (!user) return;
+
+    if (!user.onboardingComplete) {
+      void navigate({ to: "/onboarding" });
+      return;
+    }
+
+    if (user.role === "escotista") {
+      void navigate({ to: "/escotista" });
+    }
+  }, [isLoading, isAuthenticated, user, navigate]);
+
+  // Show skeleton while loading OR while user needs onboarding/redirect
+  if (
+    isLoading ||
+    !isAuthenticated ||
+    !user ||
+    !user.onboardingComplete ||
+    user.role === "escotista"
+  ) {
     return (
       <div className="min-h-screen bg-background">
         <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
@@ -62,19 +86,24 @@ function Home() {
   );
 }
 
-function Dashboard() {
+export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
   const {
-    completedActionIds,
+    approvedActionIds,
+    pendingActionIds,
+    actionStatusMap,
     completedSpecialties,
     customActions,
     completedBlockIds,
+    pendingBlockIds,
     completedBlockCount,
-    completedLisItemIds,
+    pendingBlockCount,
+    approvedLisItemIds,
+    pendingLisItemIds,
     stage,
     nextStage,
     blocksComplete,
     lisDeOuro,
-  } = useProgression();
+  } = useProgression(targetUserId);
 
   const toggleActionFn = useConvexMutation(api.progression.toggleAction);
   const { mutate: toggleAction } = useMutation({ mutationFn: toggleActionFn });
@@ -101,27 +130,27 @@ function Dashboard() {
   });
 
   const handleToggleAction = (actionId: string) => {
-    toggleAction({ actionId });
+    toggleAction({ actionId, targetUserId });
   };
 
   const handleToggleSpecialty = (blocoId: string, specialtyName: string) => {
-    toggleSpecialty({ blocoId, specialtyName });
+    toggleSpecialty({ blocoId, specialtyName, targetUserId });
   };
 
   const handleAddCustom = (blocoId: string, text: string) => {
-    addCustom({ blocoId, text });
+    addCustom({ blocoId, text, targetUserId });
   };
 
   const handleToggleCustom = (id: Id<"customActions">) => {
-    toggleCustom({ customActionId: id });
+    toggleCustom({ customActionId: id, targetUserId });
   };
 
   const handleDeleteCustom = (id: Id<"customActions">) => {
-    deleteCustom({ customActionId: id });
+    deleteCustom({ customActionId: id, targetUserId });
   };
 
   const handleToggleLisItem = (itemId: string) => {
-    toggleLisItem({ itemId });
+    toggleLisItem({ itemId, targetUserId });
   };
 
   return (
@@ -130,17 +159,24 @@ function Dashboard() {
         stage={stage}
         nextStage={nextStage}
         completedBlockCount={completedBlockCount}
+        pendingBlockCount={pendingBlockCount}
         lisDeOuro={lisDeOuro}
       />
 
-      <OverallProgress completedBlockIds={completedBlockIds} />
+      <OverallProgress
+        completedBlockIds={completedBlockIds}
+        pendingBlockIds={pendingBlockIds}
+      />
 
       {EIXOS.map((eixo) => (
         <EixoSection
           key={eixo.id}
           eixo={eixo}
-          completedActionIds={completedActionIds}
+          approvedActionIds={approvedActionIds}
+          pendingActionIds={pendingActionIds}
+          actionStatusMap={actionStatusMap}
           completedBlockIds={completedBlockIds}
+          pendingBlockIds={pendingBlockIds}
           customActions={customActions}
           completedSpecialties={completedSpecialties}
           onToggleAction={handleToggleAction}
@@ -153,7 +189,8 @@ function Dashboard() {
 
       <LisDeOuroSection
         blocksComplete={blocksComplete}
-        completedLisItemIds={completedLisItemIds}
+        approvedLisItemIds={approvedLisItemIds}
+        pendingLisItemIds={pendingLisItemIds}
         lisDeOuro={lisDeOuro}
         onToggleItem={handleToggleLisItem}
       />

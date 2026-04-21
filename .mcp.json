@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "convex": {
+      "type": "stdio",
+      "command": "/opt/homebrew/bin/bunx",
+      "args": [
+        "convex",
+        "mcp",
+        "start",
+        "--project-dir",
+        "/Users/marcusfilipus/Developer/projects/paxtools"
+      ],
+      "env": {}
+    }
+  }
+}

@@ -10,11 +10,32 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SigninRouteImport } from './routes/signin'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as EscotistaRouteRouteImport } from './routes/escotista/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EscotistaIndexRouteImport } from './routes/escotista/index'
+import { Route as EscotistaPendingRouteImport } from './routes/escotista/pending'
+import { Route as EscotistaEscoteiroEscoteiroIdRouteImport } from './routes/escotista/escoteiro.$escoteiroId'
 
 const SigninRoute = SigninRouteImport.update({
   id: '/signin',
   path: '/signin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EscotistaRouteRoute = EscotistaRouteRouteImport.update({
+  id: '/escotista',
+  path: '/escotista',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -22,30 +43,90 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EscotistaIndexRoute = EscotistaIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => EscotistaRouteRoute,
+} as any)
+const EscotistaPendingRoute = EscotistaPendingRouteImport.update({
+  id: '/pending',
+  path: '/pending',
+  getParentRoute: () => EscotistaRouteRoute,
+} as any)
+const EscotistaEscoteiroEscoteiroIdRoute =
+  EscotistaEscoteiroEscoteiroIdRouteImport.update({
+    id: '/escoteiro/$escoteiroId',
+    path: '/escoteiro/$escoteiroId',
+    getParentRoute: () => EscotistaRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/escotista': typeof EscotistaRouteRouteWithChildren
+  '/onboarding': typeof OnboardingRoute
+  '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
+  '/escotista/pending': typeof EscotistaPendingRoute
+  '/escotista/': typeof EscotistaIndexRoute
+  '/escotista/escoteiro/$escoteiroId': typeof EscotistaEscoteiroEscoteiroIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/onboarding': typeof OnboardingRoute
+  '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
+  '/escotista/pending': typeof EscotistaPendingRoute
+  '/escotista': typeof EscotistaIndexRoute
+  '/escotista/escoteiro/$escoteiroId': typeof EscotistaEscoteiroEscoteiroIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/escotista': typeof EscotistaRouteRouteWithChildren
+  '/onboarding': typeof OnboardingRoute
+  '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
+  '/escotista/pending': typeof EscotistaPendingRoute
+  '/escotista/': typeof EscotistaIndexRoute
+  '/escotista/escoteiro/$escoteiroId': typeof EscotistaEscoteiroEscoteiroIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/signin'
+  fullPaths:
+    | '/'
+    | '/escotista'
+    | '/onboarding'
+    | '/settings'
+    | '/signin'
+    | '/escotista/pending'
+    | '/escotista/'
+    | '/escotista/escoteiro/$escoteiroId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/signin'
-  id: '__root__' | '/' | '/signin'
+  to:
+    | '/'
+    | '/onboarding'
+    | '/settings'
+    | '/signin'
+    | '/escotista/pending'
+    | '/escotista'
+    | '/escotista/escoteiro/$escoteiroId'
+  id:
+    | '__root__'
+    | '/'
+    | '/escotista'
+    | '/onboarding'
+    | '/settings'
+    | '/signin'
+    | '/escotista/pending'
+    | '/escotista/'
+    | '/escotista/escoteiro/$escoteiroId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  EscotistaRouteRoute: typeof EscotistaRouteRouteWithChildren
+  OnboardingRoute: typeof OnboardingRoute
+  SettingsRoute: typeof SettingsRoute
   SigninRoute: typeof SigninRoute
 }
 
@@ -58,6 +139,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SigninRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/escotista': {
+      id: '/escotista'
+      path: '/escotista'
+      fullPath: '/escotista'
+      preLoaderRoute: typeof EscotistaRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -65,11 +167,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/escotista/': {
+      id: '/escotista/'
+      path: '/'
+      fullPath: '/escotista/'
+      preLoaderRoute: typeof EscotistaIndexRouteImport
+      parentRoute: typeof EscotistaRouteRoute
+    }
+    '/escotista/pending': {
+      id: '/escotista/pending'
+      path: '/pending'
+      fullPath: '/escotista/pending'
+      preLoaderRoute: typeof EscotistaPendingRouteImport
+      parentRoute: typeof EscotistaRouteRoute
+    }
+    '/escotista/escoteiro/$escoteiroId': {
+      id: '/escotista/escoteiro/$escoteiroId'
+      path: '/escoteiro/$escoteiroId'
+      fullPath: '/escotista/escoteiro/$escoteiroId'
+      preLoaderRoute: typeof EscotistaEscoteiroEscoteiroIdRouteImport
+      parentRoute: typeof EscotistaRouteRoute
+    }
   }
 }
 
+interface EscotistaRouteRouteChildren {
+  EscotistaPendingRoute: typeof EscotistaPendingRoute
+  EscotistaIndexRoute: typeof EscotistaIndexRoute
+  EscotistaEscoteiroEscoteiroIdRoute: typeof EscotistaEscoteiroEscoteiroIdRoute
+}
+
+const EscotistaRouteRouteChildren: EscotistaRouteRouteChildren = {
+  EscotistaPendingRoute: EscotistaPendingRoute,
+  EscotistaIndexRoute: EscotistaIndexRoute,
+  EscotistaEscoteiroEscoteiroIdRoute: EscotistaEscoteiroEscoteiroIdRoute,
+}
+
+const EscotistaRouteRouteWithChildren = EscotistaRouteRoute._addFileChildren(
+  EscotistaRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  EscotistaRouteRoute: EscotistaRouteRouteWithChildren,
+  OnboardingRoute: OnboardingRoute,
+  SettingsRoute: SettingsRoute,
   SigninRoute: SigninRoute,
 }
 export const routeTree = rootRouteImport

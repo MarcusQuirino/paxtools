@@ -1,0 +1,35 @@
+- generic [ref=e8]:
+  - generic [ref=e9]:
+    - img "Paxtools" [ref=e11]
+    - heading "Paxtools" [level=1] [ref=e12]
+    - paragraph [ref=e13]: Progressão Pessoal · Ramo Escoteiro
+  - generic [ref=e14]:
+    - generic [ref=e15]:
+      - heading "Bem-vindo de volta" [level=2] [ref=e16]
+      - paragraph [ref=e17]: Faça login para continuar sua jornada
+    - generic [ref=e18]:
+      - generic [ref=e19]:
+        - img [ref=e20]
+        - paragraph [ref=e23]: Trilha Pessoal
+        - paragraph [ref=e24]: Acompanhe cada passo da sua progressão
+      - generic [ref=e25]:
+        - img [ref=e26]
+        - paragraph [ref=e28]: Eixos de Desenvolvimento
+        - paragraph [ref=e29]: Visualize seu progresso por eixo
+      - generic [ref=e30]:
+        - img [ref=e31]
+        - paragraph [ref=e34]: Especialidades
+        - paragraph [ref=e35]: Registre suas conquistas e especialidades
+      - generic [ref=e36]:
+        - img [ref=e37]
+        - paragraph [ref=e40]: Etapas
+        - paragraph [ref=e41]: Veja sua evolução rumo à próxima etapa
+  - contentinfo [ref=e44]:
+    - paragraph [ref=e45]: Este serviço não é afiliado à UEB ou ao Paxtu. É um projeto pessoal de terceiros.
+    - generic [ref=e46]:
+      - generic [ref=e47]: v0.1.0
+      - generic [ref=e48]: "|"
+      - link "Reportar um bug" [ref=e49] [cursor=pointer]:
+        - /url: https://github.com/MarcusQuirino/paxtools/issues/new?title=%5BBug%5D+&body=%23%23+O+que+aconteceu%3F%0A%3C%21--+Descreva+o+problema+que+voc%C3%AA+encontrou.+Seja+o+mais+claro+poss%C3%ADvel.+--%3E%0A%0A%0A%23%23+O+que+voc%C3%AA+esperava+que+acontecesse%3F%0A%3C%21--+Descreva+o+comportamento+que+voc%C3%AA+esperava.+--%3E%0A%0A%0A%23%23+Passos+para+reproduzir%0A%3C%21--+Liste+os+passos+que+levaram+ao+problema%3A+--%3E%0A1.+Abri+a+p%C3%A1gina+%22...%22%0A2.+Cliquei+em+%22...%22%0A3.+Vi+o+erro+%22...%22%0A%0A%23%23+Captura+de+tela%0A%3C%21--+Se+poss%C3%ADvel%2C+cole+uma+imagem+ou+captura+de+tela+do+problema+aqui+%28voc%C3%AA+pode+colar+diretamente%29.+--%3E%0A%0A%0A%23%23+Informa%C3%A7%C3%B5es+do+dispositivo%0A-+**Aparelho**%3A+%3C%21--+ex%3A+iPhone+15%2C+computador+Windows%2C+MacBook+--%3E%0A-+**Navegador**%3A+%3C%21--+ex%3A+Chrome%2C+Safari%2C+Firefox+--%3E%0A-+**Vers%C3%A3o+do+app**%3A+0.1.0%0A&labels=bug
+        - img [ref=e50]
+        - text: Reportar um bug

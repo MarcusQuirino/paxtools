@@ -7,6 +7,7 @@ type StageBannerProps = {
   stage: Stage;
   nextStage: Stage | null;
   completedBlockCount: number;
+  pendingBlockCount: number;
   lisDeOuro: boolean;
 };
 
@@ -14,9 +15,11 @@ export function StageBanner({
   stage,
   nextStage,
   completedBlockCount,
+  pendingBlockCount,
   lisDeOuro,
 }: StageBannerProps) {
-  const percent = (completedBlockCount / LIS_DE_OURO_BLOCKS) * 100;
+  const approvedPercent = (completedBlockCount / LIS_DE_OURO_BLOCKS) * 100;
+  const pendingPercent = (pendingBlockCount / LIS_DE_OURO_BLOCKS) * 100;
 
   if (lisDeOuro) {
     return (
@@ -52,6 +55,7 @@ export function StageBanner({
         </div>
         <span className="text-xs opacity-80">
           {completedBlockCount}/{LIS_DE_OURO_BLOCKS} blocos
+          {pendingBlockCount > 0 && ` (+${pendingBlockCount})`}
         </span>
       </div>
 
@@ -84,10 +88,16 @@ export function StageBanner({
           );
         })}
 
-        <div className="h-2 w-full rounded-full bg-white/30">
+        <div className="h-2 w-full rounded-full bg-white/30 relative overflow-hidden">
+          {pendingPercent > 0 && (
+            <div
+              className="absolute inset-0 h-full rounded-full bg-white/30 transition-all"
+              style={{ width: `${approvedPercent + pendingPercent}%` }}
+            />
+          )}
           <div
-            className="h-full rounded-full bg-white transition-all"
-            style={{ width: `${percent}%` }}
+            className="absolute inset-0 h-full rounded-full bg-white transition-all"
+            style={{ width: `${approvedPercent}%` }}
           />
         </div>
       </div>

@@ -1,0 +1,119 @@
+- generic [ref=e3]:
+  - generic [ref=e5]:
+    - generic [ref=e8]:
+      - img "Google" [ref=e10]
+      - generic [ref=e11]: Sign in with Google
+    - generic [ref=e12]:
+      - generic [ref=e14]:
+        - heading "Sign in" [level=1] [ref=e15]
+        - paragraph [ref=e16]:
+          - text: to continue to
+          - button "handsome-walrus-236.convex.site" [ref=e17] [cursor=pointer]
+      - generic [ref=e18]:
+        - generic [ref=e21]:
+          - generic [ref=e26]:
+            - textbox "Email or phone" [active] [ref=e27]
+            - generic:
+              - generic: Email or phone
+          - paragraph [ref=e28]:
+            - link "Forgot email?" [ref=e29] [cursor=pointer]:
+              - /url: /signin/v2/usernamerecovery?app_domain=https://handsome-walrus-236.convex.site&client_id=27035785847-9lfjaia4th8uqc4utfgg1ro90pu3ljna.apps.googleusercontent.com&code_challenge=Z-kQrvB5D94L0AJFZhqQf_qUijYCwIWNaraMpO7JmCQ&code_challenge_method=S256&continue=https://accounts.google.com/signin/oauth/legacy/consent?authuser%3Dunknown%26part%3DAJi8hAO0-UmyJIbGbmLDrKCMWCAVN2X9j5EqblISg6T6DXeI1r1PW227A_-U2EgQonf-6HHlRqWzhoiFE8dK84ahoRJXDnARuH1ZhxaKtJiuiY8LjN0JOTnd1G4n6QRX_xWDMw2e66ERIr5fSXkNJ693UdnwaT14iNtUtmXaauhle8twqSZOvEzBvGg6NhMgLQYxikkGIaBvIexnS89_40Ci-2yk7fwXm0S2vtOuJngqySuZ8hVkERSN6JsHuEBUd3VCwEu4Iye2x_-I_ZoI13jfMx5CkdymOt5XkJSEkmpvI5jGpOFTxMxc0CttfNWsXvfw1QTnBJjNzg5TYDV74WXyIzmHy7GmZcEUMvQ1I6mUOjgSoM2mYLqO9yOOFHhaGB6PB1Cag2oOaTiY0UWwHTw8AgfkZEq3DWkiMSuGySSJsVDCC5Mfhm4kyrI237I8Z37_RgIk4AK9L1nqQIM_AWk4sRdR58wBFyc_nfXuyccg_hUneiiu_4w%26flowName%3DGeneralOAuthFlow%26as%3DS1832203742%253A1776814307952011%26client_id%3D27035785847-9lfjaia4th8uqc4utfgg1ro90pu3ljna.apps.googleusercontent.com%23&dsh=S1832203742:1776814307952011&flowName=GeneralOAuthLite&o2v=2&opparams=%253F&rart=ANgoxcefKlBi8qIDNsR9URAjvpQT71dRmvdqA0afK2AENkfh96Rdjg9MpgVShw_tlzRrYct9AitYTpJNH8ucD6oBzJmNEvTMvJfqx6x5PjBmffcaaRUMjdY&redirect_uri=https://handsome-walrus-236.convex.site/api/auth/callback/google&response_type=code&scope=openid+profile+email&service=lso
+        - generic [ref=e31]:
+          - button "Next" [ref=e33]
+          - link "Create account" [ref=e35] [cursor=pointer]:
+            - /url: /lifecycle/flows/signup?app_domain=https://handsome-walrus-236.convex.site&client_id=27035785847-9lfjaia4th8uqc4utfgg1ro90pu3ljna.apps.googleusercontent.com&code_challenge=Z-kQrvB5D94L0AJFZhqQf_qUijYCwIWNaraMpO7JmCQ&code_challenge_method=S256&continue=https://accounts.google.com/signin/oauth/legacy/consent?authuser%3Dunknown%26part%3DAJi8hAO0-UmyJIbGbmLDrKCMWCAVN2X9j5EqblISg6T6DXeI1r1PW227A_-U2EgQonf-6HHlRqWzhoiFE8dK84ahoRJXDnARuH1ZhxaKtJiuiY8LjN0JOTnd1G4n6QRX_xWDMw2e66ERIr5fSXkNJ693UdnwaT14iNtUtmXaauhle8twqSZOvEzBvGg6NhMgLQYxikkGIaBvIexnS89_40Ci-2yk7fwXm0S2vtOuJngqySuZ8hVkERSN6JsHuEBUd3VCwEu4Iye2x_-I_ZoI13jfMx5CkdymOt5XkJSEkmpvI5jGpOFTxMxc0CttfNWsXvfw1QTnBJjNzg5TYDV74WXyIzmHy7GmZcEUMvQ1I6mUOjgSoM2mYLqO9yOOFHhaGB6PB1Cag2oOaTiY0UWwHTw8AgfkZEq3DWkiMSuGySSJsVDCC5Mfhm4kyrI237I8Z37_RgIk4AK9L1nqQIM_AWk4sRdR58wBFyc_nfXuyccg_hUneiiu_4w%26flowName%3DGeneralOAuthFlow%26as%3DS1832203742%253A1776814307952011%26client_id%3D27035785847-9lfjaia4th8uqc4utfgg1ro90pu3ljna.apps.googleusercontent.com%23&dsh=S1832203742:1776814307952011&flowEntry=SignUp&flowName=GlifWebSignIn&o2v=2&opparams=%253F&rart=ANgoxcefKlBi8qIDNsR9URAjvpQT71dRmvdqA0afK2AENkfh96Rdjg9MpgVShw_tlzRrYct9AitYTpJNH8ucD6oBzJmNEvTMvJfqx6x5PjBmffcaaRUMjdY&redirect_uri=https://handsome-walrus-236.convex.site/api/auth/callback/google&response_type=code&scope=openid+profile+email&service=lso&signInUrl=https://accounts.google.com/signin/oauth?app_domain%3Dhttps://handsome-walrus-236.convex.site%26client_id%3D27035785847-9lfjaia4th8uqc4utfgg1ro90pu3ljna.apps.googleusercontent.com%26code_challenge%3DZ-kQrvB5D94L0AJFZhqQf_qUijYCwIWNaraMpO7JmCQ%26code_challenge_method%3DS256%26continue%3Dhttps://accounts.google.com/signin/oauth/legacy/consent?authuser%253Dunknown%2526part%253DAJi8hAO0-UmyJIbGbmLDrKCMWCAVN2X9j5EqblISg6T6DXeI1r1PW227A_-U2EgQonf-6HHlRqWzhoiFE8dK84ahoRJXDnARuH1ZhxaKtJiuiY8LjN0JOTnd1G4n6QRX_xWDMw2e66ERIr5fSXkNJ693UdnwaT14iNtUtmXaauhle8twqSZOvEzBvGg6NhMgLQYxikkGIaBvIexnS89_40Ci-2yk7fwXm0S2vtOuJngqySuZ8hVkERSN6JsHuEBUd3VCwEu4Iye2x_-I_ZoI13jfMx5CkdymOt5XkJSEkmpvI5jGpOFTxMxc0CttfNWsXvfw1QTnBJjNzg5TYDV74WXyIzmHy7GmZcEUMvQ1I6mUOjgSoM2mYLqO9yOOFHhaGB6PB1Cag2oOaTiY0UWwHTw8AgfkZEq3DWkiMSuGySSJsVDCC5Mfhm4kyrI237I8Z37_RgIk4AK9L1nqQIM_AWk4sRdR58wBFyc_nfXuyccg_hUneiiu_4w%2526flowName%253DGeneralOAuthFlow%2526as%253DS1832203742%25253A1776814307952011%2526client_id%253D27035785847-9lfjaia4th8uqc4utfgg1ro90pu3ljna.apps.googleusercontent.com%2523%26dsh%3DS1832203742:1776814307952011%26flowName%3DGeneralOAuthLite%26o2v%3D2%26opparams%3D%25253F%26rart%3DANgoxcefKlBi8qIDNsR9URAjvpQT71dRmvdqA0afK2AENkfh96Rdjg9MpgVShw_tlzRrYct9AitYTpJNH8ucD6oBzJmNEvTMvJfqx6x5PjBmffcaaRUMjdY%26redirect_uri%3Dhttps://handsome-walrus-236.convex.site/api/auth/callback/google%26response_type%3Dcode%26scope%3Dopenid%2Bprofile%2Bemail%26service%3Dlso
+  - contentinfo [ref=e36]:
+    - combobox [ref=e39] [cursor=pointer]:
+      - option "Afrikaans"
+      - option "azərbaycan"
+      - option "bosanski"
+      - option "català"
+      - option "Čeština"
+      - option "Cymraeg"
+      - option "Dansk"
+      - option "Deutsch"
+      - option "eesti"
+      - option "English (United Kingdom)"
+      - option "English (United States)" [selected]
+      - option "Español (España)"
+      - option "Español (Latinoamérica)"
+      - option "euskara"
+      - option "Filipino"
+      - option "Français (Canada)"
+      - option "Français (France)"
+      - option "Gaeilge"
+      - option "galego"
+      - option "Hrvatski"
+      - option "Indonesia"
+      - option "isiZulu"
+      - option "íslenska"
+      - option "Italiano"
+      - option "Kiswahili"
+      - option "latviešu"
+      - option "lietuvių"
+      - option "magyar"
+      - option "Melayu"
+      - option "Nederlands"
+      - option "norsk"
+      - option "o‘zbek"
+      - option "polski"
+      - option "Português (Brasil)"
+      - option "Português (Portugal)"
+      - option "română"
+      - option "shqip"
+      - option "Slovenčina"
+      - option "slovenščina"
+      - option "srpski (latinica)"
+      - option "Suomi"
+      - option "Svenska"
+      - option "Tiếng Việt"
+      - option "Türkçe"
+      - option "Ελληνικά"
+      - option "беларуская"
+      - option "български"
+      - option "кыргызча"
+      - option "қазақ тілі"
+      - option "македонски"
+      - option "монгол"
+      - option "Русский"
+      - option "српски (ћирилица)"
+      - option "Українська"
+      - option "ქართული"
+      - option "հայերեն"
+      - option "‫עברית‬‎"
+      - option "‫اردو‬‎"
+      - option "‫العربية‬‎"
+      - option "‫فارسی‬‎"
+      - option "አማርኛ"
+      - option "नेपाली"
+      - option "मराठी"
+      - option "हिन्दी"
+      - option "অসমীয়া"
+      - option "বাংলা"
+      - option "ਪੰਜਾਬੀ"
+      - option "ગુજરાતી"
+      - option "ଓଡ଼ିଆ"
+      - option "தமிழ்"
+      - option "తెలుగు"
+      - option "ಕನ್ನಡ"
+      - option "മലയാളം"
+      - option "සිංහල"
+      - option "ไทย"
+      - option "ລາວ"
+      - option "မြန်မာ"
+      - option "ខ្មែរ"
+      - option "한국어"
+      - option "中文（香港）"
+      - option "日本語"
+      - option "简体中文"
+      - option "繁體中文"
+    - list [ref=e40]:
+      - listitem [ref=e41]:
+        - link "Help" [ref=e42] [cursor=pointer]:
+          - /url: https://support.google.com/accounts?hl=en-US&p=account_iph
+      - listitem [ref=e43]:
+        - link "Privacy" [ref=e44] [cursor=pointer]:
+          - /url: https://accounts.google.com/TOS?loc=BR&hl=en-US&privacy=true
+      - listitem [ref=e45]:
+        - link "Terms" [ref=e46] [cursor=pointer]:
+          - /url: https://accounts.google.com/TOS?loc=BR&hl=en-US

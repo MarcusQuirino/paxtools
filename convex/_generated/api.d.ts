@@ -8,8 +8,12 @@
  * @module
  */
 
+import type * as approvals from "../approvals.js";
 import type * as auth from "../auth.js";
+import type * as groups from "../groups.js";
 import type * as http from "../http.js";
+import type * as lib_authHelpers from "../lib/authHelpers.js";
+import type * as onboarding from "../onboarding.js";
 import type * as progression from "../progression.js";
 import type * as users from "../users.js";
 
@@ -20,8 +24,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  approvals: typeof approvals;
   auth: typeof auth;
+  groups: typeof groups;
   http: typeof http;
+  "lib/authHelpers": typeof lib_authHelpers;
+  onboarding: typeof onboarding;
   progression: typeof progression;
   users: typeof users;
 }>;
