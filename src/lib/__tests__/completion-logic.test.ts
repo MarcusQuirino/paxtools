@@ -48,13 +48,15 @@ function makeEixo(blocos: Bloco[]): Eixo {
   };
 }
 
+const emptyPending = new Set<string>();
+
 // ── getBlocoProgress ───────────────────────────────────────────
 
 describe("getBlocoProgress", () => {
   const bloco = makeBloco();
 
   it("returns zeros when nothing is completed", () => {
-    const result = getBlocoProgress(bloco, new Set(), 0, false);
+    const result = getBlocoProgress(bloco, new Set(), emptyPending, 0, 0, false, false);
 
     expect(result.fixedDone).toBe(0);
     expect(result.fixedTotal).toBe(2);
@@ -65,7 +67,7 @@ describe("getBlocoProgress", () => {
 
   it("tracks fixed action completion count", () => {
     const completed = new Set(["test-bloco:fixed:0"]);
-    const result = getBlocoProgress(bloco, completed, 0, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false, false);
 
     expect(result.fixedDone).toBe(1);
     expect(result.fixedTotal).toBe(2);
@@ -77,7 +79,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:variable:0",
       "test-bloco:variable:1",
     ]);
-    const result = getBlocoProgress(bloco, completed, 0, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false, false);
 
     expect(result.variableDone).toBe(2);
   });
@@ -89,7 +91,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:variable:0",
       "test-bloco:variable:1",
     ]);
-    const result = getBlocoProgress(bloco, completed, 0, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false, false);
 
     expect(result.isComplete).toBe(true);
   });
@@ -100,7 +102,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:fixed:1",
       "test-bloco:variable:0",
     ]);
-    const result = getBlocoProgress(bloco, completed, 0, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false, false);
 
     expect(result.isComplete).toBe(false);
   });
@@ -111,7 +113,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:variable:0",
       "test-bloco:variable:1",
     ]);
-    const result = getBlocoProgress(bloco, completed, 0, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false, false);
 
     expect(result.isComplete).toBe(false);
   });
@@ -123,7 +125,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:variable:0",
     ]);
     // 1 variable action + 1 custom = 2, meets threshold of 2
-    const result = getBlocoProgress(bloco, completed, 1, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 1, 0, false, false);
 
     expect(result.variableDone).toBe(2);
     expect(result.isComplete).toBe(true);
@@ -135,7 +137,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:fixed:1",
     ]);
     // 0 variable done, but specialty alternative = true
-    const result = getBlocoProgress(bloco, completed, 0, true);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, true, false);
 
     expect(result.variableDone).toBe(0);
     expect(result.isComplete).toBe(true);
@@ -143,7 +145,7 @@ describe("getBlocoProgress", () => {
 
   it("specialty alternative does NOT bypass fixed requirement", () => {
     const completed = new Set(["test-bloco:fixed:0"]);
-    const result = getBlocoProgress(bloco, completed, 0, true);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, true, false);
 
     expect(result.isComplete).toBe(false);
   });
@@ -154,7 +156,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:fixed:0",
       "test-bloco:fixed:1",
     ]);
-    const result = getBlocoProgress(noVarBloco, completed, 0, false);
+    const result = getBlocoProgress(noVarBloco, completed, emptyPending, 0, 0, false, false);
 
     expect(result.isComplete).toBe(true);
   });
@@ -165,7 +167,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:variable:0",
       "test-bloco:variable:1",
     ]);
-    const result = getBlocoProgress(noFixedBloco, completed, 0, false);
+    const result = getBlocoProgress(noFixedBloco, completed, emptyPending, 0, 0, false, false);
 
     expect(result.isComplete).toBe(true);
   });
@@ -175,7 +177,7 @@ describe("getBlocoProgress", () => {
       "other-bloco:fixed:0",
       "other-bloco:variable:0",
     ]);
-    const result = getBlocoProgress(bloco, completed, 0, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false, false);
 
     expect(result.fixedDone).toBe(0);
     expect(result.variableDone).toBe(0);
@@ -188,22 +190,47 @@ describe("getBlocoProgress", () => {
       "test-bloco:variable:0",
       "test-bloco:variable:1",
     ]);
-    const result = getBlocoProgress(bloco, completed, 0, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false, false);
 
     expect(result.variableDone).toBe(2);
     expect(result.variableRequired).toBe(2);
     expect(result.isComplete).toBe(true);
+  });
+
+  it("pending items track separately", () => {
+    const approved = new Set(["test-bloco:fixed:0"]);
+    const pending = new Set(["test-bloco:fixed:1"]);
+    const result = getBlocoProgress(bloco, approved, pending, 0, 0, false, false);
+
+    expect(result.fixedDone).toBe(1);
+    expect(result.fixedPending).toBe(1);
+    expect(result.isComplete).toBe(false);
+    expect(result.isPendingComplete).toBe(false);
+  });
+
+  it("isPendingComplete when approved + pending would satisfy requirements", () => {
+    const approved = new Set(["test-bloco:fixed:0"]);
+    const pending = new Set([
+      "test-bloco:fixed:1",
+      "test-bloco:variable:0",
+      "test-bloco:variable:1",
+    ]);
+    const result = getBlocoProgress(bloco, approved, pending, 0, 0, false, false);
+
+    expect(result.isComplete).toBe(false);
+    expect(result.isPendingComplete).toBe(true);
   });
 });
 
 // ── getCompletedBlockIds ───────────────────────────────────────
 
 describe("getCompletedBlockIds", () => {
-  it("returns empty set when nothing completed", () => {
+  it("returns empty sets when nothing completed", () => {
     const eixos = [makeEixo([makeBloco()])];
-    const result = getCompletedBlockIds(eixos, new Set(), [], []);
+    const result = getCompletedBlockIds(eixos, new Set(), emptyPending, [], []);
 
-    expect(result.size).toBe(0);
+    expect(result.approved.size).toBe(0);
+    expect(result.pending.size).toBe(0);
   });
 
   it("identifies completed blocks across multiple eixos", () => {
@@ -225,10 +252,10 @@ describe("getCompletedBlockIds", () => {
       "bloco-2:variable:1",
     ]);
 
-    const result = getCompletedBlockIds(eixos, completed, [], []);
-    expect(result.has("bloco-1")).toBe(true);
-    expect(result.has("bloco-2")).toBe(true);
-    expect(result.size).toBe(2);
+    const result = getCompletedBlockIds(eixos, completed, emptyPending, [], []);
+    expect(result.approved.has("bloco-1")).toBe(true);
+    expect(result.approved.has("bloco-2")).toBe(true);
+    expect(result.approved.size).toBe(2);
   });
 
   it("custom actions contribute only to their bloco", () => {
@@ -245,8 +272,8 @@ describe("getCompletedBlockIds", () => {
       { blocoId: "test-bloco", completed: true },
     ];
 
-    const result = getCompletedBlockIds(eixos, completed, customActions, []);
-    expect(result.has("test-bloco")).toBe(true);
+    const result = getCompletedBlockIds(eixos, completed, emptyPending, customActions, []);
+    expect(result.approved.has("test-bloco")).toBe(true);
   });
 
   it("ignores custom actions where completed is false", () => {
@@ -263,9 +290,9 @@ describe("getCompletedBlockIds", () => {
       { blocoId: "test-bloco", completed: false },
     ];
 
-    const result = getCompletedBlockIds(eixos, completed, customActions, []);
+    const result = getCompletedBlockIds(eixos, completed, emptyPending, customActions, []);
     // Only 1 variable done, needs 2 -- not complete
-    expect(result.has("test-bloco")).toBe(false);
+    expect(result.approved.has("test-bloco")).toBe(false);
   });
 
   it("specialty completions bypass variable for matching bloco", () => {
@@ -281,10 +308,11 @@ describe("getCompletedBlockIds", () => {
     const result = getCompletedBlockIds(
       eixos,
       completed,
+      emptyPending,
       [],
-      [{ blocoId: "test-bloco" }],
+      [{ blocoId: "test-bloco", status: "approved" }],
     );
-    expect(result.has("test-bloco")).toBe(true);
+    expect(result.approved.has("test-bloco")).toBe(true);
   });
 
   it("does not mark incomplete blocks", () => {
@@ -300,10 +328,10 @@ describe("getCompletedBlockIds", () => {
       // incomplete-bloco has nothing
     ]);
 
-    const result = getCompletedBlockIds(eixos, completed, [], []);
-    expect(result.has("complete-bloco")).toBe(true);
-    expect(result.has("incomplete-bloco")).toBe(false);
-    expect(result.size).toBe(1);
+    const result = getCompletedBlockIds(eixos, completed, emptyPending, [], []);
+    expect(result.approved.has("complete-bloco")).toBe(true);
+    expect(result.approved.has("incomplete-bloco")).toBe(false);
+    expect(result.approved.size).toBe(1);
   });
 });
 

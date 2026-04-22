@@ -1,0 +1,189 @@
+[     819ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3001/node_modules/.vite/deps/react-dom_client.js?v=451ed1be:14337
+[     874ms] Error: Switched to client rendering because the server rendering errored:
+
+[Request ID: 13b51a95f73816fd] Server Error
+Uncaught Error: Não autenticado
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:85:14)
+
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:85:14)
+
+    at ConvexHttpClient.queryInner (file:///Users/marcusfilipus/Developer/projects/paxtools/node_modules/convex/dist/esm/browser/http_client.js:250:15)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at ConvexHttpClient.consistentQuery (file:///Users/marcusfilipus/Developer/projects/paxtools/node_modules/convex/dist/esm/browser/http_client.js:167:12)
+    at file:///Users/marcusfilipus/Developer/projects/paxtools/node_modules/@convex-dev/react-query/dist/esm/index.js:222:32
+[    1861ms] [ERROR] %o
+
+%s
+
+%s
+ Error: [CONVEX Q(groups:getMyGroup)] [Request ID: 66c8e8a8c9fc2a1f] Server Error
+Uncaught Error: Não autenticado
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:85:14)
+
+  Called by client
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:85:14)
+
+  Called by client
+    at OptimisticQueryResults.queryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:816:10)
+    at BaseConvexClient.localQueryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2212:38)
+    at Object.localQueryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2935:49)
+    at ConvexQueryClient.onUpdateQueryKeyHash (http://localhost:3001/node_modules/.vite/deps/@convex-dev_react-query.js?v=451ed1be:68:18)
+    at http://localhost:3001/node_modules/.vite/deps/@convex-dev_react-query.js?v=451ed1be:109:12
+    at ConvexReactClient.transition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:3117:53)
+    at ConvexReactClient.handleTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:3112:8)
+    at PaginatedQueryClient.onTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2861:100)
+    at PaginatedQueryClient.onBaseTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2595:8)
+    at http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2487:59 The above error occurred in the <SettingsPage> component. React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary. @ http://localhost:3001/node_modules/.vite/deps/react-dom_client.js?v=451ed1be:5273
+[    1861ms] [ERROR] App error: Error: [CONVEX Q(groups:getMyGroup)] [Request ID: 66c8e8a8c9fc2a1f] Server Error
+Uncaught Error: Não autenticado
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:85:14)
+
+  Called by client
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:85:14)
+
+  Called by client
+    at OptimisticQueryResults.queryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:816:10)
+    at BaseConvexClient.localQueryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2212:38)
+    at Object.localQueryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2935:49)
+    at ConvexQueryClient.onUpdateQueryKeyHash (http://localhost:3001/node_modules/.vite/deps/@convex-dev_react-query.js?v=451ed1be:68:18)
+    at http://localhost:3001/node_modules/.vite/deps/@convex-dev_react-query.js?v=451ed1be:109:12
+    at ConvexReactClient.transition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:3117:53)
+    at ConvexReactClient.handleTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:3112:8)
+    at PaginatedQueryClient.onTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2861:100)
+    at PaginatedQueryClient.onBaseTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2595:8)
+    at http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2487:59 {componentStack: 
+    at SettingsPage (http://localhost:3001/src/ro…=451ed1be:20:12)
+    at StartClient (<anonymous>)} @ http://localhost:3001/src/routes/__root.tsx?t=1776814036146:15
+[   37251ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3001/node_modules/.vite/deps/react-dom_client.js?v=451ed1be:14337
+[   37283ms] Error: Switched to client rendering because the server rendering errored:
+
+[Request ID: 7441c08321023cb4] Server Error
+Uncaught Error: Não autenticado
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:85:14)
+
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:85:14)
+
+    at ConvexHttpClient.queryInner (file:///Users/marcusfilipus/Developer/projects/paxtools/node_modules/convex/dist/esm/browser/http_client.js:250:15)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at ConvexHttpClient.consistentQuery (file:///Users/marcusfilipus/Developer/projects/paxtools/node_modules/convex/dist/esm/browser/http_client.js:167:12)
+    at file:///Users/marcusfilipus/Developer/projects/paxtools/node_modules/@convex-dev/react-query/dist/esm/index.js:222:32
+[   37997ms] [ERROR] %o
+
+%s
+
+%s
+ Error: [CONVEX Q(groups:getMyGroup)] [Request ID: db6d5c8fa45e4022] Server Error
+Uncaught Error: Não autenticado
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:85:14)
+
+  Called by client
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:85:14)
+
+  Called by client
+    at OptimisticQueryResults.queryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:816:10)
+    at BaseConvexClient.localQueryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2212:38)
+    at Object.localQueryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2935:49)
+    at ConvexQueryClient.onUpdateQueryKeyHash (http://localhost:3001/node_modules/.vite/deps/@convex-dev_react-query.js?v=451ed1be:68:18)
+    at http://localhost:3001/node_modules/.vite/deps/@convex-dev_react-query.js?v=451ed1be:109:12
+    at ConvexReactClient.transition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:3117:53)
+    at ConvexReactClient.handleTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:3112:8)
+    at PaginatedQueryClient.onTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2861:100)
+    at PaginatedQueryClient.onBaseTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2595:8)
+    at http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2487:59 The above error occurred in the <SettingsPage> component. React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary. @ http://localhost:3001/node_modules/.vite/deps/react-dom_client.js?v=451ed1be:5273
+[   37998ms] [ERROR] App error: Error: [CONVEX Q(groups:getMyGroup)] [Request ID: db6d5c8fa45e4022] Server Error
+Uncaught Error: Não autenticado
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:85:14)
+
+  Called by client
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:85:14)
+
+  Called by client
+    at OptimisticQueryResults.queryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:816:10)
+    at BaseConvexClient.localQueryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2212:38)
+    at Object.localQueryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2935:49)
+    at ConvexQueryClient.onUpdateQueryKeyHash (http://localhost:3001/node_modules/.vite/deps/@convex-dev_react-query.js?v=451ed1be:68:18)
+    at http://localhost:3001/node_modules/.vite/deps/@convex-dev_react-query.js?v=451ed1be:109:12
+    at ConvexReactClient.transition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:3117:53)
+    at ConvexReactClient.handleTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:3112:8)
+    at PaginatedQueryClient.onTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2861:100)
+    at PaginatedQueryClient.onBaseTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2595:8)
+    at http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2487:59 {componentStack: 
+    at SettingsPage (http://localhost:3001/src/ro…=451ed1be:20:12)
+    at StartClient (<anonymous>)} @ http://localhost:3001/src/routes/__root.tsx?t=1776814445074:15
+[   42024ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3001/node_modules/.vite/deps/react-dom_client.js?v=451ed1be:14337
+[   42060ms] Error: Switched to client rendering because the server rendering errored:
+
+[Request ID: 23e0239ef5290924] Server Error
+Uncaught Error: Não autenticado
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:86:14)
+
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:86:14)
+
+    at ConvexHttpClient.queryInner (file:///Users/marcusfilipus/Developer/projects/paxtools/node_modules/convex/dist/esm/browser/http_client.js:250:15)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at ConvexHttpClient.consistentQuery (file:///Users/marcusfilipus/Developer/projects/paxtools/node_modules/convex/dist/esm/browser/http_client.js:167:12)
+    at file:///Users/marcusfilipus/Developer/projects/paxtools/node_modules/@convex-dev/react-query/dist/esm/index.js:222:32
+[   42835ms] [ERROR] %o
+
+%s
+
+%s
+ Error: [CONVEX Q(groups:getMyGroup)] [Request ID: 85094ba7ef3728e4] Server Error
+Uncaught Error: Não autenticado
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:86:14)
+
+  Called by client
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:86:14)
+
+  Called by client
+    at OptimisticQueryResults.queryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:816:10)
+    at BaseConvexClient.localQueryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2212:38)
+    at Object.localQueryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2935:49)
+    at ConvexQueryClient.onUpdateQueryKeyHash (http://localhost:3001/node_modules/.vite/deps/@convex-dev_react-query.js?v=451ed1be:68:18)
+    at http://localhost:3001/node_modules/.vite/deps/@convex-dev_react-query.js?v=451ed1be:109:12
+    at ConvexReactClient.transition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:3117:53)
+    at ConvexReactClient.handleTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:3112:8)
+    at PaginatedQueryClient.onTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2861:100)
+    at PaginatedQueryClient.onBaseTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2595:8)
+    at http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2487:59 The above error occurred in the <SettingsPage> component. React will try to recreate this component tree from scratch using the error boundary you provided, ErrorBoundary. @ http://localhost:3001/node_modules/.vite/deps/react-dom_client.js?v=451ed1be:5273
+[   42835ms] [ERROR] App error: Error: [CONVEX Q(groups:getMyGroup)] [Request ID: 85094ba7ef3728e4] Server Error
+Uncaught Error: Não autenticado
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:86:14)
+
+  Called by client
+    at getAuthenticatedUser (../../convex/lib/authHelpers.ts:7:21)
+    at async handler (../convex/groups.ts:86:14)
+
+  Called by client
+    at OptimisticQueryResults.queryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:816:10)
+    at BaseConvexClient.localQueryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2212:38)
+    at Object.localQueryResult (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2935:49)
+    at ConvexQueryClient.onUpdateQueryKeyHash (http://localhost:3001/node_modules/.vite/deps/@convex-dev_react-query.js?v=451ed1be:68:18)
+    at http://localhost:3001/node_modules/.vite/deps/@convex-dev_react-query.js?v=451ed1be:109:12
+    at ConvexReactClient.transition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:3117:53)
+    at ConvexReactClient.handleTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:3112:8)
+    at PaginatedQueryClient.onTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2861:100)
+    at PaginatedQueryClient.onBaseTransition (http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2595:8)
+    at http://localhost:3001/node_modules/.vite/deps/react-BZQ-ZXrk.js?v=451ed1be:2487:59 {componentStack: 
+    at SettingsPage (http://localhost:3001/src/ro…=451ed1be:20:12)
+    at StartClient (<anonymous>)} @ http://localhost:3001/src/routes/__root.tsx?t=1776814449578:15
+[   53506ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3001/node_modules/.vite/deps/react-dom_client.js?v=451ed1be:14337
+[   64932ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3001/node_modules/.vite/deps/react-dom_client.js?v=451ed1be:14337
+[   81951ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3001/node_modules/.vite/deps/react-dom_client.js?v=451ed1be:14337

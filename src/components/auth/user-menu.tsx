@@ -1,8 +1,9 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { convexQuery } from "@convex-dev/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { api } from "../../../convex/_generated/api";
-import { LogOut } from "lucide-react";
+import { LogOut, Settings, Shield, Compass } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,7 @@ function getInitials(name?: string | null, email?: string | null): string {
 export function UserMenu() {
   const { signOut } = useAuthActions();
   const { data: user } = useSuspenseQuery(convexQuery(api.users.viewer, {}));
+  const navigate = useNavigate();
 
   if (!user) return null;
 
@@ -49,9 +51,27 @@ export function UserMenu() {
               <AvatarFallback>{getInitials(user.name, user.email)}</AvatarFallback>
             </Avatar>
             <div className="flex flex-col gap-0.5 overflow-hidden">
-              <p className="text-sm font-medium leading-none truncate">
-                {user.name ?? "User"}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-medium leading-none truncate">
+                  {user.name ?? "User"}
+                </p>
+                {user.role && (
+                  <span
+                    className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-medium ${
+                      user.role === "escotista"
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-emerald-100 text-emerald-700"
+                    }`}
+                  >
+                    {user.role === "escotista" ? (
+                      <Shield className="size-2.5" />
+                    ) : (
+                      <Compass className="size-2.5" />
+                    )}
+                    {user.role === "escotista" ? "Escotista" : "Escoteiro"}
+                  </span>
+                )}
+              </div>
               {user.email && (
                 <p className="text-xs text-muted-foreground leading-none truncate">
                   {user.email}
@@ -61,6 +81,10 @@ export function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => void navigate({ to: "/settings" })}>
+          <Settings className="size-4 mr-2" />
+          Configurações
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => void signOut()}>
           <LogOut className="size-4 mr-2" />
           Sair

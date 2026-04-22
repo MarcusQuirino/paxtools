@@ -32,9 +32,14 @@ export type Eixo = {
   blocos: Bloco[];
 };
 
+export type CompletionStatus = "pending" | "approved";
+
 export type CustomAction = {
   _id: Id<"customActions">;
   blocoId: string;
   text: string;
   completed: boolean;
+  status?: CompletionStatus;
 };
+
+export type UserRole = "escoteiro" | "escotista";

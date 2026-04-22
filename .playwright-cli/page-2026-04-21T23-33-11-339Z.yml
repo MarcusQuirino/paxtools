@@ -1,0 +1,19 @@
+- generic [ref=e6]:
+  - generic [ref=e7]:
+    - heading "Bem-vindo ao Paxtools" [level=1] [ref=e8]
+    - paragraph [ref=e9]: Escolha como você vai usar o app
+  - generic [ref=e10]:
+    - button "Escoteiro Registre sua progressão pessoal, marque ações completadas e acompanhe seu avanço nas etapas." [ref=e11]:
+      - generic [ref=e12]:
+        - img [ref=e14]
+        - generic [ref=e17]:
+          - heading "Escoteiro" [level=2] [ref=e18]
+          - paragraph [ref=e19]: Registre sua progressão pessoal, marque ações completadas e acompanhe seu avanço nas etapas.
+        - img [ref=e20]
+    - button "Escotista Acompanhe a progressão do seu grupo, aprove itens pendentes e gerencie escoteiros." [ref=e22]:
+      - generic [ref=e23]:
+        - img [ref=e25]
+        - generic [ref=e27]:
+          - heading "Escotista" [level=2] [ref=e28]
+          - paragraph [ref=e29]: Acompanhe a progressão do seu grupo, aprove itens pendentes e gerencie escoteiros.
+        - img [ref=e30]

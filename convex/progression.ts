@@ -1,6 +1,12 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import {
+  getAuthenticatedUser,
+  assertEscotistaInSameGroup,
+} from "./lib/authHelpers";
+import type { Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 
 const ACTION_ID_PATTERN = /^[a-z0-9-]+:(fixed|variable):\d+$/;
 const BLOCO_ID_PATTERN = /^[a-z0-9-]+$/;
@@ -12,6 +18,34 @@ const VALID_LIS_ITEM_IDS = new Set([
   "lis_corte_honra",
 ]);
 const MAX_CUSTOM_ACTIONS_PER_BLOCO = 20;
+
+type CompletionStatus = "pending" | "approved";
+
+async function resolveTargetAndStatus(
+  ctx: MutationCtx,
+  targetUserId?: Id<"users">,
+): Promise<{
+  effectiveUserId: Id<"users">;
+  status: CompletionStatus;
+  approvedBy?: Id<"users">;
+}> {
+  const caller = await getAuthenticatedUser(ctx);
+
+  if (targetUserId) {
+    await assertEscotistaInSameGroup(ctx, targetUserId);
+    return {
+      effectiveUserId: targetUserId,
+      status: "approved",
+      approvedBy: caller._id,
+    };
+  }
+
+  if (caller.role === "escotista") {
+    return { effectiveUserId: caller._id, status: "approved" };
+  }
+
+  return { effectiveUserId: caller._id, status: "pending" };
+}
 
 export const getMyCompletions = query({
   args: {},
@@ -49,18 +83,51 @@ export const getMyCompletions = query({
   },
 });
 
-export const toggleAction = mutation({
-  args: { actionId: v.string() },
+export const getCompletionsForUser = query({
+  args: { targetUserId: v.id("users") },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Não autenticado");
+    await assertEscotistaInSameGroup(ctx, args.targetUserId);
+
+    const actions = await ctx.db
+      .query("actionCompletions")
+      .withIndex("by_userId", (q) => q.eq("userId", args.targetUserId))
+      .take(500);
+
+    const specialties = await ctx.db
+      .query("specialtyCompletions")
+      .withIndex("by_userId", (q) => q.eq("userId", args.targetUserId))
+      .take(500);
+
+    const customActions = await ctx.db
+      .query("customActions")
+      .withIndex("by_userId", (q) => q.eq("userId", args.targetUserId))
+      .take(1000);
+
+    const lisDeOuroItems = await ctx.db
+      .query("lisDeOuroCompletions")
+      .withIndex("by_userId", (q) => q.eq("userId", args.targetUserId))
+      .take(10);
+
+    return { actions, specialties, customActions, lisDeOuroItems };
+  },
+});
+
+export const toggleAction = mutation({
+  args: {
+    actionId: v.string(),
+    targetUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const { effectiveUserId, status, approvedBy } =
+      await resolveTargetAndStatus(ctx, args.targetUserId);
+
     if (!ACTION_ID_PATTERN.test(args.actionId))
       throw new Error("ID de ação inválido");
 
     const existing = await ctx.db
       .query("actionCompletions")
       .withIndex("by_userId_and_actionId", (q) =>
-        q.eq("userId", userId).eq("actionId", args.actionId),
+        q.eq("userId", effectiveUserId).eq("actionId", args.actionId),
       )
       .unique();
 
@@ -68,19 +135,27 @@ export const toggleAction = mutation({
       await ctx.db.delete(existing._id);
     } else {
       await ctx.db.insert("actionCompletions", {
-        userId,
+        userId: effectiveUserId,
         actionId: args.actionId,
         completedAt: Date.now(),
+        status,
+        approvedBy,
+        approvedAt: approvedBy ? Date.now() : undefined,
       });
     }
   },
 });
 
 export const toggleSpecialty = mutation({
-  args: { blocoId: v.string(), specialtyName: v.string() },
+  args: {
+    blocoId: v.string(),
+    specialtyName: v.string(),
+    targetUserId: v.optional(v.id("users")),
+  },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Não autenticado");
+    const { effectiveUserId, status, approvedBy } =
+      await resolveTargetAndStatus(ctx, args.targetUserId);
+
     if (!BLOCO_ID_PATTERN.test(args.blocoId))
       throw new Error("ID de bloco inválido");
     if (!args.specialtyName.trim() || args.specialtyName.length > 200)
@@ -90,7 +165,7 @@ export const toggleSpecialty = mutation({
       .query("specialtyCompletions")
       .withIndex("by_userId_and_blocoId_and_specialtyName", (q) =>
         q
-          .eq("userId", userId)
+          .eq("userId", effectiveUserId)
           .eq("blocoId", args.blocoId)
           .eq("specialtyName", args.specialtyName),
       )
@@ -100,20 +175,30 @@ export const toggleSpecialty = mutation({
       await ctx.db.delete(existing._id);
     } else {
       await ctx.db.insert("specialtyCompletions", {
-        userId,
+        userId: effectiveUserId,
         blocoId: args.blocoId,
         specialtyName: args.specialtyName,
         completedAt: Date.now(),
+        status,
+        approvedBy,
+        approvedAt: approvedBy ? Date.now() : undefined,
       });
     }
   },
 });
 
 export const addCustomAction = mutation({
-  args: { blocoId: v.string(), text: v.string() },
+  args: {
+    blocoId: v.string(),
+    text: v.string(),
+    targetUserId: v.optional(v.id("users")),
+  },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Não autenticado");
+    const { effectiveUserId } = await resolveTargetAndStatus(
+      ctx,
+      args.targetUserId,
+    );
+
     if (!BLOCO_ID_PATTERN.test(args.blocoId))
       throw new Error("ID de bloco inválido");
 
@@ -124,14 +209,14 @@ export const addCustomAction = mutation({
     const existingCount = await ctx.db
       .query("customActions")
       .withIndex("by_userId_and_blocoId", (q) =>
-        q.eq("userId", userId).eq("blocoId", args.blocoId),
+        q.eq("userId", effectiveUserId).eq("blocoId", args.blocoId),
       )
       .take(MAX_CUSTOM_ACTIONS_PER_BLOCO + 1);
     if (existingCount.length >= MAX_CUSTOM_ACTIONS_PER_BLOCO)
       throw new Error("Limite de ações personalizadas atingido");
 
     return await ctx.db.insert("customActions", {
-      userId,
+      userId: effectiveUserId,
       blocoId: args.blocoId,
       text,
       completed: false,
@@ -141,43 +226,62 @@ export const addCustomAction = mutation({
 });
 
 export const toggleCustomAction = mutation({
-  args: { customActionId: v.id("customActions") },
+  args: {
+    customActionId: v.id("customActions"),
+    targetUserId: v.optional(v.id("users")),
+  },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Não autenticado");
+    const { effectiveUserId, status, approvedBy } =
+      await resolveTargetAndStatus(ctx, args.targetUserId);
 
     const doc = await ctx.db.get(args.customActionId);
-    if (!doc || doc.userId !== userId) throw new Error("Não encontrado");
+    if (!doc || doc.userId !== effectiveUserId)
+      throw new Error("Não encontrado");
 
-    await ctx.db.patch(args.customActionId, { completed: !doc.completed });
+    await ctx.db.patch(args.customActionId, {
+      completed: !doc.completed,
+      status: !doc.completed ? status : undefined,
+      approvedBy: !doc.completed ? approvedBy : undefined,
+      approvedAt: !doc.completed && approvedBy ? Date.now() : undefined,
+    });
   },
 });
 
 export const deleteCustomAction = mutation({
-  args: { customActionId: v.id("customActions") },
+  args: {
+    customActionId: v.id("customActions"),
+    targetUserId: v.optional(v.id("users")),
+  },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Não autenticado");
+    const { effectiveUserId } = await resolveTargetAndStatus(
+      ctx,
+      args.targetUserId,
+    );
 
     const doc = await ctx.db.get(args.customActionId);
-    if (!doc || doc.userId !== userId) throw new Error("Não encontrado");
+    if (!doc || doc.userId !== effectiveUserId)
+      throw new Error("Não encontrado");
 
     await ctx.db.delete(args.customActionId);
   },
 });
 
 export const toggleLisDeOuroItem = mutation({
-  args: { itemId: v.string() },
+  args: {
+    itemId: v.string(),
+    targetUserId: v.optional(v.id("users")),
+  },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Não autenticado");
+    const { effectiveUserId, status, approvedBy } =
+      await resolveTargetAndStatus(ctx, args.targetUserId);
+
     if (!VALID_LIS_ITEM_IDS.has(args.itemId))
       throw new Error("ID de item inválido");
 
     const existing = await ctx.db
       .query("lisDeOuroCompletions")
       .withIndex("by_userId_and_itemId", (q) =>
-        q.eq("userId", userId).eq("itemId", args.itemId),
+        q.eq("userId", effectiveUserId).eq("itemId", args.itemId),
       )
       .unique();
 
@@ -185,9 +289,12 @@ export const toggleLisDeOuroItem = mutation({
       await ctx.db.delete(existing._id);
     } else {
       await ctx.db.insert("lisDeOuroCompletions", {
-        userId,
+        userId: effectiveUserId,
         itemId: args.itemId,
         completedAt: Date.now(),
+        status,
+        approvedBy,
+        approvedAt: approvedBy ? Date.now() : undefined,
       });
     }
   },

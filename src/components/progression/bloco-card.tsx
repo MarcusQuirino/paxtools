@@ -1,4 +1,4 @@
-import type { Bloco, CustomAction } from "@/data/types";
+import type { Bloco, CustomAction, CompletionStatus } from "@/data/types";
 import {
   AccordionItem,
   AccordionTrigger,
@@ -9,14 +9,20 @@ import { Progress } from "@/components/ui/progress";
 import { ActionChecklist } from "./action-checklist";
 import { SpecialtySection } from "./specialty-section";
 import { getBlocoProgress } from "@/lib/completion-logic";
-import { Check } from "lucide-react";
+import { Check, Clock } from "lucide-react";
 import type { Id } from "../../../convex/_generated/dataModel";
 
 type BlocoCardProps = {
   bloco: Bloco;
-  completedActionIds: Set<string>;
+  approvedActionIds: Set<string>;
+  pendingActionIds: Set<string>;
+  actionStatusMap: Map<string, CompletionStatus>;
   customActions: CustomAction[];
-  completedSpecialties: { blocoId: string; specialtyName: string }[];
+  completedSpecialties: {
+    blocoId: string;
+    specialtyName: string;
+    status: CompletionStatus;
+  }[];
   color: string;
   colorLight: string;
   onToggleAction: (actionId: string) => void;
@@ -28,7 +34,9 @@ type BlocoCardProps = {
 
 export function BlocoCard({
   bloco,
-  completedActionIds,
+  approvedActionIds,
+  pendingActionIds,
+  actionStatusMap,
   customActions,
   completedSpecialties,
   color,
@@ -39,25 +47,60 @@ export function BlocoCard({
   onToggleCustom,
   onDeleteCustom,
 }: BlocoCardProps) {
-  const customCompleted = customActions.filter(
-    (c) => c.blocoId === bloco.id && c.completed,
+  const approvedCustomCompleted = customActions.filter(
+    (c) => c.blocoId === bloco.id && c.completed && c.status !== "pending",
   ).length;
-  const hasSpecialty = completedSpecialties.some(
-    (s) => s.blocoId === bloco.id,
+  const pendingCustomCompleted = customActions.filter(
+    (c) => c.blocoId === bloco.id && c.completed && c.status === "pending",
+  ).length;
+  const hasApprovedSpecialty = completedSpecialties.some(
+    (s) => s.blocoId === bloco.id && s.status !== "pending",
   );
+  const hasPendingSpecialty = completedSpecialties.some(
+    (s) => s.blocoId === bloco.id && s.status === "pending",
+  );
+
   const progress = getBlocoProgress(
     bloco,
-    completedActionIds,
-    customCompleted,
-    hasSpecialty,
+    approvedActionIds,
+    pendingActionIds,
+    approvedCustomCompleted,
+    pendingCustomCompleted,
+    hasApprovedSpecialty,
+    hasPendingSpecialty,
   );
 
   const totalActions = bloco.fixedActions.length + bloco.variableRequired;
-  const variableCredit = hasSpecialty
+
+  const approvedVariableCredit = hasApprovedSpecialty
     ? bloco.variableRequired
     : Math.min(progress.variableDone, bloco.variableRequired);
-  const totalDone = Math.min(progress.fixedDone + variableCredit, totalActions);
-  const percent = totalActions > 0 ? (totalDone / totalActions) * 100 : 0;
+  const approvedDone = Math.min(
+    progress.fixedDone + approvedVariableCredit,
+    totalActions,
+  );
+  const approvedPercent =
+    totalActions > 0 ? (approvedDone / totalActions) * 100 : 0;
+
+  const pendingVariableCredit =
+    hasApprovedSpecialty || hasPendingSpecialty
+      ? bloco.variableRequired - approvedVariableCredit
+      : Math.min(
+          progress.variablePending,
+          bloco.variableRequired - approvedVariableCredit,
+        );
+  const pendingDone = Math.min(
+    progress.fixedPending + Math.max(0, pendingVariableCredit),
+    totalActions - approvedDone,
+  );
+  const pendingPercent =
+    totalActions > 0 ? (pendingDone / totalActions) * 100 : 0;
+
+  // For the checklist, combine both sets so checked items show
+  const allCompletedActionIds = new Set([
+    ...approvedActionIds,
+    ...pendingActionIds,
+  ]);
 
   return (
     <AccordionItem value={bloco.id}>
@@ -73,16 +116,26 @@ export function BlocoCard({
                 <Check className="size-3 mr-0.5" />
                 Completo
               </Badge>
+            ) : progress.isPendingComplete && !progress.isComplete ? (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 text-amber-600 border-amber-300"
+              >
+                <Clock className="size-3 mr-0.5" />
+                Pendente
+              </Badge>
             ) : (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                {totalDone}/{totalActions}
+                {approvedDone}/{totalActions}
               </Badge>
             )}
           </div>
           <Progress
-            value={percent}
+            value={approvedPercent}
+            pendingValue={pendingPercent}
             className="mt-2 h-1.5"
             indicatorColor={color}
+            pendingColor={color}
           />
         </div>
       </AccordionTrigger>
@@ -92,9 +145,10 @@ export function BlocoCard({
         </p>
         <ActionChecklist
           bloco={bloco}
-          completedActionIds={completedActionIds}
+          completedActionIds={allCompletedActionIds}
+          actionStatusMap={actionStatusMap}
           customActions={customActions}
-          hasSpecialtyAlternative={hasSpecialty}
+          hasSpecialtyAlternative={hasApprovedSpecialty || hasPendingSpecialty}
           color={color}
           colorLight={colorLight}
           onToggleAction={onToggleAction}

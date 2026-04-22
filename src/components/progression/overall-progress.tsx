@@ -3,17 +3,25 @@ import { Progress } from "@/components/ui/progress";
 
 type OverallProgressProps = {
   completedBlockIds: Set<string>;
+  pendingBlockIds: Set<string>;
 };
 
-export function OverallProgress({ completedBlockIds }: OverallProgressProps) {
+export function OverallProgress({
+  completedBlockIds,
+  pendingBlockIds,
+}: OverallProgressProps) {
   return (
     <div className="grid grid-cols-2 gap-3">
       {EIXOS.map((eixo) => {
-        const done = eixo.blocos.filter((b) =>
+        const approved = eixo.blocos.filter((b) =>
           completedBlockIds.has(b.id),
         ).length;
+        const pending = eixo.blocos.filter((b) =>
+          pendingBlockIds.has(b.id),
+        ).length;
         const total = eixo.blocos.length;
-        const percent = (done / total) * 100;
+        const approvedPercent = (approved / total) * 100;
+        const pendingPercent = (pending / total) * 100;
 
         return (
           <div
@@ -23,12 +31,15 @@ export function OverallProgress({ completedBlockIds }: OverallProgressProps) {
           >
             <p className="text-xs font-semibold truncate">{eixo.name}</p>
             <Progress
-              value={percent}
+              value={approvedPercent}
+              pendingValue={pendingPercent}
               className="h-1.5"
               indicatorColor={eixo.color}
+              pendingColor={eixo.color}
             />
             <p className="text-[10px] text-muted-foreground">
-              {done}/{total} blocos
+              {approved}/{total} blocos
+              {pending > 0 && ` (+${pending})`}
             </p>
           </div>
         );
