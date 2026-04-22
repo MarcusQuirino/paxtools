@@ -218,6 +218,64 @@ export const rejectLisDeOuroItem = mutation({
   },
 });
 
+export const bulkAction = mutation({
+  args: {
+    action: v.union(v.literal("approve"), v.literal("reject")),
+    actionIds: v.array(v.id("actionCompletions")),
+    specialtyIds: v.array(v.id("specialtyCompletions")),
+    lisIds: v.array(v.id("lisDeOuroCompletions")),
+  },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    const now = Date.now();
+
+    for (const id of args.actionIds) {
+      const doc = await ctx.db.get(id);
+      if (!doc || doc.status !== "pending") continue;
+      await assertEscotistaInSameGroup(ctx, doc.userId);
+      if (args.action === "approve") {
+        await ctx.db.patch(id, {
+          status: "approved",
+          approvedBy: user._id,
+          approvedAt: now,
+        });
+      } else {
+        await ctx.db.delete(id);
+      }
+    }
+
+    for (const id of args.specialtyIds) {
+      const doc = await ctx.db.get(id);
+      if (!doc || doc.status !== "pending") continue;
+      await assertEscotistaInSameGroup(ctx, doc.userId);
+      if (args.action === "approve") {
+        await ctx.db.patch(id, {
+          status: "approved",
+          approvedBy: user._id,
+          approvedAt: now,
+        });
+      } else {
+        await ctx.db.delete(id);
+      }
+    }
+
+    for (const id of args.lisIds) {
+      const doc = await ctx.db.get(id);
+      if (!doc || doc.status !== "pending") continue;
+      await assertEscotistaInSameGroup(ctx, doc.userId);
+      if (args.action === "approve") {
+        await ctx.db.patch(id, {
+          status: "approved",
+          approvedBy: user._id,
+          approvedAt: now,
+        });
+      } else {
+        await ctx.db.delete(id);
+      }
+    }
+  },
+});
+
 export const approveAllForEscoteiro = mutation({
   args: { escoteiroId: v.id("users") },
   handler: async (ctx, args) => {

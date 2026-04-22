@@ -1,9 +1,11 @@
+import { useState, useMemo, useCallback } from "react";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Collapsible,
@@ -11,7 +13,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, ChevronDown, CheckCheck, Inbox } from "lucide-react";
+import { Check, X, ChevronDown, Inbox } from "lucide-react";
 import { EIXOS } from "@/data/progression-data";
 
 export const Route = createFileRoute("/escotista/pending")({
@@ -55,39 +57,24 @@ function getEixoForBloco(blocoId: string) {
   return null;
 }
 
+type PendingItem = {
+  key: string;
+  type: "action" | "specialty" | "lis";
+  id: string;
+  text: string;
+  blocoId?: string;
+  eixoColor?: string;
+};
+
 function PendingApprovalsPage() {
   const { data: pendingData } = useSuspenseQuery(
     convexQuery(api.approvals.getPendingForGroup, {}),
   );
 
-  const approveActionFn = useConvexMutation(api.approvals.approveAction);
-  const { mutate: approveAction } = useMutation({
-    mutationFn: approveActionFn,
+  const bulkActionFn = useConvexMutation(api.approvals.bulkAction);
+  const { mutate: bulkAction, isPending: isBulkPending } = useMutation({
+    mutationFn: bulkActionFn,
   });
-
-  const rejectActionFn = useConvexMutation(api.approvals.rejectAction);
-  const { mutate: rejectAction } = useMutation({
-    mutationFn: rejectActionFn,
-  });
-
-  const approveSpecialtyFn = useConvexMutation(api.approvals.approveSpecialty);
-  const { mutate: approveSpecialty } = useMutation({
-    mutationFn: approveSpecialtyFn,
-  });
-
-  const rejectSpecialtyFn = useConvexMutation(api.approvals.rejectSpecialty);
-  const { mutate: rejectSpecialty } = useMutation({
-    mutationFn: rejectSpecialtyFn,
-  });
-
-  const approveLisFn = useConvexMutation(api.approvals.approveLisDeOuroItem);
-  const { mutate: approveLis } = useMutation({ mutationFn: approveLisFn });
-
-  const rejectLisFn = useConvexMutation(api.approvals.rejectLisDeOuroItem);
-  const { mutate: rejectLis } = useMutation({ mutationFn: rejectLisFn });
-
-  const approveAllFn = useConvexMutation(api.approvals.approveAllForEscoteiro);
-  const { mutate: approveAll } = useMutation({ mutationFn: approveAllFn });
 
   if (pendingData.length === 0) {
     return (
@@ -107,15 +94,8 @@ function PendingApprovalsPage() {
         <EscoteiroPendingCard
           key={entry.escoteiro._id}
           entry={entry}
-          onApproveAction={(id) => approveAction({ completionId: id })}
-          onRejectAction={(id) => rejectAction({ completionId: id })}
-          onApproveSpecialty={(id) => approveSpecialty({ completionId: id })}
-          onRejectSpecialty={(id) => rejectSpecialty({ completionId: id })}
-          onApproveLis={(id) => approveLis({ completionId: id })}
-          onRejectLis={(id) => rejectLis({ completionId: id })}
-          onApproveAll={() =>
-            approveAll({ escoteiroId: entry.escoteiro._id })
-          }
+          onBulkAction={bulkAction}
+          isBulkPending={isBulkPending}
         />
       ))}
     </div>
@@ -146,34 +126,130 @@ type PendingEntry = {
 
 function EscoteiroPendingCard({
   entry,
-  onApproveAction,
-  onRejectAction,
-  onApproveSpecialty,
-  onRejectSpecialty,
-  onApproveLis,
-  onRejectLis,
-  onApproveAll,
+  onBulkAction,
+  isBulkPending,
 }: {
   entry: PendingEntry;
-  onApproveAction: (id: Id<"actionCompletions">) => void;
-  onRejectAction: (id: Id<"actionCompletions">) => void;
-  onApproveSpecialty: (id: Id<"specialtyCompletions">) => void;
-  onRejectSpecialty: (id: Id<"specialtyCompletions">) => void;
-  onApproveLis: (id: Id<"lisDeOuroCompletions">) => void;
-  onRejectLis: (id: Id<"lisDeOuroCompletions">) => void;
-  onApproveAll: () => void;
+  onBulkAction: (args: {
+    action: "approve" | "reject";
+    actionIds: Id<"actionCompletions">[];
+    specialtyIds: Id<"specialtyCompletions">[];
+    lisIds: Id<"lisDeOuroCompletions">[];
+  }) => void;
+  isBulkPending: boolean;
 }) {
-  // Group actions by eixo/bloco
-  const actionsByBloco = new Map<
-    string,
-    { _id: Id<"actionCompletions">; actionId: string; text: string }[]
-  >();
-  for (const action of entry.pendingActions) {
-    const blocoId = action.actionId.split(":")[0] ?? "";
-    const items = actionsByBloco.get(blocoId) ?? [];
-    items.push({ ...action, text: getActionLabel(action.actionId) });
-    actionsByBloco.set(blocoId, items);
-  }
+  // Build a flat list of all pending items with unique keys
+  const allItems = useMemo(() => {
+    const items: PendingItem[] = [];
+
+    for (const action of entry.pendingActions) {
+      const blocoId = action.actionId.split(":")[0] ?? "";
+      items.push({
+        key: `action:${action._id}`,
+        type: "action",
+        id: action._id,
+        text: getActionLabel(action.actionId),
+        blocoId,
+        eixoColor: getEixoForBloco(blocoId)?.color,
+      });
+    }
+
+    for (const s of entry.pendingSpecialties) {
+      items.push({
+        key: `specialty:${s._id}`,
+        type: "specialty",
+        id: s._id,
+        text: `${s.specialtyName} (${getBlocoName(s.blocoId)})`,
+        blocoId: s.blocoId,
+      });
+    }
+
+    for (const l of entry.pendingLisItems) {
+      items.push({
+        key: `lis:${l._id}`,
+        type: "lis",
+        id: l._id,
+        text: l.itemId.replace("lis_", "").replace(/_/g, " "),
+      });
+    }
+
+    return items;
+  }, [entry]);
+
+  // All items selected by default
+  const [deselected, setDeselected] = useState<Set<string>>(new Set());
+
+  const selectedCount = allItems.length - deselected.size;
+  const allSelected = deselected.size === 0;
+  const noneSelected = deselected.size === allItems.length;
+
+  const toggleItem = useCallback((key: string) => {
+    setDeselected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    if (allSelected) {
+      setDeselected(new Set(allItems.map((i) => i.key)));
+    } else {
+      setDeselected(new Set());
+    }
+  }, [allSelected, allItems]);
+
+  const getSelectedIds = useCallback(() => {
+    const actionIds: Id<"actionCompletions">[] = [];
+    const specialtyIds: Id<"specialtyCompletions">[] = [];
+    const lisIds: Id<"lisDeOuroCompletions">[] = [];
+
+    for (const item of allItems) {
+      if (deselected.has(item.key)) continue;
+      if (item.type === "action")
+        actionIds.push(item.id as Id<"actionCompletions">);
+      else if (item.type === "specialty")
+        specialtyIds.push(item.id as Id<"specialtyCompletions">);
+      else if (item.type === "lis")
+        lisIds.push(item.id as Id<"lisDeOuroCompletions">);
+    }
+
+    return { actionIds, specialtyIds, lisIds };
+  }, [allItems, deselected]);
+
+  const handleBulk = useCallback(
+    (action: "approve" | "reject") => {
+      const ids = getSelectedIds();
+      onBulkAction({ action, ...ids });
+    },
+    [getSelectedIds, onBulkAction],
+  );
+
+  // Group items by section for display
+  const actionsByBloco = useMemo(() => {
+    const map = new Map<
+      string,
+      { items: PendingItem[]; eixoColor?: string }
+    >();
+    for (const item of allItems) {
+      if (item.type !== "action") continue;
+      const blocoId = item.blocoId ?? "";
+      const group = map.get(blocoId) ?? {
+        items: [],
+        eixoColor: item.eixoColor,
+      };
+      group.items.push(item);
+      map.set(blocoId, group);
+    }
+    return map;
+  }, [allItems]);
+
+  const specialties = allItems.filter((i) => i.type === "specialty");
+  const lisItems = allItems.filter((i) => i.type === "lis");
 
   return (
     <Collapsible>
@@ -200,75 +276,98 @@ function EscoteiroPendingCard({
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <div className="border-t px-4 py-3 space-y-4">
+          <div className="border-t px-4 py-3 space-y-3">
+            {/* Select all toggle */}
+            <label className="flex items-center gap-2 cursor-pointer py-1 px-1">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={toggleAll}
+                className="size-4"
+              />
+              <span className="text-xs font-medium text-muted-foreground">
+                {allSelected
+                  ? "Todos selecionados"
+                  : `${selectedCount}/${allItems.length} selecionados`}
+              </span>
+            </label>
+
             {/* Actions grouped by bloco */}
             {Array.from(actionsByBloco.entries()).map(
-              ([blocoId, actions]) => {
-                const eixo = getEixoForBloco(blocoId);
-                return (
-                  <div key={blocoId} className="space-y-1">
-                    <p
-                      className="text-xs font-semibold uppercase tracking-wider"
-                      style={{ color: eixo?.color }}
-                    >
-                      {getBlocoName(blocoId)}
-                    </p>
-                    {actions.map((action) => (
-                      <PendingItemRow
-                        key={action._id}
-                        text={action.text}
-                        onApprove={() => onApproveAction(action._id)}
-                        onReject={() => onRejectAction(action._id)}
-                      />
-                    ))}
-                  </div>
-                );
-              },
+              ([blocoId, { items, eixoColor }]) => (
+                <div key={blocoId} className="space-y-0.5">
+                  <p
+                    className="text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: eixoColor }}
+                  >
+                    {getBlocoName(blocoId)}
+                  </p>
+                  {items.map((item) => (
+                    <SelectableItem
+                      key={item.key}
+                      text={item.text}
+                      selected={!deselected.has(item.key)}
+                      onToggle={() => toggleItem(item.key)}
+                    />
+                  ))}
+                </div>
+              ),
             )}
 
             {/* Specialties */}
-            {entry.pendingSpecialties.length > 0 && (
-              <div className="space-y-1">
+            {specialties.length > 0 && (
+              <div className="space-y-0.5">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Especialidades
                 </p>
-                {entry.pendingSpecialties.map((s) => (
-                  <PendingItemRow
-                    key={s._id}
-                    text={`${s.specialtyName} (${getBlocoName(s.blocoId)})`}
-                    onApprove={() => onApproveSpecialty(s._id)}
-                    onReject={() => onRejectSpecialty(s._id)}
+                {specialties.map((item) => (
+                  <SelectableItem
+                    key={item.key}
+                    text={item.text}
+                    selected={!deselected.has(item.key)}
+                    onToggle={() => toggleItem(item.key)}
                   />
                 ))}
               </div>
             )}
 
             {/* Lis de Ouro items */}
-            {entry.pendingLisItems.length > 0 && (
-              <div className="space-y-1">
+            {lisItems.length > 0 && (
+              <div className="space-y-0.5">
                 <p className="text-xs font-semibold uppercase tracking-wider text-green-700">
                   Lis de Ouro
                 </p>
-                {entry.pendingLisItems.map((item) => (
-                  <PendingItemRow
-                    key={item._id}
-                    text={item.itemId.replace("lis_", "").replace(/_/g, " ")}
-                    onApprove={() => onApproveLis(item._id)}
-                    onReject={() => onRejectLis(item._id)}
+                {lisItems.map((item) => (
+                  <SelectableItem
+                    key={item.key}
+                    text={item.text}
+                    selected={!deselected.has(item.key)}
+                    onToggle={() => toggleItem(item.key)}
                   />
                 ))}
               </div>
             )}
 
-            <div className="pt-2 border-t">
+            {/* Bulk action buttons */}
+            <div className="pt-2 border-t flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full text-emerald-700 border-emerald-300 hover:bg-emerald-50"
-                onClick={onApproveAll}
+                className="flex-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                onClick={() => handleBulk("approve")}
+                disabled={noneSelected || isBulkPending}
               >
-                <CheckCheck className="size-4 mr-1" />
-                Aprovar tudo ({entry.totalPending})
+                <Check className="size-4 mr-1" />
+                Aprovar ({selectedCount})
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 text-red-600 border-red-300 hover:bg-red-50"
+                onClick={() => handleBulk("reject")}
+                disabled={noneSelected || isBulkPending}
+              >
+                <X className="size-4 mr-1" />
+                Rejeitar ({selectedCount})
               </Button>
             </div>
           </div>
@@ -278,36 +377,27 @@ function EscoteiroPendingCard({
   );
 }
 
-function PendingItemRow({
+function SelectableItem({
   text,
-  onApprove,
-  onReject,
+  selected,
+  onToggle,
 }: {
   text: string;
-  onApprove: () => void;
-  onReject: () => void;
+  selected: boolean;
+  onToggle: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 py-1.5 px-1">
-      <span className="text-sm flex-1 line-clamp-2">{text}</span>
-      <div className="flex items-center gap-1 shrink-0">
-        <button
-          type="button"
-          onClick={onApprove}
-          className="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-50 transition-colors"
-          aria-label="Aprovar"
-        >
-          <Check className="size-4" />
-        </button>
-        <button
-          type="button"
-          onClick={onReject}
-          className="p-1.5 rounded-md text-red-500 hover:bg-red-50 transition-colors"
-          aria-label="Rejeitar"
-        >
-          <X className="size-4" />
-        </button>
-      </div>
-    </div>
+    <label className="flex items-center gap-3 py-1.5 px-1 cursor-pointer hover:bg-muted/30 rounded-md transition-colors">
+      <Checkbox
+        checked={selected}
+        onCheckedChange={onToggle}
+        className="size-4"
+      />
+      <span
+        className={`text-sm flex-1 line-clamp-2 ${!selected ? "text-muted-foreground line-through" : ""}`}
+      >
+        {text}
+      </span>
+    </label>
   );
 }
