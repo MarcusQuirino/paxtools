@@ -16,6 +16,10 @@ Default to using Bun instead of Node.js.
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
 
+## Deployment
+
+**Never deploy to Vercel unless explicitly asked.** The user handles Vercel deployments manually.
+
 ## GitHub
 
 Always use the `gh` CLI to interface with GitHub (PRs, issues, releases, etc.). Never use the GitHub web UI or direct API calls.
