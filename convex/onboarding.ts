@@ -6,7 +6,7 @@ export const setRole = mutation({
   args: { role: v.union(v.literal("escoteiro"), v.literal("escotista")) },
   handler: async (ctx, args) => {
     const user = await getAuthenticatedUser(ctx);
-    if (user.role) {
+    if (user.role && user.onboardingComplete) {
       throw new Error("Papel já definido. Não é possível alterar.");
     }
     await ctx.db.patch(user._id, { role: args.role });
