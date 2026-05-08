@@ -114,7 +114,7 @@ function SettingsPage() {
         <section className="rounded-xl border bg-card p-4 space-y-3">
           <h2 className="text-sm font-semibold flex items-center gap-2">
             {user.role === "escotista" ? (
-              <Shield className="size-4 text-amber-500" />
+              <Shield className="size-4 text-teal-600" />
             ) : (
               <Compass className="size-4 text-emerald-500" />
             )}
@@ -124,7 +124,7 @@ function SettingsPage() {
             <div
               className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
                 user.role === "escotista"
-                  ? "bg-amber-100 text-amber-800"
+                  ? "bg-teal-100 text-teal-800"
                   : "bg-emerald-100 text-emerald-800"
               }`}
             >

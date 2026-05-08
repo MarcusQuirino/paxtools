@@ -132,7 +132,16 @@ export const toggleAction = mutation({
       .unique();
 
     if (existing) {
-      await ctx.db.delete(existing._id);
+      if (existing.status === "pending" && status === "approved") {
+        // Escotista clicking a pending item → approve it
+        await ctx.db.patch(existing._id, {
+          status: "approved",
+          approvedBy,
+          approvedAt: Date.now(),
+        });
+      } else {
+        await ctx.db.delete(existing._id);
+      }
     } else {
       await ctx.db.insert("actionCompletions", {
         userId: effectiveUserId,
@@ -172,7 +181,15 @@ export const toggleSpecialty = mutation({
       .unique();
 
     if (existing) {
-      await ctx.db.delete(existing._id);
+      if (existing.status === "pending" && status === "approved") {
+        await ctx.db.patch(existing._id, {
+          status: "approved",
+          approvedBy,
+          approvedAt: Date.now(),
+        });
+      } else {
+        await ctx.db.delete(existing._id);
+      }
     } else {
       await ctx.db.insert("specialtyCompletions", {
         userId: effectiveUserId,
@@ -238,12 +255,21 @@ export const toggleCustomAction = mutation({
     if (!doc || doc.userId !== effectiveUserId)
       throw new Error("Não encontrado");
 
-    await ctx.db.patch(args.customActionId, {
-      completed: !doc.completed,
-      status: !doc.completed ? status : undefined,
-      approvedBy: !doc.completed ? approvedBy : undefined,
-      approvedAt: !doc.completed && approvedBy ? Date.now() : undefined,
-    });
+    if (doc.completed && doc.status === "pending" && status === "approved") {
+      // Escotista clicking a pending custom action → approve it
+      await ctx.db.patch(args.customActionId, {
+        status: "approved",
+        approvedBy,
+        approvedAt: Date.now(),
+      });
+    } else {
+      await ctx.db.patch(args.customActionId, {
+        completed: !doc.completed,
+        status: !doc.completed ? status : undefined,
+        approvedBy: !doc.completed ? approvedBy : undefined,
+        approvedAt: !doc.completed && approvedBy ? Date.now() : undefined,
+      });
+    }
   },
 });
 
@@ -286,7 +312,15 @@ export const toggleLisDeOuroItem = mutation({
       .unique();
 
     if (existing) {
-      await ctx.db.delete(existing._id);
+      if (existing.status === "pending" && status === "approved") {
+        await ctx.db.patch(existing._id, {
+          status: "approved",
+          approvedBy,
+          approvedAt: Date.now(),
+        });
+      } else {
+        await ctx.db.delete(existing._id);
+      }
     } else {
       await ctx.db.insert("lisDeOuroCompletions", {
         userId: effectiveUserId,

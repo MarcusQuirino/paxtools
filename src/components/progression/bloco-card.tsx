@@ -119,7 +119,7 @@ export function BlocoCard({
             ) : progress.isPendingComplete && !progress.isComplete ? (
               <Badge
                 variant="outline"
-                className="text-[10px] px-1.5 py-0 text-amber-600 border-amber-300"
+                className="text-[10px] px-1.5 py-0 text-slate-600 border-slate-300"
               >
                 <Clock className="size-3 mr-0.5" />
                 Pendente

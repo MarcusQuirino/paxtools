@@ -71,7 +71,7 @@ export function SpecialtySection({
                   {item}
                 </span>
                 {isPending && (
-                  <Clock className="size-3.5 text-amber-500 shrink-0" />
+                  <Clock className="size-3.5 text-slate-400 shrink-0" />
                 )}
               </label>
             );

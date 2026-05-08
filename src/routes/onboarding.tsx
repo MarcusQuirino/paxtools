@@ -5,7 +5,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Compass, Shield, ArrowRight, Users, AlertCircle } from "lucide-react";
+import { Compass, Shield, ArrowRight, Users, AlertCircle, Plus } from "lucide-react";
 
 export const Route = createFileRoute("/onboarding")({
   component: OnboardingPage,
@@ -17,6 +17,8 @@ function OnboardingPage() {
     "escoteiro" | "escotista" | null
   >(null);
   const [groupPassword, setGroupPassword] = useState("");
+  const [newGroupName, setNewGroupName] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
@@ -28,6 +30,11 @@ function OnboardingPage() {
   const joinGroupFn = useConvexMutation(api.groups.joinGroup);
   const { mutate: joinGroup, isPending: joiningGroup } = useMutation({
     mutationFn: joinGroupFn,
+  });
+
+  const createGroupFn = useConvexMutation(api.groups.createGroup);
+  const { mutate: createGroup, isPending: creatingGroup } = useMutation({
+    mutationFn: createGroupFn,
   });
 
   const completeOnboardingFn = useConvexMutation(
@@ -64,6 +71,28 @@ function OnboardingPage() {
                 void navigate({
                   to: selectedRole === "escotista" ? "/escotista" : "/",
                 });
+              },
+            },
+          );
+        },
+        onError: (err) => setError(err.message),
+      },
+    );
+  };
+
+  const handleCreateGroup = () => {
+    const name = newGroupName.trim();
+    if (!name) return;
+    setError("");
+    createGroup(
+      { name },
+      {
+        onSuccess: () => {
+          completeOnboarding(
+            {},
+            {
+              onSuccess: () => {
+                void navigate({ to: "/escotista" });
               },
             },
           );
@@ -137,8 +166,8 @@ function OnboardingPage() {
               className="w-full rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/10 p-6 text-left hover:bg-white/[0.12] transition-colors group disabled:opacity-50"
             >
               <div className="flex items-start gap-4">
-                <div className="rounded-xl bg-amber-500/20 p-3">
-                  <Shield className="size-8 text-amber-300" />
+                <div className="rounded-xl bg-teal-500/20 p-3">
+                  <Shield className="size-8 text-teal-300" />
                 </div>
                 <div className="flex-1">
                   <h2 className="text-lg font-semibold text-white">
@@ -155,49 +184,123 @@ function OnboardingPage() {
           </div>
         ) : (
           <div className="rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/10 p-6 space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-blue-500/20 p-3">
-                <Users className="size-6 text-blue-300" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-white">
-                  Entrar em um grupo
-                </h2>
-                <p className="text-xs text-green-200/50">
-                  Peça a senha ao seu escotista
-                </p>
-              </div>
-            </div>
+            {showCreate && selectedRole === "escotista" ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl bg-emerald-500/20 p-3">
+                    <Plus className="size-6 text-emerald-300" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">
+                      Criar um grupo
+                    </h2>
+                    <p className="text-xs text-green-200/50">
+                      Uma senha será gerada automaticamente
+                    </p>
+                  </div>
+                </div>
 
-            <div className="space-y-3">
-              <Input
-                placeholder="Senha do grupo (ex: A3K9X2)"
-                value={groupPassword}
-                onChange={(e) => {
-                  setGroupPassword(e.target.value.toUpperCase());
-                  setError("");
-                }}
-                onKeyDown={(e) => e.key === "Enter" && handleJoinGroup()}
-                className="bg-white/10 border-white/20 text-white placeholder:text-white/30 text-center text-lg tracking-widest font-mono"
-                maxLength={6}
-              />
+                <div className="space-y-3">
+                  <Input
+                    placeholder="Nome do grupo (ex: Tropa Falcão)"
+                    value={newGroupName}
+                    onChange={(e) => {
+                      setNewGroupName(e.target.value);
+                      setError("");
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && handleCreateGroup()}
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/30"
+                  />
 
-              <Button
-                onClick={handleJoinGroup}
-                disabled={!groupPassword.trim() || joiningGroup}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                {joiningGroup ? "Entrando..." : "Entrar no grupo"}
-              </Button>
-            </div>
+                  <Button
+                    onClick={handleCreateGroup}
+                    disabled={!newGroupName.trim() || creatingGroup}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    {creatingGroup ? "Criando..." : "Criar grupo"}
+                  </Button>
+                </div>
 
-            <div className="flex items-start gap-2 text-xs text-amber-200/60 bg-amber-900/20 rounded-lg px-3 py-2">
-              <AlertCircle className="size-3.5 mt-0.5 shrink-0" />
-              <span>
-                Você pode fazer isso depois nas configurações. Sem um grupo,
-                seus itens não terão aprovação de um escotista.
-              </span>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreate(false);
+                    setError("");
+                  }}
+                  className="w-full text-sm text-green-200/50 hover:text-green-200/80 transition-colors py-1"
+                >
+                  Entrar em um grupo existente
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl bg-blue-500/20 p-3">
+                    <Users className="size-6 text-blue-300" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">
+                      Entrar em um grupo
+                    </h2>
+                    <p className="text-xs text-green-200/50">
+                      Peça a senha ao seu escotista
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Input
+                    placeholder="Senha do grupo (ex: A3K9X2)"
+                    value={groupPassword}
+                    onChange={(e) => {
+                      setGroupPassword(e.target.value.toUpperCase());
+                      setError("");
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && handleJoinGroup()}
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/30 text-center text-lg tracking-widest font-mono"
+                    maxLength={6}
+                  />
+
+                  <Button
+                    onClick={handleJoinGroup}
+                    disabled={!groupPassword.trim() || joiningGroup}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    {joiningGroup ? "Entrando..." : "Entrar no grupo"}
+                  </Button>
+                </div>
+
+                {selectedRole === "escotista" && (
+                  <>
+                    <div className="flex items-center gap-2 text-xs text-green-200/30">
+                      <div className="flex-1 border-t border-white/10" />
+                      <span>ou</span>
+                      <div className="flex-1 border-t border-white/10" />
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowCreate(true);
+                        setError("");
+                      }}
+                      className="w-full border-white/20 text-white bg-white/5 hover:bg-white/10"
+                    >
+                      <Plus className="size-4 mr-1" />
+                      Criar novo grupo
+                    </Button>
+                  </>
+                )}
+
+                <div className="flex items-start gap-2 text-xs text-sky-200/60 bg-sky-900/20 rounded-lg px-3 py-2">
+                  <AlertCircle className="size-3.5 mt-0.5 shrink-0" />
+                  <span>
+                    Você pode fazer isso depois nas configurações. Sem um grupo,
+                    seus itens não terão aprovação de um escotista.
+                  </span>
+                </div>
+              </>
+            )}
 
             <button
               type="button"

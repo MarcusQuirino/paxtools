@@ -76,7 +76,7 @@ function Home() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
         <header className="flex items-center justify-between">
-          <h1 className="text-lg font-bold text-green-800">Paxtools</h1>
+          <h1 className="text-lg font-bold text-emerald-900">Paxtools</h1>
           <AuthButton />
         </header>
         <Dashboard />

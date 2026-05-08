@@ -59,7 +59,7 @@ export function UserMenu() {
                   <span
                     className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-medium ${
                       user.role === "escotista"
-                        ? "bg-amber-100 text-amber-700"
+                        ? "bg-teal-100 text-teal-700"
                         : "bg-emerald-100 text-emerald-700"
                     }`}
                   >

@@ -52,7 +52,7 @@ function LoginPage({ loading = false }: { loading?: boolean }) {
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-green-800/30 blur-3xl" />
         <div className="absolute -bottom-32 -right-32 h-[30rem] w-[30rem] rounded-full bg-emerald-800/20 blur-3xl" />
-        <div className="absolute top-1/4 right-1/4 h-64 w-64 rounded-full bg-yellow-900/10 blur-3xl" />
+        <div className="absolute top-1/4 right-1/4 h-64 w-64 rounded-full bg-teal-900/10 blur-3xl" />
       </div>
 
       {/* Subtle dot pattern overlay */}
@@ -101,7 +101,7 @@ function LoginPage({ loading = false }: { loading?: boolean }) {
                 key={feature.title}
                 className="rounded-xl bg-white/[0.05] border border-white/[0.06] p-3 group hover:bg-white/[0.08] transition-colors"
               >
-                <feature.icon className="w-5 h-5 text-amber-300/80 mb-2" />
+                <feature.icon className="w-5 h-5 text-emerald-300/80 mb-2" />
                 <p className="text-sm font-medium text-white/90">
                   {feature.title}
                 </p>
