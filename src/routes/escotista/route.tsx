@@ -69,7 +69,7 @@ function EscotistaLayout() {
               Voltar
             </button>
           ) : (
-            <h1 className="text-lg font-bold text-green-800">Paxtools</h1>
+            <h1 className="text-lg font-bold text-emerald-900">Paxtools</h1>
           )}
           <AuthButton />
         </header>

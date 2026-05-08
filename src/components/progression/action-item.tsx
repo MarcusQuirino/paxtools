@@ -53,7 +53,7 @@ export function ActionItem({
         {text}
       </span>
       {isPending && (
-        <Clock className="size-3.5 text-amber-500 mt-0.5 shrink-0" />
+        <Clock className="size-3.5 text-slate-400 mt-0.5 shrink-0" />
       )}
     </label>
   );

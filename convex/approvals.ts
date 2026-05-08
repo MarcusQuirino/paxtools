@@ -46,10 +46,20 @@ export const getPendingForGroup = query({
         )
         .take(10);
 
+      const pendingCustomActions = (
+        await ctx.db
+          .query("customActions")
+          .withIndex("by_userId_and_status", (q) =>
+            q.eq("userId", escoteiro._id).eq("status", "pending"),
+          )
+          .take(100)
+      ).filter((c) => c.completed);
+
       const totalPending =
         pendingActions.length +
         pendingSpecialties.length +
-        pendingLisItems.length;
+        pendingLisItems.length +
+        pendingCustomActions.length;
 
       if (totalPending > 0) {
         result.push({
@@ -61,6 +71,7 @@ export const getPendingForGroup = query({
           pendingActions,
           pendingSpecialties,
           pendingLisItems,
+          pendingCustomActions,
           totalPending,
         });
       }
@@ -182,6 +193,44 @@ export const approveLisDeOuroItem = mutation({
   },
 });
 
+export const approveCustomAction = mutation({
+  args: { completionId: v.id("customActions") },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    const doc = await ctx.db.get(args.completionId);
+    if (!doc) throw new Error("Não encontrado");
+    if (!doc.completed || doc.status !== "pending")
+      throw new Error("Item não está pendente");
+
+    await assertEscotistaInSameGroup(ctx, doc.userId);
+
+    await ctx.db.patch(args.completionId, {
+      status: "approved",
+      approvedBy: user._id,
+      approvedAt: Date.now(),
+    });
+  },
+});
+
+export const rejectCustomAction = mutation({
+  args: { completionId: v.id("customActions") },
+  handler: async (ctx, args) => {
+    const doc = await ctx.db.get(args.completionId);
+    if (!doc) throw new Error("Não encontrado");
+    if (!doc.completed || doc.status !== "pending")
+      throw new Error("Item não está pendente");
+
+    await assertEscotistaInSameGroup(ctx, doc.userId);
+
+    await ctx.db.patch(args.completionId, {
+      completed: false,
+      status: undefined,
+      approvedBy: undefined,
+      approvedAt: undefined,
+    });
+  },
+});
+
 export const rejectAction = mutation({
   args: { completionId: v.id("actionCompletions") },
   handler: async (ctx, args) => {
@@ -224,6 +273,7 @@ export const bulkAction = mutation({
     actionIds: v.array(v.id("actionCompletions")),
     specialtyIds: v.array(v.id("specialtyCompletions")),
     lisIds: v.array(v.id("lisDeOuroCompletions")),
+    customActionIds: v.optional(v.array(v.id("customActions"))),
   },
   handler: async (ctx, args) => {
     const user = await getAuthenticatedUser(ctx);
@@ -271,6 +321,26 @@ export const bulkAction = mutation({
         });
       } else {
         await ctx.db.delete(id);
+      }
+    }
+
+    for (const id of args.customActionIds ?? []) {
+      const doc = await ctx.db.get(id);
+      if (!doc || !doc.completed || doc.status !== "pending") continue;
+      await assertEscotistaInSameGroup(ctx, doc.userId);
+      if (args.action === "approve") {
+        await ctx.db.patch(id, {
+          status: "approved",
+          approvedBy: user._id,
+          approvedAt: now,
+        });
+      } else {
+        await ctx.db.patch(id, {
+          completed: false,
+          status: undefined,
+          approvedBy: undefined,
+          approvedAt: undefined,
+        });
       }
     }
   },
@@ -322,6 +392,23 @@ export const approveAllForEscoteiro = mutation({
       .take(10);
 
     for (const doc of pendingLis) {
+      await ctx.db.patch(doc._id, {
+        status: "approved",
+        approvedBy: user._id,
+        approvedAt: now,
+      });
+    }
+
+    const pendingCustomActions = (
+      await ctx.db
+        .query("customActions")
+        .withIndex("by_userId_and_status", (q) =>
+          q.eq("userId", args.escoteiroId).eq("status", "pending"),
+        )
+        .take(100)
+    ).filter((c) => c.completed);
+
+    for (const doc of pendingCustomActions) {
       await ctx.db.patch(doc._id, {
         status: "approved",
         approvedBy: user._id,

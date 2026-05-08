@@ -16,6 +16,9 @@ Default to using Bun instead of Node.js.
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
 
+## comunication
+be concise and sacrifice grammar for the sake of concision
+
 ## Deployment
 
 **Never deploy to Vercel unless explicitly asked.** The user handles Vercel deployments manually.
@@ -23,6 +26,13 @@ For more information, read the Bun API docs in `node_modules/bun-types/docs/**.m
 ## GitHub
 
 Always use the `gh` CLI to interface with GitHub (PRs, issues, releases, etc.). Never use the GitHub web UI or direct API calls.
+
+## Branching & Commits
+
+**Never commit directly to `master` unless explicitly asked.** When you have changes to commit:
+1. Create a new branch with a descriptive name.
+2. Commit the changes to that branch.
+3. Open a PR targeting `master` using `gh pr create`.
 
 ## Quality Checks
 

@@ -59,7 +59,7 @@ function getEixoForBloco(blocoId: string) {
 
 type PendingItem = {
   key: string;
-  type: "action" | "specialty" | "lis";
+  type: "action" | "specialty" | "lis" | "custom";
   id: string;
   text: string;
   blocoId?: string;
@@ -121,6 +121,11 @@ type PendingEntry = {
     _id: Id<"lisDeOuroCompletions">;
     itemId: string;
   }[];
+  pendingCustomActions: {
+    _id: Id<"customActions">;
+    blocoId: string;
+    text: string;
+  }[];
   totalPending: number;
 };
 
@@ -135,6 +140,7 @@ function EscoteiroPendingCard({
     actionIds: Id<"actionCompletions">[];
     specialtyIds: Id<"specialtyCompletions">[];
     lisIds: Id<"lisDeOuroCompletions">[];
+    customActionIds: Id<"customActions">[];
   }) => void;
   isBulkPending: boolean;
 }) {
@@ -173,6 +179,17 @@ function EscoteiroPendingCard({
       });
     }
 
+    for (const c of entry.pendingCustomActions) {
+      items.push({
+        key: `custom:${c._id}`,
+        type: "custom",
+        id: c._id,
+        text: c.text,
+        blocoId: c.blocoId,
+        eixoColor: getEixoForBloco(c.blocoId)?.color,
+      });
+    }
+
     return items;
   }, [entry]);
 
@@ -207,6 +224,7 @@ function EscoteiroPendingCard({
     const actionIds: Id<"actionCompletions">[] = [];
     const specialtyIds: Id<"specialtyCompletions">[] = [];
     const lisIds: Id<"lisDeOuroCompletions">[] = [];
+    const customActionIds: Id<"customActions">[] = [];
 
     for (const item of allItems) {
       if (deselected.has(item.key)) continue;
@@ -216,9 +234,11 @@ function EscoteiroPendingCard({
         specialtyIds.push(item.id as Id<"specialtyCompletions">);
       else if (item.type === "lis")
         lisIds.push(item.id as Id<"lisDeOuroCompletions">);
+      else if (item.type === "custom")
+        customActionIds.push(item.id as Id<"customActions">);
     }
 
-    return { actionIds, specialtyIds, lisIds };
+    return { actionIds, specialtyIds, lisIds, customActionIds };
   }, [allItems, deselected]);
 
   const handleBulk = useCallback(
@@ -236,7 +256,7 @@ function EscoteiroPendingCard({
       { items: PendingItem[]; eixoColor?: string }
     >();
     for (const item of allItems) {
-      if (item.type !== "action") continue;
+      if (item.type !== "action" && item.type !== "custom") continue;
       const blocoId = item.blocoId ?? "";
       const group = map.get(blocoId) ?? {
         items: [],
@@ -268,7 +288,7 @@ function EscoteiroPendingCard({
           </div>
           <Badge
             variant="outline"
-            className="text-amber-600 border-amber-300 text-xs"
+            className="text-slate-600 border-slate-300 text-xs"
           >
             {entry.totalPending} pendente{entry.totalPending !== 1 ? "s" : ""}
           </Badge>

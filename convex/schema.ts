@@ -71,7 +71,8 @@ export default defineSchema({
     approvedAt: v.optional(v.number()),
   })
     .index("by_userId", ["userId"])
-    .index("by_userId_and_blocoId", ["userId", "blocoId"]),
+    .index("by_userId_and_blocoId", ["userId", "blocoId"])
+    .index("by_userId_and_status", ["userId", "status"]),
 
   lisDeOuroCompletions: defineTable({
     userId: v.id("users"),

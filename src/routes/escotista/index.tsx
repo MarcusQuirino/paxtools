@@ -16,6 +16,8 @@ import {
   Copy,
   Check,
   AlertCircle,
+  Plus,
+  Users,
 } from "lucide-react";
 
 export const Route = createFileRoute("/escotista/")({
@@ -36,20 +38,7 @@ function EscotistaDashboard() {
   const { mutate: toggleFav } = useMutation({ mutationFn: toggleFavFn });
 
   if (!stats) {
-    return (
-      <div className="space-y-4">
-        <div className="rounded-xl border bg-card p-5 text-center space-y-3">
-          <AlertCircle className="size-10 text-muted-foreground mx-auto" />
-          <h2 className="font-semibold">Sem grupo</h2>
-          <p className="text-sm text-muted-foreground">
-            Crie ou entre em um grupo para começar a acompanhar escoteiros.
-          </p>
-          <Link to="/settings">
-            <Button size="sm">Configurações</Button>
-          </Link>
-        </div>
-      </div>
-    );
+    return <NoGroupState />;
   }
 
   const favorites = new Set(user?.favoriteEscoteiroIds ?? []);
@@ -73,7 +62,7 @@ function EscotistaDashboard() {
   return (
     <div className="space-y-4">
       {/* Group stats */}
-      <div className="rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 px-4 py-3 text-white shadow-lg">
+      <div className="rounded-xl bg-gradient-to-r from-emerald-900 to-emerald-800 px-4 py-3 text-white shadow-lg">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-bold text-lg">{stats.group.name}</h2>
           <button
@@ -194,7 +183,7 @@ function EscoteiroCard({
           {escoteiro.pendingActions > 0 && (
             <Badge
               variant="outline"
-              className="text-[10px] px-1 py-0 text-amber-600 border-amber-300"
+              className="text-[10px] px-1 py-0 text-slate-600 border-slate-300"
             >
               <Clock className="size-2.5 mr-0.5" />
               {escoteiro.pendingActions}
@@ -211,7 +200,7 @@ function EscoteiroCard({
           aria-label={isFavorite ? "Remover favorito" : "Favoritar"}
         >
           <Star
-            className={`size-4 ${isFavorite ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`}
+            className={`size-4 ${isFavorite ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground"}`}
           />
         </button>
         <Link
@@ -222,6 +211,144 @@ function EscoteiroCard({
         >
           <Eye className="size-4 text-muted-foreground" />
         </Link>
+      </div>
+    </div>
+  );
+}
+
+function NoGroupState() {
+  const [mode, setMode] = useState<"choice" | "create" | "join">("choice");
+  const [groupName, setGroupName] = useState("");
+  const [joinPassword, setJoinPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const createGroupFn = useConvexMutation(api.groups.createGroup);
+  const { mutate: createGroup, isPending: creating } = useMutation({
+    mutationFn: createGroupFn,
+  });
+
+  const joinGroupFn = useConvexMutation(api.groups.joinGroup);
+  const { mutate: joinGroup, isPending: joining } = useMutation({
+    mutationFn: joinGroupFn,
+  });
+
+  const handleCreate = () => {
+    const name = groupName.trim();
+    if (!name) return;
+    setError("");
+    createGroup({ name }, { onError: (err) => setError(err.message) });
+  };
+
+  const handleJoin = () => {
+    const pw = joinPassword.trim();
+    if (!pw) return;
+    setError("");
+    joinGroup({ password: pw }, { onError: (err) => setError(err.message) });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border bg-card p-5 space-y-4">
+        <div className="text-center space-y-1">
+          <AlertCircle className="size-10 text-muted-foreground mx-auto" />
+          <h2 className="font-semibold">Sem grupo</h2>
+          <p className="text-sm text-muted-foreground">
+            Crie ou entre em um grupo para acompanhar escoteiros.
+          </p>
+        </div>
+
+        {mode === "choice" && (
+          <div className="space-y-2">
+            <Button onClick={() => setMode("create")} className="w-full">
+              <Plus className="size-4 mr-1" />
+              Criar novo grupo
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setMode("join")}
+              className="w-full"
+            >
+              <Users className="size-4 mr-1" />
+              Entrar em grupo existente
+            </Button>
+          </div>
+        )}
+
+        {mode === "create" && (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Nome do grupo</label>
+              <Input
+                placeholder="Ex: Tropa Falcão"
+                value={groupName}
+                onChange={(e) => {
+                  setGroupName(e.target.value);
+                  setError("");
+                }}
+                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                autoFocus
+              />
+            </div>
+            <Button
+              onClick={handleCreate}
+              disabled={!groupName.trim() || creating}
+              className="w-full"
+            >
+              {creating ? "Criando..." : "Criar grupo"}
+            </Button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("choice");
+                setError("");
+              }}
+              className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+            >
+              Voltar
+            </button>
+          </div>
+        )}
+
+        {mode === "join" && (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Senha do grupo</label>
+              <Input
+                placeholder="Ex: A3K9X2"
+                value={joinPassword}
+                onChange={(e) => {
+                  setJoinPassword(e.target.value.toUpperCase());
+                  setError("");
+                }}
+                onKeyDown={(e) => e.key === "Enter" && handleJoin()}
+                className="font-mono tracking-widest text-center"
+                maxLength={6}
+                autoFocus
+              />
+            </div>
+            <Button
+              onClick={handleJoin}
+              disabled={!joinPassword.trim() || joining}
+              className="w-full"
+            >
+              {joining ? "Entrando..." : "Entrar no grupo"}
+            </Button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("choice");
+                setError("");
+              }}
+              className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+            >
+              Voltar
+            </button>
+          </div>
+        )}
+
+        {error && (
+          <p className="text-xs text-destructive text-center">{error}</p>
+        )}
       </div>
     </div>
   );

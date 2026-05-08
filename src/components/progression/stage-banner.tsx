@@ -23,7 +23,7 @@ export function StageBanner({
 
   if (lisDeOuro) {
     return (
-      <div className="rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 p-5 text-white shadow-lg">
+      <div className="rounded-xl bg-gradient-to-r from-yellow-600 to-yellow-500 p-5 text-white shadow-lg">
         <div className="flex items-center gap-3">
           <Trophy className="size-10 drop-shadow" />
           <div>
