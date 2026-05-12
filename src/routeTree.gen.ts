@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as PlanRouteImport } from './routes/plan'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as EscotistaRouteRouteImport } from './routes/escotista/route'
 import { Route as IndexRouteImport } from './routes/index'
@@ -26,6 +27,11 @@ const SigninRoute = SigninRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlanRoute = PlanRouteImport.update({
+  id: '/plan',
+  path: '/plan',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardingRoute = OnboardingRouteImport.update({
@@ -64,6 +70,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/escotista': typeof EscotistaRouteRouteWithChildren
   '/onboarding': typeof OnboardingRoute
+  '/plan': typeof PlanRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
   '/escotista/pending': typeof EscotistaPendingRoute
@@ -73,6 +80,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/onboarding': typeof OnboardingRoute
+  '/plan': typeof PlanRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
   '/escotista/pending': typeof EscotistaPendingRoute
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/escotista': typeof EscotistaRouteRouteWithChildren
   '/onboarding': typeof OnboardingRoute
+  '/plan': typeof PlanRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
   '/escotista/pending': typeof EscotistaPendingRoute
@@ -96,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/escotista'
     | '/onboarding'
+    | '/plan'
     | '/settings'
     | '/signin'
     | '/escotista/pending'
@@ -105,6 +115,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/onboarding'
+    | '/plan'
     | '/settings'
     | '/signin'
     | '/escotista/pending'
@@ -115,6 +126,7 @@ export interface FileRouteTypes {
     | '/'
     | '/escotista'
     | '/onboarding'
+    | '/plan'
     | '/settings'
     | '/signin'
     | '/escotista/pending'
@@ -126,6 +138,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   EscotistaRouteRoute: typeof EscotistaRouteRouteWithChildren
   OnboardingRoute: typeof OnboardingRoute
+  PlanRoute: typeof PlanRoute
   SettingsRoute: typeof SettingsRoute
   SigninRoute: typeof SigninRoute
 }
@@ -144,6 +157,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/plan': {
+      id: '/plan'
+      path: '/plan'
+      fullPath: '/plan'
+      preLoaderRoute: typeof PlanRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/onboarding': {
@@ -211,6 +231,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   EscotistaRouteRoute: EscotistaRouteRouteWithChildren,
   OnboardingRoute: OnboardingRoute,
+  PlanRoute: PlanRoute,
   SettingsRoute: SettingsRoute,
   SigninRoute: SigninRoute,
 }
