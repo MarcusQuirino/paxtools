@@ -14,6 +14,7 @@ import type * as groups from "../groups.js";
 import type * as http from "../http.js";
 import type * as lib_authHelpers from "../lib/authHelpers.js";
 import type * as onboarding from "../onboarding.js";
+import type * as plan from "../plan.js";
 import type * as progression from "../progression.js";
 import type * as users from "../users.js";
 
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "lib/authHelpers": typeof lib_authHelpers;
   onboarding: typeof onboarding;
+  plan: typeof plan;
   progression: typeof progression;
   users: typeof users;
 }>;

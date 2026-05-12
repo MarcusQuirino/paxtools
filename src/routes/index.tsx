@@ -7,18 +7,25 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { AuthButton } from "@/components/auth/auth-button";
 import { useProgression } from "@/hooks/use-progression";
+import { usePlan } from "@/hooks/use-plan";
 import { StageBanner } from "@/components/progression/stage-banner";
 import { OverallProgress } from "@/components/progression/overall-progress";
 import { EixoSection } from "@/components/progression/eixo-section";
 import { LisDeOuroSection } from "@/components/progression/lis-de-ouro-section";
+import { PlanNav } from "@/components/progression/plan-nav";
 import { Footer } from "@/components/footer";
 import { EIXOS } from "@/data/progression-data";
 
 export const Route = createFileRoute("/")({
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(
-      convexQuery(api.progression.getMyCompletions, {}),
-    );
+    await Promise.all([
+      context.queryClient.ensureQueryData(
+        convexQuery(api.progression.getMyCompletions, {}),
+      ),
+      context.queryClient.ensureQueryData(
+        convexQuery(api.plan.getMyPlan, {}),
+      ),
+    ]);
   },
   component: Home,
 });
@@ -79,6 +86,7 @@ function Home() {
           <h1 className="text-lg font-bold text-emerald-900">Paxtools</h1>
           <AuthButton />
         </header>
+        <PlanNav />
         <Dashboard />
         <Footer />
       </div>
@@ -104,6 +112,9 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
     blocksComplete,
     lisDeOuro,
   } = useProgression(targetUserId);
+
+  // Plan favorites only apply to the escoteiro viewing their own dashboard.
+  const showPlanStars = !targetUserId;
 
   const toggleActionFn = useConvexMutation(api.progression.toggleAction);
   const { mutate: toggleAction } = useMutation({ mutationFn: toggleActionFn });
@@ -168,10 +179,8 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
         pendingBlockIds={pendingBlockIds}
       />
 
-      {EIXOS.map((eixo) => (
-        <EixoSection
-          key={eixo.id}
-          eixo={eixo}
+      {showPlanStars ? (
+        <DashboardEixosWithPlan
           approvedActionIds={approvedActionIds}
           pendingActionIds={pendingActionIds}
           actionStatusMap={actionStatusMap}
@@ -185,7 +194,26 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
           onToggleCustom={handleToggleCustom}
           onDeleteCustom={handleDeleteCustom}
         />
-      ))}
+      ) : (
+        EIXOS.map((eixo) => (
+          <EixoSection
+            key={eixo.id}
+            eixo={eixo}
+            approvedActionIds={approvedActionIds}
+            pendingActionIds={pendingActionIds}
+            actionStatusMap={actionStatusMap}
+            completedBlockIds={completedBlockIds}
+            pendingBlockIds={pendingBlockIds}
+            customActions={customActions}
+            completedSpecialties={completedSpecialties}
+            onToggleAction={handleToggleAction}
+            onToggleSpecialty={handleToggleSpecialty}
+            onAddCustom={handleAddCustom}
+            onToggleCustom={handleToggleCustom}
+            onDeleteCustom={handleDeleteCustom}
+          />
+        ))
+      )}
 
       <LisDeOuroSection
         blocksComplete={blocksComplete}
@@ -195,5 +223,42 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
         onToggleItem={handleToggleLisItem}
       />
     </div>
+  );
+}
+
+type DashboardEixosWithPlanProps = {
+  approvedActionIds: Set<string>;
+  pendingActionIds: Set<string>;
+  actionStatusMap: Map<string, "pending" | "approved">;
+  completedBlockIds: Set<string>;
+  pendingBlockIds: Set<string>;
+  customActions: React.ComponentProps<typeof EixoSection>["customActions"];
+  completedSpecialties: React.ComponentProps<
+    typeof EixoSection
+  >["completedSpecialties"];
+  onToggleAction: (actionId: string) => void;
+  onToggleSpecialty: (blocoId: string, specialtyName: string) => void;
+  onAddCustom: (blocoId: string, text: string) => void;
+  onToggleCustom: (id: Id<"customActions">) => void;
+  onDeleteCustom: (id: Id<"customActions">) => void;
+};
+
+function DashboardEixosWithPlan(props: DashboardEixosWithPlanProps) {
+  const { plannedKeys, togglePlanned } = usePlan();
+  const handleTogglePlanned = (itemKey: string) => {
+    togglePlanned({ itemKey });
+  };
+  return (
+    <>
+      {EIXOS.map((eixo) => (
+        <EixoSection
+          key={eixo.id}
+          eixo={eixo}
+          {...props}
+          plannedKeys={plannedKeys}
+          onTogglePlanned={handleTogglePlanned}
+        />
+      ))}
+    </>
   );
 }

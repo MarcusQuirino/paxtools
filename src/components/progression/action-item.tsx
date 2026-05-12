@@ -1,6 +1,7 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Clock } from "lucide-react";
 import type { CompletionStatus } from "@/data/types";
+import { PlanStar } from "./plan-star";
 
 type ActionItemProps = {
   id: string;
@@ -9,6 +10,8 @@ type ActionItemProps = {
   status?: CompletionStatus;
   onToggle: () => void;
   color?: string;
+  planned?: boolean;
+  onTogglePlanned?: () => void;
 };
 
 export function ActionItem({
@@ -18,6 +21,8 @@ export function ActionItem({
   status,
   onToggle,
   color,
+  planned,
+  onTogglePlanned,
 }: ActionItemProps) {
   const isPending = checked && status === "pending";
 
@@ -54,6 +59,13 @@ export function ActionItem({
       </span>
       {isPending && (
         <Clock className="size-3.5 text-slate-400 mt-0.5 shrink-0" />
+      )}
+      {onTogglePlanned && (
+        <PlanStar
+          planned={!!planned}
+          onToggle={onTogglePlanned}
+          color={color}
+        />
       )}
     </label>
   );
