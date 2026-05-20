@@ -148,23 +148,27 @@ function SettingsPage() {
               <div className="rounded-lg bg-muted/50 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-sm">{group.name}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleCopyPassword}
-                    className="h-7 text-xs gap-1"
-                  >
-                    {copiedPassword ? (
-                      <Check className="size-3" />
-                    ) : (
-                      <Copy className="size-3" />
-                    )}
-                    {copiedPassword ? "Copiado!" : group.password}
-                  </Button>
+                  {group.password && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCopyPassword}
+                      className="h-7 text-xs gap-1"
+                    >
+                      {copiedPassword ? (
+                        <Check className="size-3" />
+                      ) : (
+                        <Copy className="size-3" />
+                      )}
+                      {copiedPassword ? "Copiado!" : group.password}
+                    </Button>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Compartilhe a senha acima para convidar membros.
-                </p>
+                {group.password && (
+                  <p className="text-xs text-muted-foreground">
+                    Compartilhe a senha acima para convidar membros.
+                  </p>
+                )}
               </div>
               <Button
                 variant="outline"
