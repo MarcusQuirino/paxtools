@@ -18,6 +18,7 @@ type CustomActionInputProps = {
   plannedKeys?: Set<string>;
   onTogglePlanned?: (itemKey: string) => void;
   planOnly?: boolean;
+  lockApproved?: boolean;
 };
 
 export function CustomActionInput({
@@ -30,6 +31,7 @@ export function CustomActionInput({
   plannedKeys,
   onTogglePlanned,
   planOnly,
+  lockApproved,
 }: CustomActionInputProps) {
   const [text, setText] = useState("");
 
@@ -53,6 +55,8 @@ export function CustomActionInput({
     <div className="space-y-1">
       {blocoCustom.map((action) => {
         const isPending = action.completed && action.status === "pending";
+        const isLocked =
+          lockApproved && action.completed && action.status === "approved";
         const planKey = encodePlanKey({
           kind: "custom",
           customActionId: action._id,
@@ -65,6 +69,7 @@ export function CustomActionInput({
             <Checkbox
               checked={action.completed}
               onCheckedChange={() => onToggle(action._id)}
+              disabled={isLocked}
               className="mt-0.5 size-5"
               style={
                 action.completed
@@ -97,14 +102,16 @@ export function CustomActionInput({
                 color={color}
               />
             )}
-            <button
-              type="button"
-              onClick={() => onDelete(action._id)}
-              className="text-muted-foreground hover:text-destructive transition-opacity p-1 sm:opacity-0 sm:group-hover:opacity-100"
-              aria-label="Remover"
-            >
-              <Trash2 className="size-4" />
-            </button>
+            {!isLocked && (
+              <button
+                type="button"
+                onClick={() => onDelete(action._id)}
+                className="text-muted-foreground hover:text-destructive transition-opacity p-1 sm:opacity-0 sm:group-hover:opacity-100"
+                aria-label="Remover"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            )}
           </div>
         );
       })}

@@ -19,6 +19,7 @@ type ActionChecklistProps = {
   plannedKeys?: Set<string>;
   onTogglePlanned?: (itemKey: string) => void;
   planOnly?: boolean;
+  lockApproved?: boolean;
 };
 
 export function ActionChecklist({
@@ -36,6 +37,7 @@ export function ActionChecklist({
   plannedKeys,
   onTogglePlanned,
   planOnly,
+  lockApproved,
 }: ActionChecklistProps) {
   const variableDone = bloco.variableActions.filter((a) =>
     completedActionIds.has(a.id),
@@ -93,6 +95,7 @@ export function ActionChecklist({
                       ? () => onTogglePlanned(planKey)
                       : undefined
                   }
+                  lockApproved={lockApproved}
                 />
               );
             })}
@@ -134,6 +137,7 @@ export function ActionChecklist({
                     ? () => onTogglePlanned(planKey)
                     : undefined
                 }
+                lockApproved={lockApproved}
               />
             );
           })}
@@ -147,6 +151,7 @@ export function ActionChecklist({
             plannedKeys={plannedKeys}
             onTogglePlanned={onTogglePlanned}
             planOnly={planOnly}
+            lockApproved={lockApproved}
           />
         </div>
       </div>

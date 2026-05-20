@@ -12,6 +12,7 @@ type ActionItemProps = {
   color?: string;
   planned?: boolean;
   onTogglePlanned?: () => void;
+  lockApproved?: boolean;
 };
 
 export function ActionItem({
@@ -23,18 +24,25 @@ export function ActionItem({
   color,
   planned,
   onTogglePlanned,
+  lockApproved,
 }: ActionItemProps) {
   const isPending = checked && status === "pending";
+  const isLocked = lockApproved && checked && status === "approved";
 
   return (
     <label
       htmlFor={id}
-      className="flex items-start gap-3 rounded-lg p-3 min-h-[44px] cursor-pointer hover:bg-muted/50 active:bg-muted transition-colors"
+      className={`flex items-start gap-3 rounded-lg p-3 min-h-[44px] transition-colors ${
+        isLocked
+          ? "cursor-not-allowed"
+          : "cursor-pointer hover:bg-muted/50 active:bg-muted"
+      }`}
     >
       <Checkbox
         id={id}
         checked={checked}
         onCheckedChange={onToggle}
+        disabled={isLocked}
         className="mt-0.5 size-5"
         style={
           checked && color

@@ -115,6 +115,9 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
 
   // Plan favorites only apply to the escoteiro viewing their own dashboard.
   const showPlanStars = !targetUserId;
+  // Lock approved items from being un-checked by the escoteiro themselves;
+  // escotistas viewing an escoteiro retain edit rights.
+  const lockApproved = !targetUserId;
 
   const toggleActionFn = useConvexMutation(api.progression.toggleAction);
   const { mutate: toggleAction } = useMutation({ mutationFn: toggleActionFn });
@@ -193,6 +196,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
           onAddCustom={handleAddCustom}
           onToggleCustom={handleToggleCustom}
           onDeleteCustom={handleDeleteCustom}
+          lockApproved={lockApproved}
         />
       ) : (
         EIXOS.map((eixo) => (
@@ -211,6 +215,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
             onAddCustom={handleAddCustom}
             onToggleCustom={handleToggleCustom}
             onDeleteCustom={handleDeleteCustom}
+            lockApproved={lockApproved}
           />
         ))
       )}
@@ -221,6 +226,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
         pendingLisItemIds={pendingLisItemIds}
         lisDeOuro={lisDeOuro}
         onToggleItem={handleToggleLisItem}
+        lockApproved={lockApproved}
       />
     </div>
   );
@@ -241,6 +247,7 @@ type DashboardEixosWithPlanProps = {
   onAddCustom: (blocoId: string, text: string) => void;
   onToggleCustom: (id: Id<"customActions">) => void;
   onDeleteCustom: (id: Id<"customActions">) => void;
+  lockApproved?: boolean;
 };
 
 function DashboardEixosWithPlan(props: DashboardEixosWithPlanProps) {

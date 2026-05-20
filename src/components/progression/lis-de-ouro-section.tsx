@@ -13,6 +13,7 @@ type LisDeOuroSectionProps = {
   pendingLisItemIds: Set<string>;
   lisDeOuro: boolean;
   onToggleItem: (itemId: string) => void;
+  lockApproved?: boolean;
 };
 
 export function LisDeOuroSection({
@@ -21,6 +22,7 @@ export function LisDeOuroSection({
   pendingLisItemIds,
   lisDeOuro,
   onToggleItem,
+  lockApproved,
 }: LisDeOuroSectionProps) {
   const approvedCount = LIS_DE_OURO_ITEMS.filter((item) =>
     item.auto ? blocksComplete : approvedLisItemIds.has(item.id),
@@ -79,7 +81,8 @@ export function LisDeOuroSection({
             : approvedLisItemIds.has(item.id);
           const isPending = !isAutoItem && pendingLisItemIds.has(item.id);
           const isChecked = isApproved || isPending;
-          const isDisabled = !blocksComplete;
+          const isLocked = !!lockApproved && isApproved && !isAutoItem;
+          const isDisabled = !blocksComplete || isLocked;
 
           return (
             <label

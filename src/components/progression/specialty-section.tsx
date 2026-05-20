@@ -16,6 +16,7 @@ type SpecialtySectionProps = {
   plannedKeys?: Set<string>;
   onTogglePlanned?: (itemKey: string) => void;
   planOnly?: boolean;
+  lockApproved?: boolean;
 };
 
 export function SpecialtySection({
@@ -26,6 +27,7 @@ export function SpecialtySection({
   plannedKeys,
   onTogglePlanned,
   planOnly,
+  lockApproved,
 }: SpecialtySectionProps) {
   if (alternatives.length === 0) return null;
 
@@ -64,6 +66,8 @@ export function SpecialtySection({
             const completion = getStatus(item);
             const isChecked = !!completion;
             const isPending = completion?.status === "pending";
+            const isLocked =
+              lockApproved && isChecked && completion?.status === "approved";
             const planKey = encodePlanKey({
               kind: "specialty",
               blocoId,
@@ -72,11 +76,14 @@ export function SpecialtySection({
             return (
               <label
                 key={item}
-                className="flex items-center gap-3 min-h-[44px] cursor-pointer px-1"
+                className={`flex items-center gap-3 min-h-[44px] px-1 ${
+                  isLocked ? "cursor-not-allowed" : "cursor-pointer"
+                }`}
               >
                 <Checkbox
                   checked={isChecked}
                   onCheckedChange={() => onToggle(blocoId, item)}
+                  disabled={isLocked}
                   className="size-5"
                   style={
                     isChecked
