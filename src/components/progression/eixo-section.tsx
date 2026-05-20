@@ -25,6 +25,8 @@ type EixoSectionProps = {
   plannedKeys?: Set<string>;
   onTogglePlanned?: (itemKey: string) => void;
   blocoFilter?: (blocoId: string) => boolean;
+  planOnly?: boolean;
+  lockApproved?: boolean;
 };
 
 export function EixoSection({
@@ -44,6 +46,8 @@ export function EixoSection({
   plannedKeys,
   onTogglePlanned,
   blocoFilter,
+  planOnly,
+  lockApproved,
 }: EixoSectionProps) {
   const visibleBlocos = blocoFilter
     ? eixo.blocos.filter((b) => blocoFilter(b.id))
@@ -99,6 +103,8 @@ export function EixoSection({
             onDeleteCustom={onDeleteCustom}
             plannedKeys={plannedKeys}
             onTogglePlanned={onTogglePlanned}
+            planOnly={planOnly}
+            lockApproved={lockApproved}
           />
         ))}
       </Accordion>

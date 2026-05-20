@@ -92,7 +92,7 @@ export const getMyGroup = query({
     return {
       _id: group._id,
       name: group.name,
-      password: group.password,
+      password: user.role === "escotista" ? group.password : null,
       isCreator: group.createdBy === user._id,
     };
   },

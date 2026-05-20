@@ -33,6 +33,9 @@ function EscotistaDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFavorites, setShowFavorites] = useState(false);
   const [copiedPassword, setCopiedPassword] = useState(false);
+  const [activeTab, setActiveTab] = useState<"escoteiros" | "escotistas">(
+    "escoteiros",
+  );
 
   const toggleFavFn = useConvexMutation(api.users.toggleFavoriteEscoteiro);
   const { mutate: toggleFav } = useMutation({ mutationFn: toggleFavFn });
@@ -50,6 +53,12 @@ function EscotistaDashboard() {
       return (e.name?.toLowerCase().includes(q) ?? false);
     }
     return true;
+  });
+
+  const filteredEscotistas = stats.escotistaStats.filter((e) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return e.name?.toLowerCase().includes(q) ?? false;
   });
 
   const handleCopyPassword = async () => {
@@ -80,14 +89,32 @@ function EscotistaDashboard() {
         </div>
 
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-white/15 rounded-lg p-2 text-center">
+          <button
+            type="button"
+            onClick={() => setActiveTab("escoteiros")}
+            aria-pressed={activeTab === "escoteiros"}
+            className={`rounded-lg p-2 text-center transition-colors ${
+              activeTab === "escoteiros"
+                ? "bg-white/30 ring-2 ring-white/60"
+                : "bg-white/15 hover:bg-white/20"
+            }`}
+          >
             <p className="text-xl font-bold">{stats.escoteiroCount}</p>
             <p className="text-[10px] opacity-80">Escoteiros</p>
-          </div>
-          <div className="bg-white/15 rounded-lg p-2 text-center">
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("escotistas")}
+            aria-pressed={activeTab === "escotistas"}
+            className={`rounded-lg p-2 text-center transition-colors ${
+              activeTab === "escotistas"
+                ? "bg-white/30 ring-2 ring-white/60"
+                : "bg-white/15 hover:bg-white/20"
+            }`}
+          >
             <p className="text-xl font-bold">{stats.escotistaCount}</p>
             <p className="text-[10px] opacity-80">Escotistas</p>
-          </div>
+          </button>
           <div className="bg-white/15 rounded-lg p-2 text-center">
             <p className="text-xl font-bold">{stats.totalPending}</p>
             <p className="text-[10px] opacity-80">Pendentes</p>
@@ -101,47 +128,92 @@ function EscotistaDashboard() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar escoteiro..."
+              placeholder={
+                activeTab === "escoteiros"
+                  ? "Buscar escoteiro..."
+                  : "Buscar escotista..."
+              }
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 h-9"
             />
           </div>
-          <Button
-            variant={showFavorites ? "default" : "outline"}
-            size="sm"
-            onClick={() => setShowFavorites(!showFavorites)}
-            className="h-9 px-3"
-          >
-            <Star
-              className={`size-4 ${showFavorites ? "fill-current" : ""}`}
-            />
-          </Button>
+          {activeTab === "escoteiros" && (
+            <Button
+              variant={showFavorites ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowFavorites(!showFavorites)}
+              className="h-9 px-3"
+            >
+              <Star
+                className={`size-4 ${showFavorites ? "fill-current" : ""}`}
+              />
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Escoteiro list */}
+      {/* Member list */}
       <div className="space-y-2">
-        {filteredEscoteiros.length === 0 ? (
+        {activeTab === "escoteiros" ? (
+          filteredEscoteiros.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">
+              {showFavorites
+                ? "Nenhum favorito encontrado"
+                : searchQuery
+                  ? "Nenhum escoteiro encontrado"
+                  : "Nenhum escoteiro no grupo"}
+            </p>
+          ) : (
+            filteredEscoteiros.map((escoteiro) => (
+              <EscoteiroCard
+                key={escoteiro._id}
+                escoteiro={escoteiro}
+                isFavorite={favorites.has(escoteiro._id)}
+                onToggleFavorite={() =>
+                  toggleFav({ escoteiroId: escoteiro._id })
+                }
+              />
+            ))
+          )
+        ) : filteredEscotistas.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-6">
-            {showFavorites
-              ? "Nenhum favorito encontrado"
-              : searchQuery
-                ? "Nenhum escoteiro encontrado"
-                : "Nenhum escoteiro no grupo"}
+            {searchQuery
+              ? "Nenhum escotista encontrado"
+              : "Nenhum escotista no grupo"}
           </p>
         ) : (
-          filteredEscoteiros.map((escoteiro) => (
-            <EscoteiroCard
-              key={escoteiro._id}
-              escoteiro={escoteiro}
-              isFavorite={favorites.has(escoteiro._id)}
-              onToggleFavorite={() =>
-                toggleFav({ escoteiroId: escoteiro._id })
-              }
-            />
+          filteredEscotistas.map((escotista) => (
+            <EscotistaCard key={escotista._id} escotista={escotista} />
           ))
         )}
+      </div>
+    </div>
+  );
+}
+
+function EscotistaCard({
+  escotista,
+}: {
+  escotista: {
+    _id: Id<"users">;
+    name?: string | null;
+    image?: string | null;
+  };
+}) {
+  return (
+    <div className="rounded-xl border bg-card p-3 flex items-center gap-3">
+      <Avatar className="size-10">
+        <AvatarImage src={escotista.image ?? undefined} />
+        <AvatarFallback className="text-xs">
+          {escotista.name?.charAt(0)?.toUpperCase() ?? "?"}
+        </AvatarFallback>
+      </Avatar>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">
+          {escotista.name ?? "Sem nome"}
+        </p>
+        <p className="text-[11px] text-muted-foreground">Escotista</p>
       </div>
     </div>
   );

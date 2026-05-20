@@ -32,6 +32,8 @@ type BlocoCardProps = {
   onDeleteCustom: (id: Id<"customActions">) => void;
   plannedKeys?: Set<string>;
   onTogglePlanned?: (itemKey: string) => void;
+  planOnly?: boolean;
+  lockApproved?: boolean;
 };
 
 export function BlocoCard({
@@ -50,6 +52,8 @@ export function BlocoCard({
   onDeleteCustom,
   plannedKeys,
   onTogglePlanned,
+  planOnly,
+  lockApproved,
 }: BlocoCardProps) {
   const approvedCustomCompleted = customActions.filter(
     (c) => c.blocoId === bloco.id && c.completed && c.status !== "pending",
@@ -161,6 +165,8 @@ export function BlocoCard({
           onDeleteCustom={onDeleteCustom}
           plannedKeys={plannedKeys}
           onTogglePlanned={onTogglePlanned}
+          planOnly={planOnly}
+          lockApproved={lockApproved}
         />
         <SpecialtySection
           blocoId={bloco.id}
@@ -169,6 +175,8 @@ export function BlocoCard({
           onToggle={onToggleSpecialty}
           plannedKeys={plannedKeys}
           onTogglePlanned={onTogglePlanned}
+          planOnly={planOnly}
+          lockApproved={lockApproved}
         />
       </AccordionContent>
     </AccordionItem>

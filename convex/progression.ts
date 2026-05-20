@@ -28,6 +28,7 @@ async function resolveTargetAndStatus(
   effectiveUserId: Id<"users">;
   status: CompletionStatus;
   approvedBy?: Id<"users">;
+  callerIsEscotista: boolean;
 }> {
   const caller = await getAuthenticatedUser(ctx);
 
@@ -37,14 +38,34 @@ async function resolveTargetAndStatus(
       effectiveUserId: targetUserId,
       status: "approved",
       approvedBy: caller._id,
+      callerIsEscotista: true,
     };
   }
 
   if (caller.role === "escotista") {
-    return { effectiveUserId: caller._id, status: "approved" };
+    return {
+      effectiveUserId: caller._id,
+      status: "approved",
+      callerIsEscotista: true,
+    };
   }
 
-  return { effectiveUserId: caller._id, status: "pending" };
+  return {
+    effectiveUserId: caller._id,
+    status: "pending",
+    callerIsEscotista: false,
+  };
+}
+
+function assertCanRemoveApproved(
+  existingStatus: CompletionStatus | undefined,
+  callerIsEscotista: boolean,
+) {
+  if (existingStatus === "approved" && !callerIsEscotista) {
+    throw new Error(
+      "Item já aprovado pelo escotista. Apenas um escotista pode desfazer.",
+    );
+  }
 }
 
 export const getMyCompletions = query({
@@ -118,7 +139,7 @@ export const toggleAction = mutation({
     targetUserId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    const { effectiveUserId, status, approvedBy } =
+    const { effectiveUserId, status, approvedBy, callerIsEscotista } =
       await resolveTargetAndStatus(ctx, args.targetUserId);
 
     if (!ACTION_ID_PATTERN.test(args.actionId))
@@ -140,6 +161,7 @@ export const toggleAction = mutation({
           approvedAt: Date.now(),
         });
       } else {
+        assertCanRemoveApproved(existing.status, callerIsEscotista);
         await ctx.db.delete(existing._id);
       }
     } else {
@@ -162,7 +184,7 @@ export const toggleSpecialty = mutation({
     targetUserId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    const { effectiveUserId, status, approvedBy } =
+    const { effectiveUserId, status, approvedBy, callerIsEscotista } =
       await resolveTargetAndStatus(ctx, args.targetUserId);
 
     if (!BLOCO_ID_PATTERN.test(args.blocoId))
@@ -188,6 +210,7 @@ export const toggleSpecialty = mutation({
           approvedAt: Date.now(),
         });
       } else {
+        assertCanRemoveApproved(existing.status, callerIsEscotista);
         await ctx.db.delete(existing._id);
       }
     } else {
@@ -248,7 +271,7 @@ export const toggleCustomAction = mutation({
     targetUserId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    const { effectiveUserId, status, approvedBy } =
+    const { effectiveUserId, status, approvedBy, callerIsEscotista } =
       await resolveTargetAndStatus(ctx, args.targetUserId);
 
     const doc = await ctx.db.get(args.customActionId);
@@ -263,6 +286,10 @@ export const toggleCustomAction = mutation({
         approvedAt: Date.now(),
       });
     } else {
+      // Unchecking a completed custom action requires approval lock check.
+      if (doc.completed) {
+        assertCanRemoveApproved(doc.status, callerIsEscotista);
+      }
       await ctx.db.patch(args.customActionId, {
         completed: !doc.completed,
         status: !doc.completed ? status : undefined,
@@ -279,14 +306,16 @@ export const deleteCustomAction = mutation({
     targetUserId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    const { effectiveUserId } = await resolveTargetAndStatus(
-      ctx,
-      args.targetUserId,
-    );
+    const { effectiveUserId, callerIsEscotista } =
+      await resolveTargetAndStatus(ctx, args.targetUserId);
 
     const doc = await ctx.db.get(args.customActionId);
     if (!doc || doc.userId !== effectiveUserId)
       throw new Error("Não encontrado");
+
+    if (doc.completed) {
+      assertCanRemoveApproved(doc.status, callerIsEscotista);
+    }
 
     await ctx.db.delete(args.customActionId);
   },
@@ -298,7 +327,7 @@ export const toggleLisDeOuroItem = mutation({
     targetUserId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
-    const { effectiveUserId, status, approvedBy } =
+    const { effectiveUserId, status, approvedBy, callerIsEscotista } =
       await resolveTargetAndStatus(ctx, args.targetUserId);
 
     if (!VALID_LIS_ITEM_IDS.has(args.itemId))
@@ -319,6 +348,7 @@ export const toggleLisDeOuroItem = mutation({
           approvedAt: Date.now(),
         });
       } else {
+        assertCanRemoveApproved(existing.status, callerIsEscotista);
         await ctx.db.delete(existing._id);
       }
     } else {

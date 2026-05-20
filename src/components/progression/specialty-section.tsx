@@ -15,6 +15,8 @@ type SpecialtySectionProps = {
   onToggle: (blocoId: string, specialtyName: string) => void;
   plannedKeys?: Set<string>;
   onTogglePlanned?: (itemKey: string) => void;
+  planOnly?: boolean;
+  lockApproved?: boolean;
 };
 
 export function SpecialtySection({
@@ -24,6 +26,8 @@ export function SpecialtySection({
   onToggle,
   plannedKeys,
   onTogglePlanned,
+  planOnly,
+  lockApproved,
 }: SpecialtySectionProps) {
   if (alternatives.length === 0) return null;
 
@@ -31,6 +35,18 @@ export function SpecialtySection({
     completedSpecialties.find(
       (s) => s.blocoId === blocoId && s.specialtyName === name,
     );
+
+  const isPlanned = (name: string) =>
+    !planOnly ||
+    !!plannedKeys?.has(
+      encodePlanKey({ kind: "specialty", blocoId, specialtyName: name }),
+    );
+
+  const visibleAlternatives = alternatives
+    .map((alt) => ({ ...alt, items: alt.items.filter(isPlanned) }))
+    .filter((alt) => alt.items.length > 0);
+
+  if (visibleAlternatives.length === 0) return null;
 
   return (
     <div className="mt-4">
@@ -40,7 +56,7 @@ export function SpecialtySection({
         <div className="flex-1 border-t" />
       </div>
 
-      {alternatives.map((alt) => (
+      {visibleAlternatives.map((alt) => (
         <div key={alt.type} className="border rounded-md p-3 space-y-2">
           <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase">
             <Award className="size-3.5" />
@@ -50,6 +66,8 @@ export function SpecialtySection({
             const completion = getStatus(item);
             const isChecked = !!completion;
             const isPending = completion?.status === "pending";
+            const isLocked =
+              lockApproved && isChecked && completion?.status === "approved";
             const planKey = encodePlanKey({
               kind: "specialty",
               blocoId,
@@ -58,11 +76,14 @@ export function SpecialtySection({
             return (
               <label
                 key={item}
-                className="flex items-center gap-3 min-h-[44px] cursor-pointer px-1"
+                className={`flex items-center gap-3 min-h-[44px] px-1 ${
+                  isLocked ? "cursor-not-allowed" : "cursor-pointer"
+                }`}
               >
                 <Checkbox
                   checked={isChecked}
                   onCheckedChange={() => onToggle(blocoId, item)}
+                  disabled={isLocked}
                   className="size-5"
                   style={
                     isChecked

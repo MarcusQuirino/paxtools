@@ -192,6 +192,8 @@ function PlanDashboard() {
             plannedKeys={plannedKeys}
             onTogglePlanned={(itemKey) => togglePlanned({ itemKey })}
             blocoFilter={(blocoId) => plannedBlocoIds.has(blocoId)}
+            planOnly
+            lockApproved
           />
         ))
       ) : (
@@ -426,18 +428,25 @@ function RowBody({
         color={item.eixo.color}
         planned
         onTogglePlanned={() => onTogglePlanned(item.itemKey)}
+        lockApproved
       />
     );
   }
   if (item.kind === "specialty") {
     const isPending = item.checked && item.status === "pending";
+    const isLocked = item.checked && item.status === "approved";
     return (
-      <label className="flex items-center gap-3 min-h-[44px] cursor-pointer px-3 py-2">
+      <label
+        className={`flex items-center gap-3 min-h-[44px] px-3 py-2 ${
+          isLocked ? "cursor-not-allowed" : "cursor-pointer"
+        }`}
+      >
         <Checkbox
           checked={item.checked}
           onCheckedChange={() =>
             onToggleSpecialty(item.bloco.id, item.specialtyName)
           }
+          disabled={isLocked}
           className="size-5"
           style={item.checked ? { opacity: isPending ? 0.4 : 1 } : undefined}
         />
@@ -462,11 +471,13 @@ function RowBody({
   // custom
   const c = item.customAction;
   const isPending = c.completed && c.status === "pending";
+  const isLocked = c.completed && c.status === "approved";
   return (
     <div className="flex items-start gap-3 px-3 py-2 min-h-[44px]">
       <Checkbox
         checked={c.completed}
         onCheckedChange={() => onToggleCustom(c._id)}
+        disabled={isLocked}
         className="mt-0.5 size-5"
         style={
           c.completed
@@ -492,14 +503,16 @@ function RowBody({
       {isPending && (
         <Clock className="size-3.5 text-amber-500 mt-0.5 shrink-0" />
       )}
-      <button
-        type="button"
-        onClick={() => onDeleteCustom(c._id)}
-        className="text-muted-foreground hover:text-destructive p-1"
-        aria-label="Remover"
-      >
-        <Trash2 className="size-4" />
-      </button>
+      {!isLocked && (
+        <button
+          type="button"
+          onClick={() => onDeleteCustom(c._id)}
+          className="text-muted-foreground hover:text-destructive p-1"
+          aria-label="Remover"
+        >
+          <Trash2 className="size-4" />
+        </button>
+      )}
     </div>
   );
 }

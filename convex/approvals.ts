@@ -128,6 +128,12 @@ export const getGroupStats = query({
       });
     }
 
+    const escotistaStats = escotistas.map((e) => ({
+      _id: e._id,
+      name: e.name,
+      image: e.image,
+    }));
+
     return {
       group: { _id: group._id, name: group.name, password: group.password },
       totalMembers: members.length,
@@ -135,6 +141,7 @@ export const getGroupStats = query({
       escotistaCount: escotistas.length,
       totalPending,
       escoteiroStats,
+      escotistaStats,
     };
   },
 });
