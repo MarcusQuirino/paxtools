@@ -22,6 +22,9 @@ type EixoSectionProps = {
   onAddCustom: (blocoId: string, text: string) => void;
   onToggleCustom: (id: Id<"customActions">) => void;
   onDeleteCustom: (id: Id<"customActions">) => void;
+  plannedKeys?: Set<string>;
+  onTogglePlanned?: (itemKey: string) => void;
+  blocoFilter?: (blocoId: string) => boolean;
 };
 
 export function EixoSection({
@@ -38,7 +41,14 @@ export function EixoSection({
   onAddCustom,
   onToggleCustom,
   onDeleteCustom,
+  plannedKeys,
+  onTogglePlanned,
+  blocoFilter,
 }: EixoSectionProps) {
+  const visibleBlocos = blocoFilter
+    ? eixo.blocos.filter((b) => blocoFilter(b.id))
+    : eixo.blocos;
+  if (visibleBlocos.length === 0) return null;
   const approvedInEixo = eixo.blocos.filter((b) =>
     completedBlockIds.has(b.id),
   ).length;
@@ -71,7 +81,7 @@ export function EixoSection({
       </div>
 
       <Accordion type="single" collapsible>
-        {eixo.blocos.map((bloco) => (
+        {visibleBlocos.map((bloco) => (
           <BlocoCard
             key={bloco.id}
             bloco={bloco}
@@ -87,6 +97,8 @@ export function EixoSection({
             onAddCustom={onAddCustom}
             onToggleCustom={onToggleCustom}
             onDeleteCustom={onDeleteCustom}
+            plannedKeys={plannedKeys}
+            onTogglePlanned={onTogglePlanned}
           />
         ))}
       </Accordion>

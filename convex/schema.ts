@@ -85,4 +85,13 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_userId_and_itemId", ["userId", "itemId"])
     .index("by_userId_and_status", ["userId", "status"]),
+
+  plannedItems: defineTable({
+    userId: v.id("users"),
+    itemKey: v.string(),
+    position: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_and_itemKey", ["userId", "itemKey"])
+    .index("by_userId_and_position", ["userId", "position"]),
 });

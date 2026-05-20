@@ -1,6 +1,8 @@
 import type { AlternativeCompletion, CompletionStatus } from "@/data/types";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Award, Clock } from "lucide-react";
+import { PlanStar } from "./plan-star";
+import { encodePlanKey } from "@/lib/plan-keys";
 
 type SpecialtySectionProps = {
   blocoId: string;
@@ -11,6 +13,8 @@ type SpecialtySectionProps = {
     status: CompletionStatus;
   }[];
   onToggle: (blocoId: string, specialtyName: string) => void;
+  plannedKeys?: Set<string>;
+  onTogglePlanned?: (itemKey: string) => void;
 };
 
 export function SpecialtySection({
@@ -18,6 +22,8 @@ export function SpecialtySection({
   alternatives,
   completedSpecialties,
   onToggle,
+  plannedKeys,
+  onTogglePlanned,
 }: SpecialtySectionProps) {
   if (alternatives.length === 0) return null;
 
@@ -44,6 +50,11 @@ export function SpecialtySection({
             const completion = getStatus(item);
             const isChecked = !!completion;
             const isPending = completion?.status === "pending";
+            const planKey = encodePlanKey({
+              kind: "specialty",
+              blocoId,
+              specialtyName: item,
+            });
             return (
               <label
                 key={item}
@@ -72,6 +83,12 @@ export function SpecialtySection({
                 </span>
                 {isPending && (
                   <Clock className="size-3.5 text-slate-400 shrink-0" />
+                )}
+                {onTogglePlanned && (
+                  <PlanStar
+                    planned={!!plannedKeys?.has(planKey)}
+                    onToggle={() => onTogglePlanned(planKey)}
+                  />
                 )}
               </label>
             );

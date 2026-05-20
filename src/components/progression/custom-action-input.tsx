@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { CustomAction } from "@/data/types";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { PlanStar } from "./plan-star";
+import { encodePlanKey } from "@/lib/plan-keys";
 
 type CustomActionInputProps = {
   blocoId: string;
@@ -13,6 +15,8 @@ type CustomActionInputProps = {
   onAdd: (blocoId: string, text: string) => void;
   onToggle: (id: Id<"customActions">) => void;
   onDelete: (id: Id<"customActions">) => void;
+  plannedKeys?: Set<string>;
+  onTogglePlanned?: (itemKey: string) => void;
 };
 
 export function CustomActionInput({
@@ -22,6 +26,8 @@ export function CustomActionInput({
   onAdd,
   onToggle,
   onDelete,
+  plannedKeys,
+  onTogglePlanned,
 }: CustomActionInputProps) {
   const [text, setText] = useState("");
 
@@ -38,6 +44,10 @@ export function CustomActionInput({
     <div className="space-y-1">
       {blocoCustom.map((action) => {
         const isPending = action.completed && action.status === "pending";
+        const planKey = encodePlanKey({
+          kind: "custom",
+          customActionId: action._id,
+        });
         return (
           <div
             key={action._id}
@@ -70,6 +80,13 @@ export function CustomActionInput({
             </span>
             {isPending && (
               <Clock className="size-3.5 text-slate-400 mt-0.5 shrink-0" />
+            )}
+            {onTogglePlanned && (
+              <PlanStar
+                planned={!!plannedKeys?.has(planKey)}
+                onToggle={() => onTogglePlanned(planKey)}
+                color={color}
+              />
             )}
             <button
               type="button"
