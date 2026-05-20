@@ -15,6 +15,7 @@ type SpecialtySectionProps = {
   onToggle: (blocoId: string, specialtyName: string) => void;
   plannedKeys?: Set<string>;
   onTogglePlanned?: (itemKey: string) => void;
+  planOnly?: boolean;
 };
 
 export function SpecialtySection({
@@ -24,6 +25,7 @@ export function SpecialtySection({
   onToggle,
   plannedKeys,
   onTogglePlanned,
+  planOnly,
 }: SpecialtySectionProps) {
   if (alternatives.length === 0) return null;
 
@@ -31,6 +33,18 @@ export function SpecialtySection({
     completedSpecialties.find(
       (s) => s.blocoId === blocoId && s.specialtyName === name,
     );
+
+  const isPlanned = (name: string) =>
+    !planOnly ||
+    !!plannedKeys?.has(
+      encodePlanKey({ kind: "specialty", blocoId, specialtyName: name }),
+    );
+
+  const visibleAlternatives = alternatives
+    .map((alt) => ({ ...alt, items: alt.items.filter(isPlanned) }))
+    .filter((alt) => alt.items.length > 0);
+
+  if (visibleAlternatives.length === 0) return null;
 
   return (
     <div className="mt-4">
@@ -40,7 +54,7 @@ export function SpecialtySection({
         <div className="flex-1 border-t" />
       </div>
 
-      {alternatives.map((alt) => (
+      {visibleAlternatives.map((alt) => (
         <div key={alt.type} className="border rounded-md p-3 space-y-2">
           <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase">
             <Award className="size-3.5" />

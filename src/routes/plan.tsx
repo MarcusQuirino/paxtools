@@ -192,6 +192,7 @@ function PlanDashboard() {
             plannedKeys={plannedKeys}
             onTogglePlanned={(itemKey) => togglePlanned({ itemKey })}
             blocoFilter={(blocoId) => plannedBlocoIds.has(blocoId)}
+            planOnly
           />
         ))
       ) : (

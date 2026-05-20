@@ -18,6 +18,7 @@ type ActionChecklistProps = {
   onDeleteCustom: (id: Id<"customActions">) => void;
   plannedKeys?: Set<string>;
   onTogglePlanned?: (itemKey: string) => void;
+  planOnly?: boolean;
 };
 
 export function ActionChecklist({
@@ -34,6 +35,7 @@ export function ActionChecklist({
   onDeleteCustom,
   plannedKeys,
   onTogglePlanned,
+  planOnly,
 }: ActionChecklistProps) {
   const variableDone = bloco.variableActions.filter((a) =>
     completedActionIds.has(a.id),
@@ -43,9 +45,26 @@ export function ActionChecklist({
   ).length;
   const totalVariableDone = variableDone + customDone;
 
+  const isPlanned = (actionId: string) =>
+    !planOnly ||
+    !!plannedKeys?.has(encodePlanKey({ kind: "action", actionId }));
+
+  const visibleFixed = bloco.fixedActions.filter((a) => isPlanned(a.id));
+  const visibleVariable = bloco.variableActions.filter((a) => isPlanned(a.id));
+  const visibleCustomCount = customActions.filter(
+    (c) =>
+      c.blocoId === bloco.id &&
+      (!planOnly ||
+        !!plannedKeys?.has(
+          encodePlanKey({ kind: "custom", customActionId: c._id }),
+        )),
+  ).length;
+  const showVariableSection =
+    visibleVariable.length > 0 || visibleCustomCount > 0 || !planOnly;
+
   return (
     <div className="space-y-4">
-      {bloco.fixedActions.length > 0 && (
+      {visibleFixed.length > 0 && (
         <div>
           <div
             className="text-xs font-semibold uppercase tracking-wider px-3 py-2 rounded-t-md text-white"
@@ -54,7 +73,7 @@ export function ActionChecklist({
             Ações Fixas
           </div>
           <div className="border border-t-0 rounded-b-md divide-y">
-            {bloco.fixedActions.map((action) => {
+            {visibleFixed.map((action) => {
               const planKey = encodePlanKey({
                 kind: "action",
                 actionId: action.id,
@@ -81,6 +100,7 @@ export function ActionChecklist({
         </div>
       )}
 
+      {showVariableSection && (
       <div>
         <div
           className="text-xs font-semibold uppercase tracking-wider px-3 py-2 rounded-t-md flex items-center justify-between"
@@ -94,7 +114,7 @@ export function ActionChecklist({
           </span>
         </div>
         <div className="border border-t-0 rounded-b-md divide-y">
-          {bloco.variableActions.map((action) => {
+          {visibleVariable.map((action) => {
             const planKey = encodePlanKey({
               kind: "action",
               actionId: action.id,
@@ -126,9 +146,11 @@ export function ActionChecklist({
             onDelete={onDeleteCustom}
             plannedKeys={plannedKeys}
             onTogglePlanned={onTogglePlanned}
+            planOnly={planOnly}
           />
         </div>
       </div>
+      )}
     </div>
   );
 }

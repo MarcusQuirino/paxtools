@@ -17,6 +17,7 @@ type CustomActionInputProps = {
   onDelete: (id: Id<"customActions">) => void;
   plannedKeys?: Set<string>;
   onTogglePlanned?: (itemKey: string) => void;
+  planOnly?: boolean;
 };
 
 export function CustomActionInput({
@@ -28,6 +29,7 @@ export function CustomActionInput({
   onDelete,
   plannedKeys,
   onTogglePlanned,
+  planOnly,
 }: CustomActionInputProps) {
   const [text, setText] = useState("");
 
@@ -38,7 +40,14 @@ export function CustomActionInput({
     setText("");
   };
 
-  const blocoCustom = customActions.filter((c) => c.blocoId === blocoId);
+  const blocoCustom = customActions.filter(
+    (c) =>
+      c.blocoId === blocoId &&
+      (!planOnly ||
+        !!plannedKeys?.has(
+          encodePlanKey({ kind: "custom", customActionId: c._id }),
+        )),
+  );
 
   return (
     <div className="space-y-1">
@@ -99,24 +108,26 @@ export function CustomActionInput({
           </div>
         );
       })}
-      <div className="flex gap-2 px-3 pt-2">
-        <Input
-          placeholder="Adicionar ação personalizada..."
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-          className="text-sm h-9"
-        />
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={handleAdd}
-          disabled={!text.trim()}
-          className="h-9 px-3"
-        >
-          <Plus className="size-4" />
-        </Button>
-      </div>
+      {!planOnly && (
+        <div className="flex gap-2 px-3 pt-2">
+          <Input
+            placeholder="Adicionar ação personalizada..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+            className="text-sm h-9"
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleAdd}
+            disabled={!text.trim()}
+            className="h-9 px-3"
+          >
+            <Plus className="size-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
