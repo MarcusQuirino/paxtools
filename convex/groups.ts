@@ -394,6 +394,21 @@ export const setMemberRamos = mutation({
   },
 });
 
+export const setMemberRamo = mutation({
+  args: { userId: v.id("users"), ramo: ramoValidator },
+  handler: async (ctx, args) => {
+    const admin = await assertAdmin(ctx);
+    const target = await ctx.db.get(args.userId);
+    if (!target || target.groupId !== admin.groupId) {
+      throw new Error("Usuário não pertence ao seu grupo");
+    }
+    if (target.role !== "escoteiro") {
+      throw new Error("Apenas escoteiros têm um ramo único");
+    }
+    await ctx.db.patch(target._id, { ramo: args.ramo });
+  },
+});
+
 // Make sure backfill runs whenever the viewer is touched via this module
 export const ensureBackfill = mutation({
   args: {},

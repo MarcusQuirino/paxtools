@@ -51,8 +51,12 @@ function OnboardingPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState("");
 
-  // Already onboarded? Send them home.
+  // Not signed in? Bounce to signin. Already onboarded? Send them home.
   useEffect(() => {
+    if (user === null) {
+      void navigate({ to: "/signin" });
+      return;
+    }
     if (user?.onboardingComplete) {
       void navigate({
         to: user.role === "escotista" ? "/escotista" : "/",
@@ -281,12 +285,14 @@ function OnboardingPage() {
             {selectedRole === "escoteiro" ? (
               <RamoPicker
                 mode="single"
+                variant="dark"
                 value={escoteiroRamo}
                 onChange={setEscoteiroRamo}
               />
             ) : (
               <RamoPicker
                 mode="multi"
+                variant="dark"
                 value={escotistaRamos}
                 onChange={setEscotistaRamos}
               />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -27,6 +27,10 @@ function SettingsPage() {
   const { data: group } = useSuspenseQuery(
     convexQuery(api.groups.getMyGroup, {}),
   );
+
+  useEffect(() => {
+    if (user === null) void navigate({ to: "/signin" });
+  }, [user, navigate]);
 
   const [joinPassword, setJoinPassword] = useState("");
   const [newGroupName, setNewGroupName] = useState("");

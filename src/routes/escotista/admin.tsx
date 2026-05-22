@@ -16,7 +16,9 @@ import {
   UserCog,
   Inbox,
   Lock,
+  TreePine,
 } from "lucide-react";
+import { RamoPicker } from "@/components/onboarding/ramo-picker";
 import { RAMO_LABELS, type Ramo } from "@/lib/ramos";
 
 export const Route = createFileRoute("/escotista/admin")({
@@ -176,6 +178,7 @@ function MembersSection({
 
 function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [editingRamos, setEditingRamos] = useState(false);
 
   const banFn = useConvexMutation(api.groups.banMember);
   const { mutateAsync: ban } = useMutation({ mutationFn: banFn });
@@ -187,6 +190,12 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
   const { mutateAsync: changeRole } = useMutation({
     mutationFn: changeRoleFn,
   });
+
+  const setRamoFn = useConvexMutation(api.groups.setMemberRamo);
+  const { mutateAsync: setRamo } = useMutation({ mutationFn: setRamoFn });
+
+  const setRamosFn = useConvexMutation(api.groups.setMemberRamos);
+  const { mutateAsync: setRamos } = useMutation({ mutationFn: setRamosFn });
 
   const run = async (key: string, fn: () => Promise<unknown>) => {
     setBusy(key);
@@ -201,92 +210,169 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
   };
 
   return (
-    <li className="flex items-center gap-3 rounded-lg border p-2 flex-wrap">
-      <Avatar className="size-9">
-        <AvatarImage src={member.image ?? undefined} />
-        <AvatarFallback className="text-xs">
-          {member.name?.charAt(0)?.toUpperCase() ?? "?"}
-        </AvatarFallback>
-      </Avatar>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">
-          {member.name ?? "Sem nome"}
-          {isSelf && (
-            <span className="ml-2 text-[11px] text-muted-foreground">
-              (você)
-            </span>
-          )}
-          {member.isAdmin && (
-            <Badge variant="outline" className="ml-2 text-[10px]">
-              admin
-            </Badge>
-          )}
-        </p>
-        <p className="text-[11px] text-muted-foreground truncate">
-          {member.role === "escotista" ? "Escotista" : "Escoteiro"}
-          {" · "}
-          {ramosLabel(member)}
-        </p>
-      </div>
-
-      <div className="flex items-center gap-1">
-        {member.role === "escotista" && !isSelf && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              void run(`admin-${member._id}`, () =>
-                setAdmin({ userId: member._id, isAdmin: !member.isAdmin }),
-              )
-            }
-            disabled={busy !== null}
-            title={member.isAdmin ? "Remover admin" : "Tornar admin"}
-          >
-            {member.isAdmin ? (
-              <ShieldOff className="size-4" aria-hidden />
-            ) : (
-              <ShieldCheck className="size-4" aria-hidden />
+    <li className="rounded-lg border p-2 space-y-2">
+      <div className="flex items-center gap-3 flex-wrap">
+        <Avatar className="size-9">
+          <AvatarImage src={member.image ?? undefined} />
+          <AvatarFallback className="text-xs">
+            {member.name?.charAt(0)?.toUpperCase() ?? "?"}
+          </AvatarFallback>
+        </Avatar>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">
+            {member.name ?? "Sem nome"}
+            {isSelf && (
+              <span className="ml-2 text-[11px] text-muted-foreground">
+                (você)
+              </span>
             )}
-          </Button>
-        )}
+            {member.isAdmin && (
+              <Badge variant="outline" className="ml-2 text-[10px]">
+                admin
+              </Badge>
+            )}
+          </p>
+          <p className="text-[11px] text-muted-foreground truncate">
+            {member.role === "escotista" ? "Escotista" : "Escoteiro"}
+            {" · "}
+            {ramosLabel(member)}
+          </p>
+        </div>
 
-        {!isSelf && (
+        <div className="flex items-center gap-1">
           <Button
             size="sm"
-            variant="outline"
-            onClick={() =>
-              void run(`role-${member._id}`, () =>
-                changeRole({
-                  userId: member._id,
-                  role:
-                    member.role === "escotista" ? "escoteiro" : "escotista",
-                }),
-              )
+            variant={editingRamos ? "default" : "outline"}
+            onClick={() => setEditingRamos((v) => !v)}
+            disabled={busy !== null}
+            title={
+              member.role === "escotista"
+                ? "Editar ramos atribuídos"
+                : "Editar ramo do escoteiro"
             }
-            disabled={busy !== null}
-            title="Trocar papel"
           >
-            <UserCog className="size-4" aria-hidden />
+            <TreePine className="size-4" aria-hidden />
           </Button>
-        )}
 
-        {!isSelf && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-red-600 border-red-300 hover:bg-red-50"
-            onClick={() => {
-              if (!confirm(`Banir ${member.name ?? "este usuário"}?`)) return;
-              void run(`ban-${member._id}`, () => ban({ userId: member._id }));
-            }}
-            disabled={busy !== null}
-            title="Banir do grupo"
-          >
-            <Ban className="size-4" aria-hidden />
-          </Button>
-        )}
+          {member.role === "escotista" && !isSelf && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                void run(`admin-${member._id}`, () =>
+                  setAdmin({ userId: member._id, isAdmin: !member.isAdmin }),
+                )
+              }
+              disabled={busy !== null}
+              title={member.isAdmin ? "Remover admin" : "Tornar admin"}
+            >
+              {member.isAdmin ? (
+                <ShieldOff className="size-4" aria-hidden />
+              ) : (
+                <ShieldCheck className="size-4" aria-hidden />
+              )}
+            </Button>
+          )}
+
+          {!isSelf && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                void run(`role-${member._id}`, () =>
+                  changeRole({
+                    userId: member._id,
+                    role:
+                      member.role === "escotista" ? "escoteiro" : "escotista",
+                  }),
+                )
+              }
+              disabled={busy !== null}
+              title="Trocar papel"
+            >
+              <UserCog className="size-4" aria-hidden />
+            </Button>
+          )}
+
+          {!isSelf && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-red-600 border-red-300 hover:bg-red-50"
+              onClick={() => {
+                if (!confirm(`Banir ${member.name ?? "este usuário"}?`)) return;
+                void run(`ban-${member._id}`, () =>
+                  ban({ userId: member._id }),
+                );
+              }}
+              disabled={busy !== null}
+              title="Banir do grupo"
+            >
+              <Ban className="size-4" aria-hidden />
+            </Button>
+          )}
+        </div>
       </div>
+
+      {editingRamos && (
+        <RamoEditor
+          member={member}
+          busy={busy !== null}
+          onSaveRamo={(ramo) =>
+            run(`ramo-${member._id}`, async () => {
+              await setRamo({ userId: member._id, ramo });
+              setEditingRamos(false);
+            })
+          }
+          onSaveRamos={(ramos) =>
+            run(`ramos-${member._id}`, async () => {
+              await setRamos({ userId: member._id, ramos });
+              setEditingRamos(false);
+            })
+          }
+        />
+      )}
     </li>
+  );
+}
+
+function RamoEditor({
+  member,
+  busy,
+  onSaveRamo,
+  onSaveRamos,
+}: {
+  member: Member;
+  busy: boolean;
+  onSaveRamo: (ramo: Ramo) => Promise<void> | void;
+  onSaveRamos: (ramos: Ramo[]) => Promise<void> | void;
+}) {
+  const [ramo, setRamo] = useState<Ramo | null>(member.ramo ?? null);
+  const [ramos, setRamos] = useState<Ramo[]>(member.escotistaRamos ?? []);
+
+  const isEscotista = member.role === "escotista";
+  const canSave = isEscotista ? ramos.length > 0 : !!ramo;
+
+  return (
+    <div className="border-t pt-2 space-y-2">
+      {isEscotista ? (
+        <RamoPicker mode="multi" value={ramos} onChange={setRamos} />
+      ) : (
+        <RamoPicker mode="single" value={ramo} onChange={setRamo} />
+      )}
+      <div className="flex justify-end">
+        <Button
+          size="sm"
+          onClick={() => {
+            if (isEscotista) void onSaveRamos(ramos);
+            else if (ramo) void onSaveRamo(ramo);
+          }}
+          disabled={!canSave || busy}
+        >
+          Salvar ramo{isEscotista ? "s" : ""}
+        </Button>
+      </div>
+    </div>
   );
 }
 
