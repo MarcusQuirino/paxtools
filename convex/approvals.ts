@@ -14,13 +14,22 @@ export const getPendingForGroup = query({
     const user = await ctx.db.get(userId);
     if (!user || user.role !== "escotista") return [];
     if (!user.groupId) return [];
+    if (user.membershipStatus && user.membershipStatus !== "approved") return [];
 
-    const escoteiros = await ctx.db
+    const all = await ctx.db
       .query("users")
       .withIndex("by_groupId_and_role", (q) =>
         q.eq("groupId", user.groupId).eq("role", "escoteiro"),
       )
-      .take(200);
+      .take(500);
+
+    const escoteiros = all.filter((e) => {
+      if (e.bannedAt) return false;
+      if ((e.membershipStatus ?? "approved") !== "approved") return false;
+      if (user.isAdmin) return true;
+      if (!e.ramo) return false;
+      return (user.escotistaRamos ?? []).includes(e.ramo);
+    });
 
     const result = [];
 
@@ -92,13 +101,27 @@ export const getGroupStats = query({
 
     const group = await ctx.db.get(user.groupId);
     if (!group) return null;
+    if (user.membershipStatus && user.membershipStatus !== "approved")
+      return null;
 
-    const members = await ctx.db
-      .query("users")
-      .withIndex("by_groupId", (q) => q.eq("groupId", user.groupId))
-      .take(200);
+    const members = (
+      await ctx.db
+        .query("users")
+        .withIndex("by_groupId", (q) => q.eq("groupId", user.groupId))
+        .take(500)
+    ).filter(
+      (m) =>
+        !m.bannedAt && (m.membershipStatus ?? "approved") === "approved",
+    );
 
-    const escoteiros = members.filter((m) => m.role === "escoteiro");
+    const visibleEscoteiros = members
+      .filter((m) => m.role === "escoteiro")
+      .filter((m) => {
+        if (user.isAdmin) return true;
+        if (!m.ramo) return false;
+        return (user.escotistaRamos ?? []).includes(m.ramo);
+      });
+    const escoteiros = visibleEscoteiros;
     const escotistas = members.filter((m) => m.role === "escotista");
 
     let totalPending = 0;
@@ -135,7 +158,13 @@ export const getGroupStats = query({
     }));
 
     return {
-      group: { _id: group._id, name: group.name, password: group.password },
+      group: {
+        _id: group._id,
+        name: group.name,
+        number: group.number ?? null,
+        password: group.password,
+      },
+      isAdmin: user.isAdmin === true,
       totalMembers: members.length,
       escoteiroCount: escoteiros.length,
       escotistaCount: escotistas.length,

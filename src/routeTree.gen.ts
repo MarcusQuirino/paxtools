@@ -17,6 +17,7 @@ import { Route as EscotistaRouteRouteImport } from './routes/escotista/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EscotistaIndexRouteImport } from './routes/escotista/index'
 import { Route as EscotistaPendingRouteImport } from './routes/escotista/pending'
+import { Route as EscotistaAdminRouteImport } from './routes/escotista/admin'
 import { Route as EscotistaEscoteiroEscoteiroIdRouteImport } from './routes/escotista/escoteiro.$escoteiroId'
 
 const SigninRoute = SigninRouteImport.update({
@@ -59,6 +60,11 @@ const EscotistaPendingRoute = EscotistaPendingRouteImport.update({
   path: '/pending',
   getParentRoute: () => EscotistaRouteRoute,
 } as any)
+const EscotistaAdminRoute = EscotistaAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => EscotistaRouteRoute,
+} as any)
 const EscotistaEscoteiroEscoteiroIdRoute =
   EscotistaEscoteiroEscoteiroIdRouteImport.update({
     id: '/escoteiro/$escoteiroId',
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/plan': typeof PlanRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
+  '/escotista/admin': typeof EscotistaAdminRoute
   '/escotista/pending': typeof EscotistaPendingRoute
   '/escotista/': typeof EscotistaIndexRoute
   '/escotista/escoteiro/$escoteiroId': typeof EscotistaEscoteiroEscoteiroIdRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/plan': typeof PlanRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
+  '/escotista/admin': typeof EscotistaAdminRoute
   '/escotista/pending': typeof EscotistaPendingRoute
   '/escotista': typeof EscotistaIndexRoute
   '/escotista/escoteiro/$escoteiroId': typeof EscotistaEscoteiroEscoteiroIdRoute
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/plan': typeof PlanRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
+  '/escotista/admin': typeof EscotistaAdminRoute
   '/escotista/pending': typeof EscotistaPendingRoute
   '/escotista/': typeof EscotistaIndexRoute
   '/escotista/escoteiro/$escoteiroId': typeof EscotistaEscoteiroEscoteiroIdRoute
@@ -108,6 +117,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/settings'
     | '/signin'
+    | '/escotista/admin'
     | '/escotista/pending'
     | '/escotista/'
     | '/escotista/escoteiro/$escoteiroId'
@@ -118,6 +128,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/settings'
     | '/signin'
+    | '/escotista/admin'
     | '/escotista/pending'
     | '/escotista'
     | '/escotista/escoteiro/$escoteiroId'
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/settings'
     | '/signin'
+    | '/escotista/admin'
     | '/escotista/pending'
     | '/escotista/'
     | '/escotista/escoteiro/$escoteiroId'
@@ -201,6 +213,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EscotistaPendingRouteImport
       parentRoute: typeof EscotistaRouteRoute
     }
+    '/escotista/admin': {
+      id: '/escotista/admin'
+      path: '/admin'
+      fullPath: '/escotista/admin'
+      preLoaderRoute: typeof EscotistaAdminRouteImport
+      parentRoute: typeof EscotistaRouteRoute
+    }
     '/escotista/escoteiro/$escoteiroId': {
       id: '/escotista/escoteiro/$escoteiroId'
       path: '/escoteiro/$escoteiroId'
@@ -212,12 +231,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface EscotistaRouteRouteChildren {
+  EscotistaAdminRoute: typeof EscotistaAdminRoute
   EscotistaPendingRoute: typeof EscotistaPendingRoute
   EscotistaIndexRoute: typeof EscotistaIndexRoute
   EscotistaEscoteiroEscoteiroIdRoute: typeof EscotistaEscoteiroEscoteiroIdRoute
 }
 
 const EscotistaRouteRouteChildren: EscotistaRouteRouteChildren = {
+  EscotistaAdminRoute: EscotistaAdminRoute,
   EscotistaPendingRoute: EscotistaPendingRoute,
   EscotistaIndexRoute: EscotistaIndexRoute,
   EscotistaEscoteiroEscoteiroIdRoute: EscotistaEscoteiroEscoteiroIdRoute,

@@ -30,6 +30,7 @@ function SettingsPage() {
 
   const [joinPassword, setJoinPassword] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupNumber, setNewGroupNumber] = useState("");
   const [joinError, setJoinError] = useState("");
   const [createError, setCreateError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -66,13 +67,15 @@ function SettingsPage() {
 
   const handleCreate = () => {
     const name = newGroupName.trim();
-    if (!name) return;
+    const number = newGroupNumber.trim();
+    if (!name || !number) return;
     setCreateError("");
     createGroup(
-      { name },
+      { name, number },
       {
         onSuccess: () => {
           setNewGroupName("");
+          setNewGroupNumber("");
           setShowCreate(false);
         },
         onError: (err) => setCreateError(err.message),
@@ -229,11 +232,24 @@ function SettingsPage() {
                   {showCreate ? (
                     <div className="space-y-2">
                       <label className="text-xs font-medium">
+                        Número do novo grupo
+                      </label>
+                      <Input
+                        placeholder="Ex: 123"
+                        inputMode="numeric"
+                        value={newGroupNumber}
+                        onChange={(e) => {
+                          setNewGroupNumber(e.target.value.replace(/\D/g, ""));
+                          setCreateError("");
+                        }}
+                        maxLength={6}
+                      />
+                      <label className="text-xs font-medium">
                         Nome do novo grupo
                       </label>
                       <div className="flex gap-2">
                         <Input
-                          placeholder="Ex: Tropa Falcão"
+                          placeholder="Ex: Potiguara"
                           value={newGroupName}
                           onChange={(e) => {
                             setNewGroupName(e.target.value);
@@ -245,7 +261,11 @@ function SettingsPage() {
                         />
                         <Button
                           onClick={handleCreate}
-                          disabled={!newGroupName.trim() || creating}
+                          disabled={
+                            !newGroupName.trim() ||
+                            !newGroupNumber.trim() ||
+                            creating
+                          }
                           size="sm"
                         >
                           {creating ? "..." : "Criar"}

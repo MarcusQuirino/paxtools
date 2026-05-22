@@ -73,7 +73,14 @@ function EscotistaDashboard() {
       {/* Group stats */}
       <div className="rounded-xl bg-gradient-to-r from-emerald-900 to-emerald-800 px-4 py-3 text-white shadow-lg">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="font-bold text-lg">{stats.group.name}</h2>
+          <h2 className="font-bold text-lg">
+            {stats.group.name}
+            {stats.group.number ? (
+              <span className="ml-1 text-xs font-normal text-white/70">
+                nº {stats.group.number}
+              </span>
+            ) : null}
+          </h2>
           <button
             type="button"
             onClick={handleCopyPassword}
@@ -291,6 +298,7 @@ function EscoteiroCard({
 function NoGroupState() {
   const [mode, setMode] = useState<"choice" | "create" | "join">("choice");
   const [groupName, setGroupName] = useState("");
+  const [groupNumber, setGroupNumber] = useState("");
   const [joinPassword, setJoinPassword] = useState("");
   const [error, setError] = useState("");
 
@@ -306,9 +314,13 @@ function NoGroupState() {
 
   const handleCreate = () => {
     const name = groupName.trim();
-    if (!name) return;
+    const number = groupNumber.trim();
+    if (!name || !number) return;
     setError("");
-    createGroup({ name }, { onError: (err) => setError(err.message) });
+    createGroup(
+      { name, number },
+      { onError: (err) => setError(err.message) },
+    );
   };
 
   const handleJoin = () => {
@@ -349,21 +361,34 @@ function NoGroupState() {
         {mode === "create" && (
           <div className="space-y-3">
             <div className="space-y-1.5">
+              <label className="text-xs font-medium">Número do grupo</label>
+              <Input
+                placeholder="Ex: 123"
+                inputMode="numeric"
+                value={groupNumber}
+                onChange={(e) => {
+                  setGroupNumber(e.target.value.replace(/\D/g, ""));
+                  setError("");
+                }}
+                maxLength={6}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
               <label className="text-xs font-medium">Nome do grupo</label>
               <Input
-                placeholder="Ex: Tropa Falcão"
+                placeholder="Ex: Potiguara"
                 value={groupName}
                 onChange={(e) => {
                   setGroupName(e.target.value);
                   setError("");
                 }}
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-                autoFocus
               />
             </div>
             <Button
               onClick={handleCreate}
-              disabled={!groupName.trim() || creating}
+              disabled={!groupName.trim() || !groupNumber.trim() || creating}
               className="w-full"
             >
               {creating ? "Criando..." : "Criar grupo"}

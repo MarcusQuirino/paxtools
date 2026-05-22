@@ -6,6 +6,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { api } from "../../../convex/_generated/api";
 import { Dashboard } from "../index";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ComingSoon } from "@/components/progression/coming-soon";
 import { Eye } from "lucide-react";
 
 export const Route = createFileRoute("/escotista/escoteiro/$escoteiroId")({
@@ -66,7 +67,11 @@ function ImpersonationContent({
         </div>
       </div>
 
-      <Dashboard targetUserId={escoteiroId} />
+      {escoteiro && escoteiro.ramo && escoteiro.ramo !== "escoteiro" ? (
+        <ComingSoon ramo={escoteiro.ramo} />
+      ) : (
+        <Dashboard targetUserId={escoteiroId} />
+      )}
     </div>
   );
 }
