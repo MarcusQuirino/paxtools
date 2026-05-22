@@ -25,6 +25,13 @@ export const RAMO_UNIT_PREFIX: Record<Ramo, string> = {
   pioneiro: "Clã",
 };
 
-export function unitLabel(ramo: Ramo, groupName: string): string {
-  return `${RAMO_UNIT_PREFIX[ramo]} ${groupName}`;
+export type RamoNames = Partial<Record<Ramo, string>>;
+
+export function unitLabel(
+  ramo: Ramo,
+  groupName: string,
+  ramoNames?: RamoNames | null,
+): string {
+  const x = ramoNames?.[ramo]?.trim() || groupName;
+  return `${RAMO_UNIT_PREFIX[ramo]} ${x}`;
 }

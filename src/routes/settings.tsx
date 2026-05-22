@@ -6,6 +6,8 @@ import { api } from "../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AuthButton } from "@/components/auth/auth-button";
+import { RamoNamesInputs } from "@/components/onboarding/ramo-names-inputs";
+import { type RamoNames } from "@/lib/ramos";
 import {
   ArrowLeft,
   Users,
@@ -15,6 +17,8 @@ import {
   Check,
   Shield,
   Compass,
+  Settings as SettingsIcon,
+  Trash2,
 } from "lucide-react";
 
 export const Route = createFileRoute("/settings")({
@@ -35,6 +39,7 @@ function SettingsPage() {
   const [joinPassword, setJoinPassword] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupNumber, setNewGroupNumber] = useState("");
+  const [newGroupRamoNames, setNewGroupRamoNames] = useState<RamoNames>({});
   const [joinError, setJoinError] = useState("");
   const [createError, setCreateError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -75,11 +80,12 @@ function SettingsPage() {
     if (!name || !number) return;
     setCreateError("");
     createGroup(
-      { name, number },
+      { name, number, ramoNames: newGroupRamoNames },
       {
         onSuccess: () => {
           setNewGroupName("");
           setNewGroupNumber("");
+          setNewGroupRamoNames({});
           setShowCreate(false);
         },
         onError: (err) => setCreateError(err.message),
@@ -234,24 +240,28 @@ function SettingsPage() {
                   </div>
 
                   {showCreate ? (
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium">
-                        Número do novo grupo
-                      </label>
-                      <Input
-                        placeholder="Ex: 123"
-                        inputMode="numeric"
-                        value={newGroupNumber}
-                        onChange={(e) => {
-                          setNewGroupNumber(e.target.value.replace(/\D/g, ""));
-                          setCreateError("");
-                        }}
-                        maxLength={6}
-                      />
-                      <label className="text-xs font-medium">
-                        Nome do novo grupo
-                      </label>
-                      <div className="flex gap-2">
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium">
+                          Número do novo grupo
+                        </label>
+                        <Input
+                          placeholder="Ex: 123"
+                          inputMode="numeric"
+                          value={newGroupNumber}
+                          onChange={(e) => {
+                            setNewGroupNumber(
+                              e.target.value.replace(/\D/g, ""),
+                            );
+                            setCreateError("");
+                          }}
+                          maxLength={6}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium">
+                          Nome do novo grupo
+                        </label>
                         <Input
                           placeholder="Ex: Potiguara"
                           value={newGroupName}
@@ -259,22 +269,30 @@ function SettingsPage() {
                             setNewGroupName(e.target.value);
                             setCreateError("");
                           }}
-                          onKeyDown={(e) =>
-                            e.key === "Enter" && handleCreate()
-                          }
                         />
-                        <Button
-                          onClick={handleCreate}
-                          disabled={
-                            !newGroupName.trim() ||
-                            !newGroupNumber.trim() ||
-                            creating
-                          }
-                          size="sm"
-                        >
-                          {creating ? "..." : "Criar"}
-                        </Button>
                       </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium">
+                          Nomes das unidades (opcional)
+                        </label>
+                        <RamoNamesInputs
+                          value={newGroupRamoNames}
+                          onChange={setNewGroupRamoNames}
+                          groupName={newGroupName}
+                        />
+                      </div>
+                      <Button
+                        onClick={handleCreate}
+                        disabled={
+                          !newGroupName.trim() ||
+                          !newGroupNumber.trim() ||
+                          creating
+                        }
+                        size="sm"
+                        className="w-full"
+                      >
+                        {creating ? "Criando..." : "Criar grupo"}
+                      </Button>
                       {createError && (
                         <p className="text-xs text-destructive">
                           {createError}
@@ -297,7 +315,188 @@ function SettingsPage() {
             </div>
           )}
         </section>
+
+        {group?.isAdmin && (
+          <GroupAdminSection
+            initialName={group.name}
+            initialRamoNames={group.ramoNames ?? {}}
+          />
+        )}
       </div>
     </div>
+  );
+}
+
+function GroupAdminSection({
+  initialName,
+  initialRamoNames,
+}: {
+  initialName: string;
+  initialRamoNames: RamoNames;
+}) {
+  const [name, setName] = useState(initialName);
+  const [ramoNames, setRamoNames] = useState<RamoNames>(initialRamoNames);
+  const [saveError, setSaveError] = useState("");
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+
+  const updateGroupFn = useConvexMutation(api.groups.updateGroup);
+  const { mutate: updateGroup, isPending: saving } = useMutation({
+    mutationFn: updateGroupFn,
+  });
+
+  const deleteGroupFn = useConvexMutation(api.groups.deleteGroup);
+  const { mutate: deleteGroup, isPending: deleting } = useMutation({
+    mutationFn: deleteGroupFn,
+  });
+
+  const dirty =
+    name.trim() !== initialName ||
+    JSON.stringify(ramoNames) !== JSON.stringify(initialRamoNames);
+
+  const handleSave = () => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setSaveError("Nome do grupo é obrigatório");
+      return;
+    }
+    setSaveError("");
+    updateGroup(
+      { name: trimmed, ramoNames },
+      {
+        onSuccess: () => {
+          setSavedAt(Date.now());
+        },
+        onError: (err) => setSaveError(err.message),
+      },
+    );
+  };
+
+  const handleDelete = () => {
+    setDeleteError("");
+    deleteGroup(
+      { confirmName: confirmText },
+      { onError: (err) => setDeleteError(err.message) },
+    );
+  };
+
+  return (
+    <section className="rounded-xl border bg-card p-4 space-y-4">
+      <h2 className="text-sm font-semibold flex items-center gap-2">
+        <SettingsIcon className="size-4" />
+        Gerenciar grupo
+      </h2>
+
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <label htmlFor="admin-group-name" className="text-xs font-medium">
+            Nome do grupo
+          </label>
+          <Input
+            id="admin-group-name"
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              setSaveError("");
+              setSavedAt(null);
+            }}
+            maxLength={100}
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-medium">Nomes das unidades</label>
+          <RamoNamesInputs
+            value={ramoNames}
+            onChange={(next) => {
+              setRamoNames(next);
+              setSaveError("");
+              setSavedAt(null);
+            }}
+            groupName={name}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs text-muted-foreground">
+            {savedAt && !dirty ? "Salvo." : ""}
+          </div>
+          <Button
+            onClick={handleSave}
+            disabled={!dirty || saving}
+            size="sm"
+          >
+            {saving ? "Salvando..." : "Salvar alterações"}
+          </Button>
+        </div>
+        {saveError && (
+          <p className="text-xs text-destructive">{saveError}</p>
+        )}
+      </div>
+
+      <div className="border-t pt-4 space-y-2">
+        <h3 className="text-xs font-semibold text-destructive">
+          Zona perigosa
+        </h3>
+        {confirmOpen ? (
+          <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+            <p className="text-xs">
+              Esta ação não pode ser desfeita pela interface. Para confirmar,
+              digite o nome do grupo:{" "}
+              <strong className="font-mono">{initialName}</strong>
+            </p>
+            <Input
+              value={confirmText}
+              onChange={(e) => {
+                setConfirmText(e.target.value);
+                setDeleteError("");
+              }}
+              placeholder={initialName}
+              autoFocus
+            />
+            {deleteError && (
+              <p className="text-xs text-destructive">{deleteError}</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setConfirmOpen(false);
+                  setConfirmText("");
+                  setDeleteError("");
+                }}
+                disabled={deleting}
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                onClick={handleDelete}
+                disabled={confirmText.trim() !== initialName || deleting}
+              >
+                <Trash2 className="size-4 mr-1" />
+                {deleting ? "Excluindo..." : "Excluir definitivamente"}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setConfirmOpen(true)}
+            className="text-destructive border-destructive/40 hover:bg-destructive/10"
+          >
+            <Trash2 className="size-4 mr-1" />
+            Excluir grupo
+          </Button>
+        )}
+      </div>
+    </section>
   );
 }

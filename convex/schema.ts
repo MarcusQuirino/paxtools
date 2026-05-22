@@ -45,6 +45,15 @@ export default defineSchema({
     password: v.string(),
     createdBy: v.id("users"),
     createdAt: v.number(),
+    ramoNames: v.optional(
+      v.object({
+        lobinho: v.optional(v.string()),
+        escoteiro: v.optional(v.string()),
+        senior: v.optional(v.string()),
+        pioneiro: v.optional(v.string()),
+      }),
+    ),
+    deletedAt: v.optional(v.number()),
   })
     .index("by_password", ["password"])
     .index("by_number", ["number"]),

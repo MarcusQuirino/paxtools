@@ -14,7 +14,8 @@ import {
   AlertCircle,
   Plus,
 } from "lucide-react";
-import { RAMO_UNIT_PREFIX, type Ramo } from "@/lib/ramos";
+import { RAMO_UNIT_PREFIX, type Ramo, type RamoNames } from "@/lib/ramos";
+import { RamoNamesInputs } from "@/components/onboarding/ramo-names-inputs";
 
 export const Route = createFileRoute("/onboarding")({
   component: OnboardingPage,
@@ -48,6 +49,7 @@ function OnboardingPage() {
   const [groupPassword, setGroupPassword] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupNumber, setNewGroupNumber] = useState("");
+  const [newGroupRamoNames, setNewGroupRamoNames] = useState<RamoNames>({});
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState("");
 
@@ -169,7 +171,7 @@ function OnboardingPage() {
     if (!name || !number) return;
     setError("");
     createGroup(
-      { name, number },
+      { name, number, ramoNames: newGroupRamoNames },
       {
         onSuccess: () => {
           completeOnboarding(
@@ -377,11 +379,25 @@ function OnboardingPage() {
                     <p className="text-xs text-emerald-200/80">
                       Sua unidade será chamada de{" "}
                       <strong>
-                        {RAMO_UNIT_PREFIX[previewRamo]} {newGroupName.trim()}
+                        {RAMO_UNIT_PREFIX[previewRamo]}{" "}
+                        {newGroupRamoNames[previewRamo]?.trim() ||
+                          newGroupName.trim()}
                       </strong>
                       .
                     </p>
                   )}
+
+                  <div className="space-y-1 pt-1">
+                    <label className="text-xs text-green-200/70">
+                      Nomes das unidades (opcional)
+                    </label>
+                    <RamoNamesInputs
+                      value={newGroupRamoNames}
+                      onChange={setNewGroupRamoNames}
+                      variant="dark"
+                      groupName={newGroupName}
+                    />
+                  </div>
 
                   <Button
                     onClick={handleCreateGroup}

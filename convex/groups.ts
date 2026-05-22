@@ -21,8 +21,45 @@ function normalizeNumber(raw: string): string {
   return raw.trim().replace(/^0+(?=\d)/, "");
 }
 
+const ramoNamesValidator = v.object({
+  lobinho: v.optional(v.string()),
+  escoteiro: v.optional(v.string()),
+  senior: v.optional(v.string()),
+  pioneiro: v.optional(v.string()),
+});
+
+function sanitizeRamoNames(
+  raw:
+    | {
+        lobinho?: string;
+        escoteiro?: string;
+        senior?: string;
+        pioneiro?: string;
+      }
+    | undefined,
+): {
+  lobinho?: string;
+  escoteiro?: string;
+  senior?: string;
+  pioneiro?: string;
+} {
+  if (!raw) return {};
+  const out: Record<string, string> = {};
+  for (const key of ["lobinho", "escoteiro", "senior", "pioneiro"] as const) {
+    const trimmed = raw[key]?.trim();
+    if (!trimmed) continue;
+    if (trimmed.length > 60) throw new Error("Nome do ramo muito longo");
+    out[key] = trimmed;
+  }
+  return out;
+}
+
 export const createGroup = mutation({
-  args: { name: v.string(), number: v.string() },
+  args: {
+    name: v.string(),
+    number: v.string(),
+    ramoNames: v.optional(ramoNamesValidator),
+  },
   handler: async (ctx, args) => {
     const user = await getAuthenticatedUser(ctx);
     if (user.role !== "escotista") {
@@ -42,9 +79,12 @@ export const createGroup = mutation({
       throw new Error("Número do grupo inválido");
     }
 
+    const ramoNames = sanitizeRamoNames(args.ramoNames);
+
     const existingByNumber = await ctx.db
       .query("groups")
       .withIndex("by_number", (q) => q.eq("number", number))
+      .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .unique();
     if (existingByNumber) {
       throw new Error("Já existe um grupo com este número");
@@ -54,12 +94,14 @@ export const createGroup = mutation({
     let existing = await ctx.db
       .query("groups")
       .withIndex("by_password", (q) => q.eq("password", password))
+      .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .unique();
     while (existing) {
       password = generatePassword();
       existing = await ctx.db
         .query("groups")
         .withIndex("by_password", (q) => q.eq("password", password))
+        .filter((q) => q.eq(q.field("deletedAt"), undefined))
         .unique();
     }
 
@@ -69,6 +111,7 @@ export const createGroup = mutation({
       password,
       createdBy: user._id,
       createdAt: Date.now(),
+      ramoNames,
     });
 
     await ctx.db.patch(user._id, {
@@ -92,6 +135,7 @@ export const joinGroup = mutation({
     const group = await ctx.db
       .query("groups")
       .withIndex("by_password", (q) => q.eq("password", password))
+      .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .unique();
 
     if (!group) throw new Error("Grupo não encontrado");
@@ -155,7 +199,7 @@ export const getMyGroup = query({
     const user = await ctx.db.get(userId);
     if (!user || !user.groupId) return null;
     const group = await ctx.db.get(user.groupId);
-    if (!group) return null;
+    if (!group || group.deletedAt) return null;
     const isCreator = group.createdBy === user._id;
     // Fallback: a legacy group creator is admin even if the field
     // has not been backfilled yet.
@@ -168,6 +212,7 @@ export const getMyGroup = query({
         user.role === "escotista" && user.membershipStatus !== "pending"
           ? group.password
           : null,
+      ramoNames: group.ramoNames ?? {},
       isCreator,
       isAdmin: computedAdmin,
       membershipStatus: user.membershipStatus ?? "approved",
@@ -406,6 +451,50 @@ export const setMemberRamo = mutation({
       throw new Error("Apenas escoteiros têm um ramo único");
     }
     await ctx.db.patch(target._id, { ramo: args.ramo });
+  },
+});
+
+export const updateGroup = mutation({
+  args: {
+    name: v.optional(v.string()),
+    ramoNames: v.optional(ramoNamesValidator),
+  },
+  handler: async (ctx, args) => {
+    const admin = await assertAdmin(ctx);
+    if (!admin.groupId) throw new Error("Você não está em nenhum grupo");
+    const group = await ctx.db.get(admin.groupId);
+    if (!group || group.deletedAt) throw new Error("Grupo não encontrado");
+
+    const patch: Record<string, unknown> = {};
+
+    if (args.name !== undefined) {
+      const name = args.name.trim();
+      if (!name || name.length > 100) {
+        throw new Error("Nome do grupo inválido");
+      }
+      patch.name = name;
+    }
+
+    if (args.ramoNames !== undefined) {
+      patch.ramoNames = sanitizeRamoNames(args.ramoNames);
+    }
+
+    if (Object.keys(patch).length === 0) return;
+    await ctx.db.patch(group._id, patch);
+  },
+});
+
+export const deleteGroup = mutation({
+  args: { confirmName: v.string() },
+  handler: async (ctx, args) => {
+    const admin = await assertAdmin(ctx);
+    if (!admin.groupId) throw new Error("Você não está em nenhum grupo");
+    const group = await ctx.db.get(admin.groupId);
+    if (!group || group.deletedAt) throw new Error("Grupo não encontrado");
+    if (args.confirmName.trim() !== group.name) {
+      throw new Error("Confirmação inválida");
+    }
+    await ctx.db.patch(group._id, { deletedAt: Date.now() });
   },
 });
 
