@@ -12,7 +12,8 @@ import { useConvexAuth } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { AuthButton } from "@/components/auth/auth-button";
 import { Footer } from "@/components/footer";
-import { LayoutDashboard, Clock, ArrowLeft } from "lucide-react";
+import { PendingApprovalScreen } from "@/components/escotista/pending-approval-screen";
+import { LayoutDashboard, Clock, ArrowLeft, Shield } from "lucide-react";
 
 export const Route = createFileRoute("/escotista")({
   component: EscotistaLayout,
@@ -23,6 +24,9 @@ function EscotistaLayout() {
   const navigate = useNavigate();
 
   const { data: user } = useSuspenseQuery(convexQuery(api.users.viewer, {}));
+  const { data: myGroup } = useSuspenseQuery(
+    convexQuery(api.groups.getMyGroup, {}),
+  );
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -43,6 +47,12 @@ function EscotistaLayout() {
     to: "/escotista/escoteiro/$escoteiroId",
     fuzzy: true,
   });
+
+  const isPending =
+    !!user &&
+    user.role === "escotista" &&
+    !!myGroup &&
+    myGroup.membershipStatus === "pending";
 
   if (isLoading || !isAuthenticated || !user || user.role !== "escotista") {
     return (
@@ -74,23 +84,33 @@ function EscotistaLayout() {
           <AuthButton />
         </header>
 
-        {!isImpersonating && (
+        {!isImpersonating && !isPending && (
           <nav className="flex gap-1 rounded-lg bg-muted p-1">
             <NavTab to="/escotista" icon={LayoutDashboard} label="Painel" />
             <NavTab to="/escotista/pending" icon={Clock} label="Pendentes" />
+            {myGroup?.isAdmin && (
+              <NavTab to="/escotista/admin" icon={Shield} label="Admin" />
+            )}
           </nav>
         )}
 
-        <Suspense
-          fallback={
-            <div className="space-y-4">
-              <div className="h-32 animate-pulse rounded-xl bg-muted" />
-              <div className="h-24 animate-pulse rounded-xl bg-muted" />
-            </div>
-          }
-        >
-          <Outlet />
-        </Suspense>
+        {isPending && myGroup ? (
+          <PendingApprovalScreen
+            groupName={myGroup.name}
+            groupNumber={myGroup.number}
+          />
+        ) : (
+          <Suspense
+            fallback={
+              <div className="space-y-4">
+                <div className="h-32 animate-pulse rounded-xl bg-muted" />
+                <div className="h-24 animate-pulse rounded-xl bg-muted" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
+        )}
         <Footer />
       </div>
     </div>

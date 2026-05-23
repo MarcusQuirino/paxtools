@@ -6,6 +6,13 @@ const completionStatus = v.optional(
   v.union(v.literal("pending"), v.literal("approved")),
 );
 
+export const ramoValidator = v.union(
+  v.literal("lobinho"),
+  v.literal("escoteiro"),
+  v.literal("senior"),
+  v.literal("pioneiro"),
+);
+
 export default defineSchema({
   ...authTables,
   users: defineTable({
@@ -18,17 +25,38 @@ export default defineSchema({
     groupId: v.optional(v.id("groups")),
     onboardingComplete: v.optional(v.boolean()),
     favoriteEscoteiroIds: v.optional(v.array(v.id("users"))),
+    ramo: v.optional(ramoValidator),
+    escotistaRamos: v.optional(v.array(ramoValidator)),
+    isAdmin: v.optional(v.boolean()),
+    membershipStatus: v.optional(
+      v.union(v.literal("pending"), v.literal("approved")),
+    ),
+    bannedAt: v.optional(v.number()),
+    bannedBy: v.optional(v.id("users")),
   })
     .index("email", ["email"])
     .index("by_groupId", ["groupId"])
-    .index("by_groupId_and_role", ["groupId", "role"]),
+    .index("by_groupId_and_role", ["groupId", "role"])
+    .index("by_groupId_and_status", ["groupId", "membershipStatus"]),
 
   groups: defineTable({
     name: v.string(),
+    number: v.optional(v.string()),
     password: v.string(),
     createdBy: v.id("users"),
     createdAt: v.number(),
-  }).index("by_password", ["password"]),
+    ramoNames: v.optional(
+      v.object({
+        lobinho: v.optional(v.string()),
+        escoteiro: v.optional(v.string()),
+        senior: v.optional(v.string()),
+        pioneiro: v.optional(v.string()),
+      }),
+    ),
+    deletedAt: v.optional(v.number()),
+  })
+    .index("by_password", ["password"])
+    .index("by_number", ["number"]),
 
   actionCompletions: defineTable({
     userId: v.id("users"),

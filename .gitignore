@@ -39,3 +39,10 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # VS Code
 .vscode/
 .vercel
+.playwright-cli
+
+# Playwright
+tests/.auth/
+playwright-report/
+test-results/
+

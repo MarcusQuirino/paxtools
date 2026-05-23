@@ -1,31 +1,87 @@
-import { useState } from "react";
-import { useConvexMutation } from "@convex-dev/react-query";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
+import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Compass, Shield, ArrowRight, Users, AlertCircle, Plus } from "lucide-react";
+import { RamoPicker } from "@/components/onboarding/ramo-picker";
+import {
+  Compass,
+  Shield,
+  ArrowRight,
+  Users,
+  AlertCircle,
+  Plus,
+} from "lucide-react";
+import { RAMO_UNIT_PREFIX, type Ramo, type RamoNames } from "@/lib/ramos";
+import { RamoNamesInputs } from "@/components/onboarding/ramo-names-inputs";
 
 export const Route = createFileRoute("/onboarding")({
   component: OnboardingPage,
 });
 
+type Step = "role" | "ramo" | "group";
+
 function OnboardingPage() {
-  const [step, setStep] = useState<"role" | "group">("role");
+  const { data: user } = useSuspenseQuery(convexQuery(api.users.viewer, {}));
+  const navigate = useNavigate();
+
+  // Resume onboarding at the right step on reload.
+  const initialStep: Step = !user?.role
+    ? "role"
+    : (user.role === "escoteiro" && !user.ramo) ||
+        (user.role === "escotista" &&
+          (!user.escotistaRamos || user.escotistaRamos.length === 0))
+      ? "ramo"
+      : "group";
+
+  const [step, setStep] = useState<Step>(initialStep);
   const [selectedRole, setSelectedRole] = useState<
     "escoteiro" | "escotista" | null
-  >(null);
+  >(user?.role ?? null);
+  const [escoteiroRamo, setEscoteiroRamo] = useState<Ramo | null>(
+    user?.ramo ?? null,
+  );
+  const [escotistaRamos, setEscotistaRamos] = useState<Ramo[]>(
+    user?.escotistaRamos ?? [],
+  );
   const [groupPassword, setGroupPassword] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupNumber, setNewGroupNumber] = useState("");
+  const [newGroupRamoNames, setNewGroupRamoNames] = useState<RamoNames>({});
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState("");
-  const navigate = useNavigate();
+
+  // Not signed in? Bounce to signin. Already onboarded? Send them home.
+  useEffect(() => {
+    if (user === null) {
+      void navigate({ to: "/signin" });
+      return;
+    }
+    if (user?.onboardingComplete) {
+      void navigate({
+        to: user.role === "escotista" ? "/escotista" : "/",
+      });
+    }
+  }, [user, navigate]);
 
   const setRoleFn = useConvexMutation(api.onboarding.setRole);
   const { mutate: setRole, isPending: settingRole } = useMutation({
     mutationFn: setRoleFn,
   });
+
+  const setEscoteiroRamoFn = useConvexMutation(
+    api.onboarding.setEscoteiroRamo,
+  );
+  const { mutate: saveEscoteiroRamo, isPending: savingEscoteiroRamo } =
+    useMutation({ mutationFn: setEscoteiroRamoFn });
+
+  const setEscotistaRamosFn = useConvexMutation(
+    api.onboarding.setEscotistaRamos,
+  );
+  const { mutate: saveEscotistaRamos, isPending: savingEscotistaRamos } =
+    useMutation({ mutationFn: setEscotistaRamosFn });
 
   const joinGroupFn = useConvexMutation(api.groups.joinGroup);
   const { mutate: joinGroup, isPending: joiningGroup } = useMutation({
@@ -50,10 +106,39 @@ function OnboardingPage() {
     setRole(
       { role },
       {
-        onSuccess: () => setStep("group"),
+        onSuccess: () => setStep("ramo"),
         onError: (err) => setError(err.message),
       },
     );
+  };
+
+  const handleSaveRamo = () => {
+    setError("");
+    if (selectedRole === "escoteiro") {
+      if (!escoteiroRamo) {
+        setError("Selecione um ramo");
+        return;
+      }
+      saveEscoteiroRamo(
+        { ramo: escoteiroRamo },
+        {
+          onSuccess: () => setStep("group"),
+          onError: (err) => setError(err.message),
+        },
+      );
+    } else if (selectedRole === "escotista") {
+      if (escotistaRamos.length === 0) {
+        setError("Selecione pelo menos um ramo");
+        return;
+      }
+      saveEscotistaRamos(
+        { ramos: escotistaRamos },
+        {
+          onSuccess: () => setStep("group"),
+          onError: (err) => setError(err.message),
+        },
+      );
+    }
   };
 
   const handleJoinGroup = () => {
@@ -82,10 +167,11 @@ function OnboardingPage() {
 
   const handleCreateGroup = () => {
     const name = newGroupName.trim();
-    if (!name) return;
+    const number = newGroupNumber.trim();
+    if (!name || !number) return;
     setError("");
     createGroup(
-      { name },
+      { name, number, ramoNames: newGroupRamoNames },
       {
         onSuccess: () => {
           completeOnboarding(
@@ -117,6 +203,10 @@ function OnboardingPage() {
     );
   };
 
+  // For the create-group preview prefix, use the first selected ramo.
+  const previewRamo: Ramo | null =
+    selectedRole === "escotista" ? (escotistaRamos[0] ?? null) : null;
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-950 via-green-900 to-emerald-900">
       <div className="absolute inset-0 overflow-hidden">
@@ -130,7 +220,11 @@ function OnboardingPage() {
           <p className="text-green-200/70 mt-1 text-sm">
             {step === "role"
               ? "Escolha como você vai usar o app"
-              : "Junte-se a um grupo (opcional)"}
+              : step === "ramo"
+                ? selectedRole === "escotista"
+                  ? "Escolha um ou mais ramos"
+                  : "Em qual ramo você está?"
+                : "Junte-se a um grupo"}
           </p>
         </div>
 
@@ -182,6 +276,43 @@ function OnboardingPage() {
               </div>
             </button>
           </div>
+        ) : step === "ramo" ? (
+          <div className="rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/10 p-6 space-y-5">
+            <p className="text-xs text-green-200/60">
+              {selectedRole === "escotista"
+                ? "Você verá apenas os escoteiros dos ramos que escolher. Pode mudar depois."
+                : "Por enquanto a progressão só está disponível para o ramo Escoteiro. Para outros ramos exibimos 'em breve'."}
+            </p>
+
+            {selectedRole === "escoteiro" ? (
+              <RamoPicker
+                mode="single"
+                variant="dark"
+                value={escoteiroRamo}
+                onChange={setEscoteiroRamo}
+              />
+            ) : (
+              <RamoPicker
+                mode="multi"
+                variant="dark"
+                value={escotistaRamos}
+                onChange={setEscotistaRamos}
+              />
+            )}
+
+            <Button
+              onClick={handleSaveRamo}
+              disabled={
+                savingEscoteiroRamo ||
+                savingEscotistaRamos ||
+                (selectedRole === "escoteiro" && !escoteiroRamo) ||
+                (selectedRole === "escotista" && escotistaRamos.length === 0)
+              }
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              Continuar
+            </Button>
+          </div>
         ) : (
           <div className="rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/10 p-6 space-y-5">
             {showCreate && selectedRole === "escotista" ? (
@@ -195,26 +326,86 @@ function OnboardingPage() {
                       Criar um grupo
                     </h2>
                     <p className="text-xs text-green-200/50">
-                      Uma senha será gerada automaticamente
+                      Você será o primeiro administrador
                     </p>
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                  <Input
-                    placeholder="Nome do grupo (ex: Tropa Falcão)"
-                    value={newGroupName}
-                    onChange={(e) => {
-                      setNewGroupName(e.target.value);
-                      setError("");
-                    }}
-                    onKeyDown={(e) => e.key === "Enter" && handleCreateGroup()}
-                    className="bg-white/10 border-white/20 text-white placeholder:text-white/30"
-                  />
+                  <div className="space-y-1">
+                    <label
+                      htmlFor="group-number"
+                      className="text-xs text-green-200/70"
+                    >
+                      Número do grupo
+                    </label>
+                    <Input
+                      id="group-number"
+                      placeholder="Ex: 123"
+                      inputMode="numeric"
+                      value={newGroupNumber}
+                      onChange={(e) => {
+                        setNewGroupNumber(e.target.value.replace(/\D/g, ""));
+                        setError("");
+                      }}
+                      maxLength={6}
+                      className="bg-white/10 border-white/20 text-white placeholder:text-white/30"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label
+                      htmlFor="group-name"
+                      className="text-xs text-green-200/70"
+                    >
+                      Nome do grupo
+                    </label>
+                    <Input
+                      id="group-name"
+                      placeholder="Ex: Potiguara"
+                      value={newGroupName}
+                      onChange={(e) => {
+                        setNewGroupName(e.target.value);
+                        setError("");
+                      }}
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && handleCreateGroup()
+                      }
+                      className="bg-white/10 border-white/20 text-white placeholder:text-white/30"
+                    />
+                  </div>
+
+                  {previewRamo && newGroupName.trim() && (
+                    <p className="text-xs text-emerald-200/80">
+                      Sua unidade será chamada de{" "}
+                      <strong>
+                        {RAMO_UNIT_PREFIX[previewRamo]}{" "}
+                        {newGroupRamoNames[previewRamo]?.trim() ||
+                          newGroupName.trim()}
+                      </strong>
+                      .
+                    </p>
+                  )}
+
+                  <div className="space-y-1 pt-1">
+                    <label className="text-xs text-green-200/70">
+                      Nomes das unidades (opcional)
+                    </label>
+                    <RamoNamesInputs
+                      value={newGroupRamoNames}
+                      onChange={setNewGroupRamoNames}
+                      variant="dark"
+                      groupName={newGroupName}
+                    />
+                  </div>
 
                   <Button
                     onClick={handleCreateGroup}
-                    disabled={!newGroupName.trim() || creatingGroup}
+                    disabled={
+                      !newGroupName.trim() ||
+                      !newGroupNumber.trim() ||
+                      creatingGroup
+                    }
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
                   >
                     {creatingGroup ? "Criando..." : "Criar grupo"}
@@ -243,14 +434,16 @@ function OnboardingPage() {
                       Entrar em um grupo
                     </h2>
                     <p className="text-xs text-green-200/50">
-                      Peça a senha ao seu escotista
+                      {selectedRole === "escotista"
+                        ? "Você precisará da aprovação de um administrador"
+                        : "Peça o código ao seu escotista"}
                     </p>
                   </div>
                 </div>
 
                 <div className="space-y-3">
                   <Input
-                    placeholder="Senha do grupo (ex: A3K9X2)"
+                    placeholder="Código do grupo (ex: A3K9X2)"
                     value={groupPassword}
                     onChange={(e) => {
                       setGroupPassword(e.target.value.toUpperCase());
@@ -295,8 +488,9 @@ function OnboardingPage() {
                 <div className="flex items-start gap-2 text-xs text-sky-200/60 bg-sky-900/20 rounded-lg px-3 py-2">
                   <AlertCircle className="size-3.5 mt-0.5 shrink-0" />
                   <span>
-                    Você pode fazer isso depois nas configurações. Sem um grupo,
-                    seus itens não terão aprovação de um escotista.
+                    {selectedRole === "escotista"
+                      ? "Após entrar, sua solicitação ficará pendente até que um administrador do grupo aprove."
+                      : "Você pode fazer isso depois nas configurações. Sem um grupo, seus itens não terão aprovação de um escotista."}
                   </span>
                 </div>
               </>
@@ -323,9 +517,13 @@ function OnboardingPage() {
             className={`h-1.5 w-8 rounded-full transition-colors ${step === "role" ? "bg-white" : "bg-white/30"}`}
           />
           <div
+            className={`h-1.5 w-8 rounded-full transition-colors ${step === "ramo" ? "bg-white" : "bg-white/30"}`}
+          />
+          <div
             className={`h-1.5 w-8 rounded-full transition-colors ${step === "group" ? "bg-white" : "bg-white/30"}`}
           />
         </div>
+
       </div>
     </div>
   );

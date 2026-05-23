@@ -13,6 +13,7 @@ import { OverallProgress } from "@/components/progression/overall-progress";
 import { EixoSection } from "@/components/progression/eixo-section";
 import { LisDeOuroSection } from "@/components/progression/lis-de-ouro-section";
 import { PlanNav } from "@/components/progression/plan-nav";
+import { ComingSoon } from "@/components/progression/coming-soon";
 import { Footer } from "@/components/footer";
 import { EIXOS } from "@/data/progression-data";
 
@@ -79,6 +80,8 @@ function Home() {
     );
   }
 
+  const showComingSoon = user.role === "escoteiro" && user.ramo !== "escoteiro";
+
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
@@ -86,8 +89,14 @@ function Home() {
           <h1 className="text-lg font-bold text-emerald-900">Paxtools</h1>
           <AuthButton />
         </header>
-        <PlanNav />
-        <Dashboard />
+        {showComingSoon ? (
+          <ComingSoon ramo={user.ramo ?? null} />
+        ) : (
+          <>
+            <PlanNav />
+            <Dashboard />
+          </>
+        )}
         <Footer />
       </div>
     </div>
