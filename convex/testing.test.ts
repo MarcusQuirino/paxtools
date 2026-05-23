@@ -2,7 +2,7 @@
 import { test, expect } from "bun:test";
 import { convexTest } from "convex-test";
 import schema from "./schema";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 const TEST_EMAIL = "wipeme@test.paxtools.local";
 const REAL_EMAIL = "real@gmail.com";
@@ -57,6 +57,20 @@ test("wipeTestData removes only @test.paxtools.local users", async () => {
     const real = survivors.find((u) => u._id === realId);
     expect(real).toBeDefined();
     expect(real?.email).toBe(REAL_EMAIL);
+  } finally {
+    if (prev === undefined) delete process.env.TEST_AUTH;
+    else process.env.TEST_AUTH = prev;
+  }
+});
+
+test("updateName rejects unauthenticated callers", async () => {
+  const prev = process.env.TEST_AUTH;
+  process.env.TEST_AUTH = "1";
+  try {
+    const t = convexTest(schema, modules);
+    await expect(
+      t.mutation(api.users.updateName, { name: "Test Name" }),
+    ).rejects.toThrow("Não autenticado");
   } finally {
     if (prev === undefined) delete process.env.TEST_AUTH;
     else process.env.TEST_AUTH = prev;

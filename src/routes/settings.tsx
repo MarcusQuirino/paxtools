@@ -19,6 +19,7 @@ import {
   Compass,
   Settings as SettingsIcon,
   Trash2,
+  User,
 } from "lucide-react";
 
 export const Route = createFileRoute("/settings")({
@@ -122,6 +123,8 @@ function SettingsPage() {
         </header>
 
         <h1 className="text-xl font-black uppercase">Configurações</h1>
+
+        <UserNameSection currentName={user.name ?? ""} />
 
         {/* Role section */}
         <section className="rounded-md border-2 border-black bg-card p-4 space-y-3 shadow-[3px_3px_0px_0px_#065f46]">
@@ -324,6 +327,69 @@ function SettingsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+function UserNameSection({ currentName }: { currentName: string }) {
+  const [name, setName] = useState(currentName);
+  const [saveError, setSaveError] = useState("");
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+
+  const updateNameFn = useConvexMutation(api.users.updateName);
+  const { mutate: updateName, isPending: saving } = useMutation({
+    mutationFn: updateNameFn,
+  });
+
+  const dirty = name.trim() !== currentName && name.trim() !== "";
+
+  const handleSave = () => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setSaveError("Nome não pode ser vazio");
+      return;
+    }
+    setSaveError("");
+    updateName(
+      { name: trimmed },
+      {
+        onSuccess: () => setSavedAt(Date.now()),
+        onError: (err) => setSaveError(err.message),
+      },
+    );
+  };
+
+  return (
+    <section className="rounded-md border-2 border-black bg-card p-4 space-y-3 shadow-[3px_3px_0px_0px_#065f46]">
+      <h2 className="text-sm font-black uppercase flex items-center gap-2">
+        <User className="size-4" />
+        Seu nome
+      </h2>
+      <div className="space-y-2">
+        <Input
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            setSaveError("");
+            setSavedAt(null);
+          }}
+          maxLength={100}
+          placeholder="Seu nome"
+        />
+        {saveError && <p className="text-xs text-destructive">{saveError}</p>}
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground">
+            {savedAt && !dirty ? "Salvo." : ""}
+          </span>
+          <Button
+            onClick={handleSave}
+            disabled={!dirty || saving}
+            size="sm"
+          >
+            {saving ? "Salvando..." : "Salvar nome"}
+          </Button>
+        </div>
+      </div>
+    </section>
   );
 }
 

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { RamoPicker } from "@/components/onboarding/ramo-picker";
 import { RAMO_LABELS, type Ramo } from "@/lib/ramos";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export const Route = createFileRoute("/escotista/admin")({
   component: AdminPage,
@@ -177,7 +178,8 @@ function MembersSection({
 }
 
 function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
-  const [busy, setBusy] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<"role" | "admin" | "ban" | null>(null);
+  const [busyAction, setBusyAction] = useState(false);
   const [editingRamos, setEditingRamos] = useState(false);
 
   const banFn = useConvexMutation(api.groups.banMember);
@@ -197,17 +199,20 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
   const setRamosFn = useConvexMutation(api.groups.setMemberRamos);
   const { mutateAsync: setRamos } = useMutation({ mutationFn: setRamosFn });
 
-  const run = async (key: string, fn: () => Promise<unknown>) => {
-    setBusy(key);
+  const runAction = async (fn: () => Promise<unknown>) => {
+    setBusyAction(true);
     try {
       await fn();
     } catch (e) {
       console.error(e);
       alert((e as Error).message);
     } finally {
-      setBusy(null);
+      setBusyAction(false);
+      setPendingAction(null);
     }
   };
+
+  const dlg = dialogProps(pendingAction, member);
 
   return (
     <li className="rounded-md border-2 border-black p-2 space-y-2 shadow-[2px_2px_0px_0px_#000]">
@@ -244,7 +249,7 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
             size="sm"
             variant={editingRamos ? "default" : "outline"}
             onClick={() => setEditingRamos((v) => !v)}
-            disabled={busy !== null}
+            disabled={busyAction}
             title={
               member.role === "escotista"
                 ? "Editar ramos atribuídos"
@@ -258,12 +263,8 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
             <Button
               size="sm"
               variant="outline"
-              onClick={() =>
-                void run(`admin-${member._id}`, () =>
-                  setAdmin({ userId: member._id, isAdmin: !member.isAdmin }),
-                )
-              }
-              disabled={busy !== null}
+              onClick={() => setPendingAction("admin")}
+              disabled={busyAction}
               title={member.isAdmin ? "Remover admin" : "Tornar admin"}
             >
               {member.isAdmin ? (
@@ -278,16 +279,8 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
             <Button
               size="sm"
               variant="outline"
-              onClick={() =>
-                void run(`role-${member._id}`, () =>
-                  changeRole({
-                    userId: member._id,
-                    role:
-                      member.role === "escotista" ? "escoteiro" : "escotista",
-                  }),
-                )
-              }
-              disabled={busy !== null}
+              onClick={() => setPendingAction("role")}
+              disabled={busyAction}
               title="Trocar papel"
             >
               <UserCog className="size-4" aria-hidden />
@@ -299,13 +292,8 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
               size="sm"
               variant="outline"
               className="text-red-600 border-red-300 hover:bg-red-50"
-              onClick={() => {
-                if (!confirm(`Banir ${member.name ?? "este usuário"}?`)) return;
-                void run(`ban-${member._id}`, () =>
-                  ban({ userId: member._id }),
-                );
-              }}
-              disabled={busy !== null}
+              onClick={() => setPendingAction("ban")}
+              disabled={busyAction}
               title="Banir do grupo"
             >
               <Ban className="size-4" aria-hidden />
@@ -317,23 +305,90 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
       {editingRamos && (
         <RamoEditor
           member={member}
-          busy={busy !== null}
+          busy={busyAction}
           onSaveRamo={(ramo) =>
-            run(`ramo-${member._id}`, async () => {
+            runAction(async () => {
               await setRamo({ userId: member._id, ramo });
               setEditingRamos(false);
             })
           }
           onSaveRamos={(ramos) =>
-            run(`ramos-${member._id}`, async () => {
+            runAction(async () => {
               await setRamos({ userId: member._id, ramos });
               setEditingRamos(false);
             })
           }
         />
       )}
+
+      <ConfirmDialog
+        open={pendingAction !== null}
+        onOpenChange={(open) => { if (!open) setPendingAction(null); }}
+        title={dlg?.title ?? ""}
+        description={dlg?.description ?? ""}
+        confirmLabel={dlg?.confirmLabel ?? "Confirmar"}
+        destructive={dlg?.destructive ?? false}
+        busy={busyAction}
+        onConfirm={() => {
+          if (!pendingAction) return;
+          if (pendingAction === "role") {
+            void runAction(() =>
+              changeRole({
+                userId: member._id,
+                role: member.role === "escotista" ? "escoteiro" : "escotista",
+              }),
+            );
+          } else if (pendingAction === "admin") {
+            void runAction(() =>
+              setAdmin({ userId: member._id, isAdmin: !member.isAdmin }),
+            );
+          } else if (pendingAction === "ban") {
+            void runAction(() => ban({ userId: member._id }));
+          }
+        }}
+      />
     </li>
   );
+}
+
+function dialogProps(
+  action: "role" | "admin" | "ban" | null,
+  member: Member,
+): { title: string; description: string; confirmLabel: string; destructive: boolean } | null {
+  if (!action) return null;
+  const name = member.name ?? "este membro";
+  switch (action) {
+    case "role": {
+      const newRole = member.role === "escotista" ? "Escoteiro" : "Escotista";
+      return {
+        title: "Trocar papel",
+        description: `Trocar o papel de ${name} para ${newRole}?`,
+        confirmLabel: "Confirmar",
+        destructive: false,
+      };
+    }
+    case "admin":
+      return member.isAdmin
+        ? {
+            title: "Remover admin",
+            description: `Remover as permissões de admin de ${name}?`,
+            confirmLabel: "Confirmar",
+            destructive: false,
+          }
+        : {
+            title: "Tornar admin",
+            description: `Tornar ${name} administrador do grupo?`,
+            confirmLabel: "Confirmar",
+            destructive: false,
+          };
+    case "ban":
+      return {
+        title: "Banir membro",
+        description: `Banir ${name} do grupo? Esta ação não pode ser desfeita pela interface.`,
+        confirmLabel: "Banir",
+        destructive: true,
+      };
+  }
 }
 
 function RamoEditor({

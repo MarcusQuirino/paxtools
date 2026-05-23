@@ -41,3 +41,14 @@ export const toggleFavoriteEscoteiro = mutation({
     }
   },
 });
+
+export const updateName = mutation({
+  args: { name: v.string() },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    const trimmed = args.name.trim();
+    if (!trimmed) throw new Error("Nome não pode ser vazio");
+    if (trimmed.length > 100) throw new Error("Nome muito longo");
+    await ctx.db.patch(user._id, { name: trimmed });
+  },
+});
