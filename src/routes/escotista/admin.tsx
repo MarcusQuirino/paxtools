@@ -212,6 +212,8 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
     }
   };
 
+  const dlg = dialogProps(pendingAction, member);
+
   return (
     <li className="rounded-md border-2 border-black p-2 space-y-2 shadow-[2px_2px_0px_0px_#000]">
       <div className="flex items-center gap-3 flex-wrap">
@@ -322,12 +324,13 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
       <ConfirmDialog
         open={pendingAction !== null}
         onOpenChange={(open) => { if (!open) setPendingAction(null); }}
-        title={dialogProps(pendingAction, member)?.title ?? ""}
-        description={dialogProps(pendingAction, member)?.description ?? ""}
-        confirmLabel={dialogProps(pendingAction, member)?.confirmLabel ?? "Confirmar"}
-        destructive={dialogProps(pendingAction, member)?.destructive ?? false}
+        title={dlg?.title ?? ""}
+        description={dlg?.description ?? ""}
+        confirmLabel={dlg?.confirmLabel ?? "Confirmar"}
+        destructive={dlg?.destructive ?? false}
         busy={busyAction}
         onConfirm={() => {
+          if (!pendingAction) return;
           if (pendingAction === "role") {
             void runAction(() =>
               changeRole({
