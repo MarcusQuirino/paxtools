@@ -71,7 +71,7 @@ function EscotistaDashboard() {
   return (
     <div className="space-y-4">
       {/* Group stats */}
-      <div className="rounded-xl bg-gradient-to-r from-emerald-900 to-emerald-800 px-4 py-3 text-white shadow-lg">
+      <div className="rounded-sm bg-emerald-700 border-2 border-black shadow-[4px_4px_0_0_#000] px-4 py-3 text-white">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-bold text-lg">
             {stats.group.name}
@@ -84,7 +84,7 @@ function EscotistaDashboard() {
           <button
             type="button"
             onClick={handleCopyPassword}
-            className="flex items-center gap-1 text-xs bg-white/20 rounded-md px-2 py-1 hover:bg-white/30 transition-colors"
+            className="flex items-center gap-1 text-xs bg-white/20 border border-white/40 px-2 py-1 hover:bg-white/30 transition-colors font-bold"
           >
             {copiedPassword ? (
               <Check className="size-3" />
@@ -100,10 +100,10 @@ function EscotistaDashboard() {
             type="button"
             onClick={() => setActiveTab("escoteiros")}
             aria-pressed={activeTab === "escoteiros"}
-            className={`rounded-lg p-2 text-center transition-colors ${
+            className={`p-2 text-center transition-colors border-2 ${
               activeTab === "escoteiros"
-                ? "bg-white/30 ring-2 ring-white/60"
-                : "bg-white/15 hover:bg-white/20"
+                ? "bg-white/30 border-white"
+                : "bg-white/10 border-white/40 hover:bg-white/20"
             }`}
           >
             <p className="text-xl font-bold">{stats.escoteiroCount}</p>
@@ -113,16 +113,16 @@ function EscotistaDashboard() {
             type="button"
             onClick={() => setActiveTab("escotistas")}
             aria-pressed={activeTab === "escotistas"}
-            className={`rounded-lg p-2 text-center transition-colors ${
+            className={`p-2 text-center transition-colors border-2 ${
               activeTab === "escotistas"
-                ? "bg-white/30 ring-2 ring-white/60"
-                : "bg-white/15 hover:bg-white/20"
+                ? "bg-white/30 border-white"
+                : "bg-white/10 border-white/40 hover:bg-white/20"
             }`}
           >
             <p className="text-xl font-bold">{stats.escotistaCount}</p>
             <p className="text-[10px] opacity-80">Escotistas</p>
           </button>
-          <div className="bg-white/15 rounded-lg p-2 text-center">
+          <div className="bg-white/10 border-2 border-white/40 p-2 text-center">
             <p className="text-xl font-bold">{stats.totalPending}</p>
             <p className="text-[10px] opacity-80">Pendentes</p>
           </div>
@@ -209,18 +209,18 @@ function EscotistaCard({
   };
 }) {
   return (
-    <div className="rounded-xl border bg-card p-3 flex items-center gap-3">
-      <Avatar className="size-10">
+    <div className="rounded-sm border-2 border-black bg-card p-3 flex items-center gap-3 shadow-[2px_2px_0_0_#000]">
+      <Avatar className="size-10 rounded-sm">
         <AvatarImage src={escotista.image ?? undefined} />
-        <AvatarFallback className="text-xs">
+        <AvatarFallback className="text-xs rounded-none">
           {escotista.name?.charAt(0)?.toUpperCase() ?? "?"}
         </AvatarFallback>
       </Avatar>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">
+        <p className="text-sm font-bold truncate">
           {escotista.name ?? "Sem nome"}
         </p>
-        <p className="text-[11px] text-muted-foreground">Escotista</p>
+        <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Escotista</p>
       </div>
     </div>
   );
@@ -243,16 +243,16 @@ function EscoteiroCard({
   onToggleFavorite: () => void;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-3 flex items-center gap-3">
-      <Avatar className="size-10">
+    <div className="rounded-sm border-2 border-black bg-card p-3 flex items-center gap-3 shadow-[2px_2px_0_0_#000]">
+      <Avatar className="size-10 rounded-sm">
         <AvatarImage src={escoteiro.image ?? undefined} />
-        <AvatarFallback className="text-xs">
+        <AvatarFallback className="text-xs rounded-none">
           {escoteiro.name?.charAt(0)?.toUpperCase() ?? "?"}
         </AvatarFallback>
       </Avatar>
 
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">
+        <p className="text-sm font-bold truncate">
           {escoteiro.name ?? "Sem nome"}
         </p>
         <div className="flex items-center gap-2 mt-0.5">
@@ -275,7 +275,7 @@ function EscoteiroCard({
         <button
           type="button"
           onClick={onToggleFavorite}
-          className="p-1.5 rounded-md hover:bg-muted transition-colors"
+          className="p-1.5 hover:bg-muted transition-colors border border-black/20"
           aria-label={isFavorite ? "Remover favorito" : "Favoritar"}
         >
           <Star
@@ -285,7 +285,7 @@ function EscoteiroCard({
         <Link
           to="/escotista/escoteiro/$escoteiroId"
           params={{ escoteiroId: escoteiro._id }}
-          className="p-1.5 rounded-md hover:bg-muted transition-colors"
+          className="p-1.5 hover:bg-muted transition-colors border border-black/20"
           aria-label="Ver progressão"
         >
           <Eye className="size-4 text-muted-foreground" />
@@ -332,7 +332,7 @@ function NoGroupState() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border bg-card p-5 space-y-4">
+      <div className="rounded-sm border-2 border-black bg-card p-5 space-y-4 shadow-[3px_3px_0_0_#000]">
         <div className="text-center space-y-1">
           <AlertCircle className="size-10 text-muted-foreground mx-auto" />
           <h2 className="font-semibold">Sem grupo</h2>

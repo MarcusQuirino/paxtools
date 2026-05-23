@@ -16,29 +16,29 @@ export function PendingApprovalScreen({ groupName, groupNumber }: Props) {
   const { mutate: leave, isPending } = useMutation({ mutationFn: leaveFn });
 
   return (
-    <div className="rounded-2xl border border-amber-300/40 bg-amber-50/60 p-6 space-y-4">
+    <div className="rounded-sm border-2 border-black bg-amber-100 p-6 space-y-4 shadow-[3px_3px_0_0_#000]">
       <div className="flex items-center gap-3">
-        <div className="rounded-xl bg-amber-200 p-3">
-          <Clock className="size-6 text-amber-700" aria-hidden />
+        <div className="bg-amber-400 border-2 border-black p-3">
+          <Clock className="size-6 text-black" aria-hidden />
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-amber-900">
+          <h2 className="text-lg font-black uppercase tracking-wide text-black">
             Aguardando aprovação
           </h2>
-          <p className="text-xs text-amber-800/70">
+          <p className="text-xs text-black/70 font-medium">
             Sua solicitação foi enviada ao administrador do grupo.
           </p>
         </div>
       </div>
 
-      <div className="rounded-lg bg-white/70 px-3 py-2 text-sm text-amber-900">
+      <div className="border-2 border-black bg-white px-3 py-2 text-sm text-black font-medium">
         <p>
           <strong>Grupo:</strong> {groupName}
           {groupNumber ? ` · nº ${groupNumber}` : ""}
         </p>
       </div>
 
-      <p className="text-sm text-amber-800/80">
+      <p className="text-sm text-black/80 font-medium">
         Entre em contato com o administrador do grupo para acelerar a aprovação.
         Você poderá usar o painel assim que for aprovado.
       </p>
@@ -56,7 +56,7 @@ export function PendingApprovalScreen({ groupName, groupNumber }: Props) {
           )
         }
         disabled={isPending}
-        className="w-full border-amber-300 text-amber-900 hover:bg-amber-100"
+        className="w-full"
       >
         <LogOut className="size-4 mr-2" aria-hidden />
         Cancelar solicitação e escolher outro grupo

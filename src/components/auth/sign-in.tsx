@@ -6,7 +6,7 @@ export function SignInWithGoogle() {
   return (
     <button
       onClick={() => void signIn("google")}
-      className="w-full flex items-center justify-center gap-3 rounded-lg bg-card px-4 py-3 text-sm font-medium text-card-foreground shadow-sm hover:bg-secondary transition-colors cursor-pointer"
+      className="w-full flex items-center justify-center gap-3 rounded-sm bg-card border-2 border-black px-4 py-3 text-sm font-black uppercase tracking-wide text-card-foreground shadow-[3px_3px_0_0_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0_0_#000] transition-all cursor-pointer"
     >
       <svg className="h-5 w-5" viewBox="0 0 24 24">
         <path

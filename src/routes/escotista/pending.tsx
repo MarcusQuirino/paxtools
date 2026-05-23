@@ -273,8 +273,8 @@ function EscoteiroPendingCard({
 
   return (
     <Collapsible>
-      <div className="rounded-xl border bg-card overflow-hidden">
-        <CollapsibleTrigger className="w-full px-4 py-3 flex items-center gap-3 hover:bg-muted/50 transition-colors">
+      <div className="rounded-sm border-2 border-black bg-card overflow-hidden shadow-[2px_2px_0_0_#000]">
+        <CollapsibleTrigger className="w-full px-4 py-3 flex items-center gap-3 hover:bg-muted transition-colors">
           <Avatar className="size-9">
             <AvatarImage src={entry.escoteiro.image ?? undefined} />
             <AvatarFallback className="text-xs">
@@ -370,9 +370,8 @@ function EscoteiroPendingCard({
             {/* Bulk action buttons */}
             <div className="pt-2 border-t flex gap-2">
               <Button
-                variant="outline"
                 size="sm"
-                className="flex-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                className="flex-1 bg-emerald-600 text-white border-black shadow-[2px_2px_0_0_#000] hover:bg-emerald-700"
                 onClick={() => handleBulk("approve")}
                 disabled={noneSelected || isBulkPending}
               >
@@ -380,9 +379,8 @@ function EscoteiroPendingCard({
                 Aprovar ({selectedCount})
               </Button>
               <Button
-                variant="outline"
                 size="sm"
-                className="flex-1 text-red-600 border-red-300 hover:bg-red-50"
+                className="flex-1 bg-destructive text-white border-black shadow-[2px_2px_0_0_#000] hover:bg-destructive/90"
                 onClick={() => handleBulk("reject")}
                 disabled={noneSelected || isBulkPending}
               >
@@ -407,7 +405,7 @@ function SelectableItem({
   onToggle: () => void;
 }) {
   return (
-    <label className="flex items-center gap-3 py-1.5 px-1 cursor-pointer hover:bg-muted/30 rounded-md transition-colors">
+    <label className="flex items-center gap-3 py-1.5 px-1 cursor-pointer hover:bg-muted transition-colors">
       <Checkbox
         checked={selected}
         onCheckedChange={onToggle}

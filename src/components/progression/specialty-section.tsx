@@ -57,7 +57,7 @@ export function SpecialtySection({
       </div>
 
       {visibleAlternatives.map((alt) => (
-        <div key={alt.type} className="border rounded-md p-3 space-y-2">
+        <div key={alt.type} className="border-2 border-black p-3 space-y-2">
           <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase">
             <Award className="size-3.5" />
             {alt.type === "especialidade" ? "Especialidades" : "Insígnias"}
@@ -76,8 +76,8 @@ export function SpecialtySection({
             return (
               <label
                 key={item}
-                className={`flex items-center gap-3 min-h-[44px] px-1 ${
-                  isLocked ? "cursor-not-allowed" : "cursor-pointer"
+                className={`flex items-center gap-3 min-h-[44px] px-1 transition-colors ${
+                  isLocked ? "cursor-not-allowed" : "cursor-pointer hover:bg-muted"
                 }`}
               >
                 <Checkbox

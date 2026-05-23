@@ -40,7 +40,7 @@ class ErrorBoundary extends Component<
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+              className="rounded-sm bg-primary border-2 border-black px-4 py-2 text-sm font-black uppercase tracking-wide text-primary-foreground shadow-[3px_3px_0_0_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0_0_#000] transition-all"
             >
               Recarregar
             </button>

@@ -124,8 +124,8 @@ function SettingsPage() {
         <h1 className="text-xl font-bold">Configurações</h1>
 
         {/* Role section */}
-        <section className="rounded-xl border bg-card p-4 space-y-3">
-          <h2 className="text-sm font-semibold flex items-center gap-2">
+        <section className="rounded-sm border-2 border-black bg-card p-4 space-y-3 shadow-[3px_3px_0_0_#000]">
+          <h2 className="text-sm font-black uppercase tracking-wide flex items-center gap-2">
             {user.role === "escotista" ? (
               <Shield className="size-4 text-teal-600" />
             ) : (
@@ -150,15 +150,15 @@ function SettingsPage() {
         </section>
 
         {/* Group section */}
-        <section className="rounded-xl border bg-card p-4 space-y-4">
-          <h2 className="text-sm font-semibold flex items-center gap-2">
+        <section className="rounded-sm border-2 border-black bg-card p-4 space-y-4 shadow-[3px_3px_0_0_#000]">
+          <h2 className="text-sm font-black uppercase tracking-wide flex items-center gap-2">
             <Users className="size-4" />
             Grupo
           </h2>
 
           {group ? (
             <div className="space-y-3">
-              <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+              <div className="border-2 border-black bg-muted p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-sm">{group.name}</span>
                   {group.password && (
@@ -384,8 +384,8 @@ function GroupAdminSection({
   };
 
   return (
-    <section className="rounded-xl border bg-card p-4 space-y-4">
-      <h2 className="text-sm font-semibold flex items-center gap-2">
+    <section className="rounded-sm border-2 border-black bg-card p-4 space-y-4 shadow-[3px_3px_0_0_#000]">
+      <h2 className="text-sm font-black uppercase tracking-wide flex items-center gap-2">
         <SettingsIcon className="size-4" />
         Gerenciar grupo
       </h2>
@@ -442,7 +442,7 @@ function GroupAdminSection({
           Zona perigosa
         </h3>
         {confirmOpen ? (
-          <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+          <div className="space-y-2 border-2 border-destructive bg-destructive/5 p-3">
             <p className="text-xs">
               Esta ação não pode ser desfeita pela interface. Para confirmar,
               digite o nome do grupo:{" "}

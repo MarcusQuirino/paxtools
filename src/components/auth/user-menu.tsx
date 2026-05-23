@@ -31,10 +31,10 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="rounded-full size-8">
+        <Button variant="ghost" size="icon" className="rounded-sm size-8 border-2 border-black shadow-[2px_2px_0_0_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]">
           <Avatar className="size-8">
             <AvatarImage src={user.image ?? undefined} alt={user.name ?? ""} />
-            <AvatarFallback className="text-xs">
+            <AvatarFallback className="text-xs rounded-none">
               {getInitials(user.name, user.email)}
             </AvatarFallback>
           </Avatar>

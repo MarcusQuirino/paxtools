@@ -6,12 +6,12 @@ export function PlanNav() {
   const onPlan = pathname.startsWith("/plan");
 
   const baseClass =
-    "flex-1 flex items-center justify-center gap-1.5 h-9 text-sm font-medium rounded-md transition-colors";
-  const active = "bg-card text-foreground shadow-sm";
-  const inactive = "text-muted-foreground hover:text-foreground";
+    "flex-1 flex items-center justify-center gap-1.5 h-9 text-sm font-black uppercase tracking-wide rounded-sm transition-colors";
+  const active = "bg-card text-foreground border-2 border-black shadow-[2px_2px_0_0_#000]";
+  const inactive = "text-muted-foreground hover:text-foreground hover:bg-muted";
 
   return (
-    <nav className="flex gap-1 p-1 bg-muted/60 rounded-lg">
+    <nav className="flex gap-1 p-1 bg-muted border-2 border-black rounded-sm">
       <Link
         to="/"
         className={`${baseClass} ${onPlan ? inactive : active}`}

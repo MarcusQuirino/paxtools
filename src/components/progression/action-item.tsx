@@ -32,10 +32,10 @@ export function ActionItem({
   return (
     <label
       htmlFor={id}
-      className={`flex items-start gap-3 rounded-lg p-3 min-h-[44px] transition-colors ${
+      className={`flex items-start gap-3 p-3 min-h-[44px] transition-colors ${
         isLocked
           ? "cursor-not-allowed"
-          : "cursor-pointer hover:bg-muted/50 active:bg-muted"
+          : "cursor-pointer hover:bg-muted"
       }`}
     >
       <Checkbox

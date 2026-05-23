@@ -35,18 +35,18 @@ export function RamoPicker(props: Props) {
   const palette =
     variant === "dark"
       ? {
-          selected: "bg-emerald-500/20 border-emerald-400/60 text-white",
+          selected: "bg-emerald-600 border-white text-white shadow-[3px_3px_0_0_#fff]",
           unselected:
-            "bg-white/[0.05] border-white/10 text-green-100 hover:bg-white/[0.1]",
-          age: "text-green-200/60",
-          check: "text-emerald-300",
+            "bg-black/20 border-white/40 text-white hover:bg-black/30",
+          age: "text-green-200/80",
+          check: "text-white",
         }
       : {
           selected:
-            "bg-emerald-500/15 border-emerald-500/60 text-emerald-950",
-          unselected: "bg-card hover:bg-muted border-input text-foreground",
+            "bg-primary text-primary-foreground border-black shadow-[3px_3px_0_0_#000]",
+          unselected: "bg-card border-black hover:bg-muted text-foreground",
           age: "text-muted-foreground",
-          check: "text-emerald-600",
+          check: "text-primary-foreground",
         };
 
   return (
@@ -58,12 +58,12 @@ export function RamoPicker(props: Props) {
             type="button"
             key={r}
             onClick={() => handleClick(r)}
-            className={`relative rounded-xl border p-3 text-left transition-colors ${
+            className={`relative rounded-sm border-2 p-3 text-left transition-all ${
               selected ? palette.selected : palette.unselected
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="font-semibold">{RAMO_LABELS[r]}</span>
+              <span className="font-black uppercase tracking-wide">{RAMO_LABELS[r]}</span>
               {selected && (
                 <Check className={`size-4 ${palette.check}`} aria-hidden />
               )}

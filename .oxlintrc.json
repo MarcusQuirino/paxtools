@@ -21,10 +21,7 @@
   "env": {
     "builtin": true
   },
-  "options": {
-    "typeAware": true,
-    "typeCheck": true
-  },
+  "options": {},
   "globals": {},
   "ignorePatterns": [".agents/skills", ".claude/skills"]
 }

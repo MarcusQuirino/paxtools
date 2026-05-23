@@ -98,7 +98,7 @@ function PlanPage() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
         <header className="flex items-center justify-between">
-          <h1 className="text-lg font-bold text-green-800">Paxtools</h1>
+          <h1 className="text-lg font-black uppercase tracking-tight text-foreground">Paxtools</h1>
           <AuthButton />
         </header>
         {showComingSoon ? (
@@ -232,11 +232,11 @@ function ViewToggle({
   onChange: (v: ViewMode) => void;
 }) {
   const base =
-    "flex-1 text-sm h-9 rounded-md font-medium transition-colors";
-  const active = "bg-card text-foreground shadow-sm";
-  const inactive = "text-muted-foreground hover:text-foreground";
+    "flex-1 text-sm h-9 rounded-sm font-black uppercase tracking-wide transition-colors";
+  const active = "bg-card text-foreground border-2 border-black shadow-[2px_2px_0_0_#000]";
+  const inactive = "text-muted-foreground hover:text-foreground hover:bg-muted";
   return (
-    <div className="flex gap-1 p-1 bg-muted/60 rounded-lg">
+    <div className="flex gap-1 p-1 bg-muted border-2 border-black rounded-sm">
       <button
         type="button"
         onClick={() => onChange("byArea")}
@@ -257,8 +257,8 @@ function ViewToggle({
 
 function EmptyState() {
   return (
-    <div className="rounded-xl border bg-card p-8 text-center space-y-3">
-      <Sparkles className="size-8 mx-auto text-muted-foreground/50" />
+    <div className="rounded-sm border-2 border-black bg-card p-8 text-center space-y-3 shadow-[3px_3px_0_0_#000]">
+      <Sparkles className="size-8 mx-auto text-muted-foreground" />
       <p className="text-sm font-medium">Seu plano está vazio</p>
       <p className="text-xs text-muted-foreground">
         Volte para <b>Tudo</b> e toque na estrela ao lado dos itens que você
@@ -377,7 +377,7 @@ function SortableRow({
     <div
       ref={setNodeRef}
       style={style}
-      className="rounded-lg border bg-card flex items-stretch"
+      className="rounded-sm border-2 border-black bg-card flex items-stretch shadow-[2px_2px_0_0_#000]"
     >
       <button
         type="button"

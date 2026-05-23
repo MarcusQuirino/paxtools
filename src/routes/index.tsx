@@ -70,11 +70,11 @@ function Home() {
       <div className="min-h-screen bg-background">
         <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
           <header className="flex items-center justify-between">
-            <div className="h-6 w-20 animate-pulse rounded bg-muted" />
-            <div className="size-8 animate-pulse rounded-full bg-muted" />
+            <div className="h-6 w-20 animate-pulse rounded-sm bg-muted border-2 border-black/20" />
+            <div className="size-8 animate-pulse rounded-sm bg-muted border-2 border-black/20" />
           </header>
-          <div className="h-32 animate-pulse rounded-xl bg-muted" />
-          <div className="h-24 animate-pulse rounded-xl bg-muted" />
+          <div className="h-32 animate-pulse rounded-sm bg-muted border-2 border-black/20" />
+          <div className="h-24 animate-pulse rounded-sm bg-muted border-2 border-black/20" />
         </div>
       </div>
     );
@@ -86,7 +86,7 @@ function Home() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
         <header className="flex items-center justify-between">
-          <h1 className="text-lg font-bold text-emerald-900">Paxtools</h1>
+          <h1 className="text-lg font-black uppercase tracking-tight text-foreground">Paxtools</h1>
           <AuthButton />
         </header>
         {showComingSoon ? (

@@ -26,10 +26,10 @@ export function OverallProgress({
         return (
           <div
             key={eixo.id}
-            className="rounded-lg border bg-card p-3 space-y-2"
-            style={{ borderLeftWidth: 4, borderLeftColor: eixo.color }}
+            className="rounded-sm border-2 border-black bg-card p-3 space-y-2 shadow-[3px_3px_0_0_#000]"
+            style={{ borderTopWidth: 4, borderTopColor: eixo.color }}
           >
-            <p className="text-xs font-semibold truncate">{eixo.name}</p>
+            <p className="text-xs font-black uppercase tracking-wide truncate">{eixo.name}</p>
             <Progress
               value={approvedPercent}
               pendingValue={pendingPercent}

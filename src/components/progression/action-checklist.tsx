@@ -69,12 +69,12 @@ export function ActionChecklist({
       {visibleFixed.length > 0 && (
         <div>
           <div
-            className="text-xs font-semibold uppercase tracking-wider px-3 py-2 rounded-t-md text-white"
+            className="text-xs font-black uppercase tracking-widest px-3 py-2 text-white border-2 border-black border-b-0"
             style={{ backgroundColor: color }}
           >
             Ações Fixas
           </div>
-          <div className="border border-t-0 rounded-b-md divide-y">
+          <div className="border-2 border-black border-t-0 divide-y divide-black/20">
             {visibleFixed.map((action) => {
               const planKey = encodePlanKey({
                 kind: "action",
@@ -106,17 +106,17 @@ export function ActionChecklist({
       {showVariableSection && (
       <div>
         <div
-          className="text-xs font-semibold uppercase tracking-wider px-3 py-2 rounded-t-md flex items-center justify-between"
+          className="text-xs font-black uppercase tracking-widest px-3 py-2 flex items-center justify-between border-2 border-black border-b-0"
           style={{ backgroundColor: colorLight, color }}
         >
           <span>Ações Variáveis</span>
-          <span className="text-xs font-normal">
+          <span className="text-xs font-bold">
             {hasSpecialtyAlternative
               ? "✓ substituída por especialidade"
               : `${totalVariableDone}/${bloco.variableRequired} necessárias`}
           </span>
         </div>
-        <div className="border border-t-0 rounded-b-md divide-y">
+        <div className="border-2 border-black border-t-0 divide-y divide-black/20">
           {visibleVariable.map((action) => {
             const planKey = encodePlanKey({
               kind: "action",
