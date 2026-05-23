@@ -23,12 +23,12 @@ export function StageBanner({
 
   if (lisDeOuro) {
     return (
-      <div className="rounded-xl bg-gradient-to-r from-yellow-600 to-yellow-500 p-5 text-white shadow-lg">
+      <div className="rounded-md border-2 border-black bg-yellow-400 p-5 text-black shadow-[4px_4px_0px_0px_#000]">
         <div className="flex items-center gap-3">
-          <Trophy className="size-10 drop-shadow" />
+          <Trophy className="size-10" />
           <div>
-            <h1 className="text-xl font-bold">Lis de Ouro!</h1>
-            <p className="text-sm opacity-90">
+            <h1 className="text-xl font-black uppercase tracking-tight">Lis de Ouro!</h1>
+            <p className="text-sm font-medium">
               Parabéns! Reconhecimento de Ramo completo.
             </p>
           </div>
@@ -43,17 +43,17 @@ export function StageBanner({
   const blocksToLis = getBlocksToLisDeOuro(completedBlockCount);
 
   return (
-    <div className="rounded-xl bg-gradient-to-r from-green-700 to-green-600 px-4 py-3 text-white shadow-lg">
+    <div className="rounded-md border-2 border-black bg-emerald-700 px-4 py-3 text-white shadow-[4px_4px_0px_0px_#065f46]">
       <div className="flex items-baseline justify-between mb-1.5">
         <div>
-          <p className="text-[10px] uppercase tracking-wider opacity-80">
+          <p className="text-[10px] font-bold uppercase tracking-widest opacity-80">
             Etapa Atual
           </p>
-          <h1 className="text-lg font-bold text-white leading-tight">
+          <h1 className="text-lg font-black text-white leading-tight uppercase">
             {stage.name}
           </h1>
         </div>
-        <span className="text-xs opacity-80">
+        <span className="text-xs font-bold opacity-80">
           {completedBlockCount}/{LIS_DE_OURO_BLOCKS} blocos
           {pendingBlockCount > 0 && ` (+${pendingBlockCount})`}
         </span>
@@ -88,27 +88,27 @@ export function StageBanner({
           );
         })}
 
-        <div className="h-2 w-full rounded-full bg-white/30 relative overflow-hidden">
+        <div className="h-3 w-full rounded-sm border-2 border-white/60 bg-white/20 relative overflow-hidden">
           {pendingPercent > 0 && (
             <div
-              className="absolute inset-0 h-full rounded-full bg-white/30 transition-all"
+              className="absolute inset-0 h-full rounded-sm bg-white/40 transition-all"
               style={{ width: `${approvedPercent + pendingPercent}%` }}
             />
           )}
           <div
-            className="absolute inset-0 h-full rounded-full bg-white transition-all"
+            className="absolute inset-0 h-full rounded-sm bg-white transition-all"
             style={{ width: `${approvedPercent}%` }}
           />
         </div>
       </div>
 
       {nextStage ? (
-        <p className="text-[11px] opacity-80 mt-1 text-white">
+        <p className="text-[11px] font-bold opacity-80 mt-1 text-white">
           +{blocksToNext} bloco{blocksToNext !== 1 ? "s" : ""} para{" "}
           <strong>{nextStage.name}</strong>
         </p>
       ) : blocksToLis > 0 ? (
-        <p className="text-[11px] opacity-80 mt-1 text-white">
+        <p className="text-[11px] font-bold opacity-80 mt-1 text-white">
           +{blocksToLis} bloco{blocksToLis !== 1 ? "s" : ""} para{" "}
           <strong>Lis de Ouro</strong>
         </p>

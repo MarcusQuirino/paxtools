@@ -121,24 +121,24 @@ function SettingsPage() {
           <AuthButton />
         </header>
 
-        <h1 className="text-xl font-bold">Configurações</h1>
+        <h1 className="text-xl font-black uppercase">Configurações</h1>
 
         {/* Role section */}
-        <section className="rounded-xl border bg-card p-4 space-y-3">
-          <h2 className="text-sm font-semibold flex items-center gap-2">
+        <section className="rounded-md border-2 border-black bg-card p-4 space-y-3 shadow-[3px_3px_0px_0px_#065f46]">
+          <h2 className="text-sm font-black uppercase flex items-center gap-2">
             {user.role === "escotista" ? (
               <Shield className="size-4 text-teal-600" />
             ) : (
-              <Compass className="size-4 text-emerald-500" />
+              <Compass className="size-4 text-primary" />
             )}
             Seu papel
           </h2>
           <div className="flex items-center gap-3">
             <div
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+              className={`rounded-md border-2 border-black px-3 py-1.5 text-sm font-bold ${
                 user.role === "escotista"
-                  ? "bg-teal-100 text-teal-800"
-                  : "bg-emerald-100 text-emerald-800"
+                  ? "bg-teal-100 text-teal-900"
+                  : "bg-emerald-100 text-emerald-900"
               }`}
             >
               {user.role === "escotista" ? "Escotista" : "Escoteiro"}
@@ -150,15 +150,15 @@ function SettingsPage() {
         </section>
 
         {/* Group section */}
-        <section className="rounded-xl border bg-card p-4 space-y-4">
-          <h2 className="text-sm font-semibold flex items-center gap-2">
+        <section className="rounded-md border-2 border-black bg-card p-4 space-y-4 shadow-[3px_3px_0px_0px_#065f46]">
+          <h2 className="text-sm font-black uppercase flex items-center gap-2">
             <Users className="size-4" />
             Grupo
           </h2>
 
           {group ? (
             <div className="space-y-3">
-              <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+              <div className="rounded-md border-2 border-black bg-muted/50 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-sm">{group.name}</span>
                   {group.password && (
@@ -384,8 +384,8 @@ function GroupAdminSection({
   };
 
   return (
-    <section className="rounded-xl border bg-card p-4 space-y-4">
-      <h2 className="text-sm font-semibold flex items-center gap-2">
+    <section className="rounded-md border-2 border-black bg-card p-4 space-y-4 shadow-[3px_3px_0px_0px_#065f46]">
+      <h2 className="text-sm font-black uppercase flex items-center gap-2">
         <SettingsIcon className="size-4" />
         Gerenciar grupo
       </h2>

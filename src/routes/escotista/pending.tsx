@@ -273,38 +273,37 @@ function EscoteiroPendingCard({
 
   return (
     <Collapsible>
-      <div className="rounded-xl border bg-card overflow-hidden">
+      <div className="rounded-md border-2 border-black bg-card overflow-hidden shadow-[3px_3px_0px_0px_#000]">
         <CollapsibleTrigger className="w-full px-4 py-3 flex items-center gap-3 hover:bg-muted/50 transition-colors">
-          <Avatar className="size-9">
+          <Avatar className="size-9 border-2 border-black">
             <AvatarImage src={entry.escoteiro.image ?? undefined} />
-            <AvatarFallback className="text-xs">
+            <AvatarFallback className="text-xs font-bold">
               {entry.escoteiro.name?.charAt(0)?.toUpperCase() ?? "?"}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0 text-left">
-            <p className="text-sm font-medium truncate">
+            <p className="text-sm font-bold truncate">
               {entry.escoteiro.name ?? "Sem nome"}
             </p>
           </div>
           <Badge
             variant="outline"
-            className="text-slate-600 border-slate-300 text-xs"
+            className="text-amber-800 border-amber-600 bg-amber-50 text-xs"
           >
             {entry.totalPending} pendente{entry.totalPending !== 1 ? "s" : ""}
           </Badge>
-          <ChevronDown className="size-4 text-muted-foreground" />
+          <ChevronDown className="size-4 text-foreground" />
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <div className="border-t px-4 py-3 space-y-3">
+          <div className="border-t-2 border-black px-4 py-3 space-y-3">
             {/* Select all toggle */}
             <label className="flex items-center gap-2 cursor-pointer py-1 px-1">
               <Checkbox
                 checked={allSelected}
                 onCheckedChange={toggleAll}
-                className="size-4"
               />
-              <span className="text-xs font-medium text-muted-foreground">
+              <span className="text-xs font-bold text-muted-foreground">
                 {allSelected
                   ? "Todos selecionados"
                   : `${selectedCount}/${allItems.length} selecionados`}
@@ -316,7 +315,7 @@ function EscoteiroPendingCard({
               ([blocoId, { items, eixoColor }]) => (
                 <div key={blocoId} className="space-y-0.5">
                   <p
-                    className="text-xs font-semibold uppercase tracking-wider"
+                    className="text-xs font-black uppercase tracking-widest"
                     style={{ color: eixoColor }}
                   >
                     {getBlocoName(blocoId)}
@@ -336,7 +335,7 @@ function EscoteiroPendingCard({
             {/* Specialties */}
             {specialties.length > 0 && (
               <div className="space-y-0.5">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                   Especialidades
                 </p>
                 {specialties.map((item) => (
@@ -353,7 +352,7 @@ function EscoteiroPendingCard({
             {/* Lis de Ouro items */}
             {lisItems.length > 0 && (
               <div className="space-y-0.5">
-                <p className="text-xs font-semibold uppercase tracking-wider text-green-700">
+                <p className="text-xs font-black uppercase tracking-widest text-primary">
                   Lis de Ouro
                 </p>
                 {lisItems.map((item) => (
@@ -368,11 +367,11 @@ function EscoteiroPendingCard({
             )}
 
             {/* Bulk action buttons */}
-            <div className="pt-2 border-t flex gap-2">
+            <div className="pt-2 border-t-2 border-black flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                className="flex-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                className="flex-1 bg-emerald-700 text-white border-black hover:bg-emerald-800"
                 onClick={() => handleBulk("approve")}
                 disabled={noneSelected || isBulkPending}
               >
@@ -382,7 +381,7 @@ function EscoteiroPendingCard({
               <Button
                 variant="outline"
                 size="sm"
-                className="flex-1 text-red-600 border-red-300 hover:bg-red-50"
+                className="flex-1 bg-destructive text-white border-black hover:bg-destructive/80"
                 onClick={() => handleBulk("reject")}
                 disabled={noneSelected || isBulkPending}
               >
@@ -407,11 +406,10 @@ function SelectableItem({
   onToggle: () => void;
 }) {
   return (
-    <label className="flex items-center gap-3 py-1.5 px-1 cursor-pointer hover:bg-muted/30 rounded-md transition-colors">
+    <label className="flex items-center gap-3 py-1.5 px-1 cursor-pointer hover:bg-muted/40 rounded-md transition-colors">
       <Checkbox
         checked={selected}
         onCheckedChange={onToggle}
-        className="size-4"
       />
       <span
         className={`text-sm flex-1 line-clamp-2 ${!selected ? "text-muted-foreground line-through" : ""}`}

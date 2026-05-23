@@ -40,9 +40,9 @@ function AdminPage() {
 
   if (!user || !myGroup?.isAdmin) {
     return (
-      <div className="rounded-xl border bg-card p-6 text-center space-y-2">
+      <div className="rounded-md border-2 border-black bg-card p-6 text-center space-y-2 shadow-[4px_4px_0px_0px_#000]">
         <Lock className="size-8 text-muted-foreground mx-auto" aria-hidden />
-        <h2 className="font-semibold">Acesso restrito</h2>
+        <h2 className="font-black uppercase">Acesso restrito</h2>
         <p className="text-sm text-muted-foreground">
           Apenas administradores do grupo podem ver esta página.
         </p>
@@ -86,9 +86,9 @@ function PendingSection({ pending }: { pending: PendingMember[] }) {
   });
 
   return (
-    <section className="rounded-xl border bg-card p-4 space-y-3">
+    <section className="rounded-md border-2 border-black bg-card p-4 space-y-3 shadow-[3px_3px_0px_0px_#065f46]">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold">Solicitações pendentes</h2>
+        <h2 className="font-black uppercase text-sm">Solicitações pendentes</h2>
         <Badge variant="outline">{pending.length}</Badge>
       </div>
 
@@ -102,19 +102,19 @@ function PendingSection({ pending }: { pending: PendingMember[] }) {
           {pending.map((m) => (
             <li
               key={m._id}
-              className="flex items-center gap-3 rounded-lg border p-2"
+              className="flex items-center gap-3 rounded-md border-2 border-black p-2 shadow-[2px_2px_0px_0px_#000]"
             >
-              <Avatar className="size-9">
+              <Avatar className="size-9 border-2 border-black">
                 <AvatarImage src={m.image ?? undefined} />
-                <AvatarFallback className="text-xs">
+                <AvatarFallback className="text-xs font-bold">
                   {m.name?.charAt(0)?.toUpperCase() ?? "?"}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">
+                <p className="text-sm font-bold truncate">
                   {m.name ?? "Sem nome"}
                 </p>
-                <p className="text-[11px] text-muted-foreground truncate">
+                <p className="text-[11px] font-medium text-muted-foreground truncate">
                   {m.role === "escotista" ? "Escotista" : "Escoteiro"}
                   {" · "}
                   {ramosLabel(m)}
@@ -123,7 +123,7 @@ function PendingSection({ pending }: { pending: PendingMember[] }) {
               <Button
                 size="sm"
                 variant="outline"
-                className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                className="bg-emerald-700 text-white border-black hover:bg-emerald-800"
                 onClick={() => approve({ userId: m._id })}
                 disabled={approving}
               >
@@ -132,7 +132,7 @@ function PendingSection({ pending }: { pending: PendingMember[] }) {
               <Button
                 size="sm"
                 variant="outline"
-                className="text-red-600 border-red-300 hover:bg-red-50"
+                className="bg-destructive text-white border-black hover:bg-destructive/80"
                 onClick={() => reject({ userId: m._id })}
                 disabled={rejecting}
               >
@@ -165,8 +165,8 @@ function MembersSection({
   selfId: Id<"users">;
 }) {
   return (
-    <section className="rounded-xl border bg-card p-4 space-y-3">
-      <h2 className="font-semibold">Membros</h2>
+    <section className="rounded-md border-2 border-black bg-card p-4 space-y-3 shadow-[3px_3px_0px_0px_#065f46]">
+      <h2 className="font-black uppercase text-sm">Membros</h2>
       <ul className="space-y-2">
         {members.map((m) => (
           <MemberRow key={m._id} member={m} isSelf={m._id === selfId} />
@@ -210,19 +210,19 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
   };
 
   return (
-    <li className="rounded-lg border p-2 space-y-2">
+    <li className="rounded-md border-2 border-black p-2 space-y-2 shadow-[2px_2px_0px_0px_#000]">
       <div className="flex items-center gap-3 flex-wrap">
-        <Avatar className="size-9">
+        <Avatar className="size-9 border-2 border-black">
           <AvatarImage src={member.image ?? undefined} />
-          <AvatarFallback className="text-xs">
+          <AvatarFallback className="text-xs font-bold">
             {member.name?.charAt(0)?.toUpperCase() ?? "?"}
           </AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">
+          <p className="text-sm font-bold truncate">
             {member.name ?? "Sem nome"}
             {isSelf && (
-              <span className="ml-2 text-[11px] text-muted-foreground">
+              <span className="ml-2 text-[11px] font-normal text-muted-foreground">
                 (você)
               </span>
             )}
@@ -232,7 +232,7 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
               </Badge>
             )}
           </p>
-          <p className="text-[11px] text-muted-foreground truncate">
+          <p className="text-[11px] font-medium text-muted-foreground truncate">
             {member.role === "escotista" ? "Escotista" : "Escoteiro"}
             {" · "}
             {ramosLabel(member)}

@@ -21,8 +21,8 @@ function ImpersonationView() {
     <Suspense
       fallback={
         <div className="space-y-4">
-          <div className="h-16 animate-pulse rounded-xl bg-muted" />
-          <div className="h-32 animate-pulse rounded-xl bg-muted" />
+          <div className="h-16 animate-pulse rounded-md border-2 border-black bg-muted" />
+          <div className="h-32 animate-pulse rounded-md border-2 border-black bg-muted" />
         </div>
       }
     >
@@ -45,22 +45,22 @@ function ImpersonationContent({
   return (
     <div className="space-y-4">
       {/* Impersonation banner */}
-      <div className="rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 flex items-center gap-3">
-        <div className="rounded-full bg-blue-100 p-2">
-          <Eye className="size-4 text-blue-600" />
+      <div className="rounded-md border-2 border-black bg-blue-50 px-4 py-3 flex items-center gap-3 shadow-[3px_3px_0px_0px_#000]">
+        <div className="rounded-md border-2 border-black bg-blue-500 p-2">
+          <Eye className="size-4 text-white" />
         </div>
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <Avatar className="size-7">
+          <Avatar className="size-7 border-2 border-black">
             <AvatarImage src={escoteiro?.image ?? undefined} />
-            <AvatarFallback className="text-[10px]">
+            <AvatarFallback className="text-[10px] font-bold">
               {escoteiro?.name?.charAt(0)?.toUpperCase() ?? "?"}
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-blue-900 truncate">
+            <p className="text-sm font-black text-blue-950 truncate uppercase">
               {escoteiro?.name ?? "Escoteiro"}
             </p>
-            <p className="text-[10px] text-blue-600">
+            <p className="text-[10px] font-medium text-blue-700">
               Visualizando como escotista — ações são aprovadas automaticamente
             </p>
           </div>

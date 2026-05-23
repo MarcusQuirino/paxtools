@@ -30,17 +30,17 @@ class ErrorBoundary extends Component<
     if (this.state.hasError) {
       return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
-          <div className="text-center space-y-3">
-            <h1 className="text-lg font-bold text-foreground">
+          <div className="text-center space-y-4 rounded-md border-2 border-black bg-card p-8 shadow-[4px_4px_0px_0px_#000]">
+            <h1 className="text-lg font-black uppercase text-foreground">
               Algo deu errado
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm font-medium text-muted-foreground">
               Tente recarregar a página.
             </p>
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+              className="rounded-md border-2 border-black bg-primary px-4 py-2 text-sm font-bold text-white shadow-[3px_3px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0px_0px_#000] transition-all"
             >
               Recarregar
             </button>
