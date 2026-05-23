@@ -41,3 +41,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .vercel
 .playwright-cli
 
+# Playwright
+tests/.auth/
+playwright-report/
+test-results/
+
