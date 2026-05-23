@@ -58,8 +58,8 @@ function EscotistaLayout() {
     return (
       <div className="min-h-screen bg-background">
         <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
-          <div className="h-6 w-20 animate-pulse rounded bg-muted" />
-          <div className="h-32 animate-pulse rounded-xl bg-muted" />
+          <div className="h-6 w-20 animate-pulse rounded-md border-2 border-black bg-muted" />
+          <div className="h-32 animate-pulse rounded-md border-2 border-black bg-muted" />
         </div>
       </div>
     );
@@ -79,13 +79,13 @@ function EscotistaLayout() {
               Voltar
             </button>
           ) : (
-            <h1 className="text-lg font-bold text-emerald-900">Paxtools</h1>
+            <h1 className="text-lg font-black uppercase text-foreground">Paxtools</h1>
           )}
           <AuthButton />
         </header>
 
         {!isImpersonating && !isPending && (
-          <nav className="flex gap-1 rounded-lg bg-muted p-1">
+          <nav className="flex gap-1 rounded-md border-2 border-black bg-muted p-1">
             <NavTab to="/escotista" icon={LayoutDashboard} label="Painel" />
             <NavTab to="/escotista/pending" icon={Clock} label="Pendentes" />
             {myGroup?.isAdmin && (
@@ -103,8 +103,8 @@ function EscotistaLayout() {
           <Suspense
             fallback={
               <div className="space-y-4">
-                <div className="h-32 animate-pulse rounded-xl bg-muted" />
-                <div className="h-24 animate-pulse rounded-xl bg-muted" />
+                <div className="h-32 animate-pulse rounded-md border-2 border-black bg-muted" />
+                <div className="h-24 animate-pulse rounded-md border-2 border-black bg-muted" />
               </div>
             }
           >
@@ -129,10 +129,10 @@ function NavTab({
   return (
     <Link
       to={to}
-      className="flex-1 flex items-center justify-center gap-1.5 rounded-md py-2 text-sm font-medium transition-colors text-muted-foreground hover:text-foreground"
+      className="flex-1 flex items-center justify-center gap-1.5 rounded-md py-2 text-sm font-bold transition-all text-muted-foreground hover:text-foreground hover:bg-white/50"
       activeProps={{
         className:
-          "bg-background text-foreground shadow-sm flex-1 flex items-center justify-center gap-1.5 rounded-md py-2 text-sm font-medium transition-colors",
+          "bg-primary text-white border-2 border-black shadow-[2px_2px_0px_0px_#000] flex-1 flex items-center justify-center gap-1.5 rounded-md py-2 text-sm font-bold transition-all",
       }}
       activeOptions={{ exact: true }}
     >

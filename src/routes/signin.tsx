@@ -18,7 +18,7 @@ function SignInPage() {
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      navigate({ to: "/" });
+      void navigate({ to: "/" });
     }
   }, [isLoading, isAuthenticated, navigate]);
 
@@ -50,49 +50,32 @@ const features = [
 
 function LoginPage({ loading = false }: { loading?: boolean }) {
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-gradient-to-br from-green-950 via-green-900 to-emerald-900">
-      {/* Decorative background elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-green-800/30 blur-3xl" />
-        <div className="absolute -bottom-32 -right-32 h-[30rem] w-[30rem] rounded-full bg-emerald-800/20 blur-3xl" />
-        <div className="absolute top-1/4 right-1/4 h-64 w-64 rounded-full bg-teal-900/10 blur-3xl" />
-      </div>
-
-      {/* Subtle dot pattern overlay */}
-      <div
-        className="absolute inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle, white 1px, transparent 1px)",
-          backgroundSize: "24px 24px",
-        }}
-      />
-
-      <div className="relative z-10 w-full max-w-md mx-4 my-8">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      <div className="w-full max-w-md my-8 space-y-4">
         {/* Logo & Brand */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/10 mb-4 shadow-lg">
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-md bg-primary border-2 border-black mb-4 shadow-[4px_4px_0px_0px_#000]">
             <img
               src="/paxtools-logo.png"
               alt="Paxtools"
-              className="w-14 h-14 object-contain"
+              className="w-12 h-12 object-contain"
             />
           </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">
+          <h1 className="text-4xl font-black text-foreground uppercase tracking-tight">
             Paxtools
           </h1>
-          <p className="text-green-200/70 mt-1 text-sm">
+          <p className="text-muted-foreground mt-1 text-sm font-bold uppercase tracking-wider">
             Progressão Pessoal &middot; Ramo Escoteiro
           </p>
         </div>
 
         {/* Main Card */}
-        <div className="rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/10 shadow-2xl">
+        <div className="rounded-md border-2 border-black bg-card shadow-[6px_6px_0px_0px_#065f46]">
           <div className="p-6 pb-0">
-            <h2 className="text-xl font-semibold text-white text-center">
+            <h2 className="text-xl font-black text-foreground text-center uppercase">
               Bem-vindo de volta
             </h2>
-            <p className="text-green-200/60 text-sm text-center mt-1">
+            <p className="text-muted-foreground text-sm font-medium text-center mt-1">
               Faça login para continuar sua jornada
             </p>
           </div>
@@ -102,13 +85,13 @@ function LoginPage({ loading = false }: { loading?: boolean }) {
             {features.map((feature) => (
               <div
                 key={feature.title}
-                className="rounded-xl bg-white/[0.05] border border-white/[0.06] p-3 group hover:bg-white/[0.08] transition-colors"
+                className="rounded-md border-2 border-black bg-accent/30 p-3 hover:bg-accent/50 transition-colors shadow-[2px_2px_0px_0px_#000]"
               >
-                <feature.icon className="w-5 h-5 text-emerald-300/80 mb-2" />
-                <p className="text-sm font-medium text-white/90">
+                <feature.icon className="w-5 h-5 text-primary mb-2" />
+                <p className="text-sm font-bold text-foreground">
                   {feature.title}
                 </p>
-                <p className="text-xs text-green-200/50 mt-0.5 leading-relaxed">
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                   {feature.description}
                 </p>
               </div>
@@ -118,7 +101,7 @@ function LoginPage({ loading = false }: { loading?: boolean }) {
           {/* Sign-in section */}
           <div className="p-6 pt-2">
             {loading ? (
-              <div className="h-11 rounded-lg bg-white/10 animate-pulse" />
+              <div className="h-11 rounded-md border-2 border-black bg-muted animate-pulse" />
             ) : (
               <SignInWithGoogle />
             )}
@@ -127,7 +110,7 @@ function LoginPage({ loading = false }: { loading?: boolean }) {
           {TEST_AUTH_ENABLED && !loading ? <TestSignInForm /> : null}
         </div>
 
-        <Footer className="mt-6 text-center text-xs text-green-200/40" />
+        <Footer className="mt-4 text-center text-xs text-muted-foreground" />
       </div>
     </div>
   );
@@ -156,8 +139,8 @@ function TestSignInForm() {
 
   return (
     <div className="px-6 pb-6 pt-0">
-      <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.03] p-3">
-        <p className="text-[10px] uppercase tracking-wider text-green-200/40 mb-2">
+      <div className="rounded-md border-2 border-dashed border-black/30 bg-muted/50 p-3">
+        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">
           Test sign-in (dev only)
         </p>
         <form onSubmit={handleSubmit} className="flex flex-col gap-2">
@@ -167,7 +150,7 @@ function TestSignInForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="email@test.paxtools.local"
-            className="rounded-md bg-white/[0.06] border border-white/10 px-2 py-1.5 text-xs text-white placeholder:text-green-200/30 focus:outline-none focus:ring-1 focus:ring-emerald-400/40"
+            className="rounded-md border-2 border-black bg-white px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-1"
             autoComplete="off"
           />
           <input
@@ -176,19 +159,19 @@ function TestSignInForm() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="password"
-            className="rounded-md bg-white/[0.06] border border-white/10 px-2 py-1.5 text-xs text-white placeholder:text-green-200/30 focus:outline-none focus:ring-1 focus:ring-emerald-400/40"
+            className="rounded-md border-2 border-black bg-white px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-1"
             autoComplete="off"
           />
           <button
             data-testid="test-signin-submit"
             type="submit"
             disabled={submitting}
-            className="rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/20 px-2 py-1.5 text-xs font-medium text-emerald-100 disabled:opacity-50 transition-colors"
+            className="rounded-md border-2 border-black bg-primary text-white px-2 py-1.5 text-xs font-bold shadow-[2px_2px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none disabled:opacity-50 transition-all"
           >
             {submitting ? "Signing in…" : "Sign in (test)"}
           </button>
           {error ? (
-            <p className="text-[11px] text-red-300/80">{error}</p>
+            <p className="text-[11px] text-destructive font-medium">{error}</p>
           ) : null}
         </form>
       </div>

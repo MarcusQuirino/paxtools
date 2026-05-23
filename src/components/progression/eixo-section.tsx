@@ -65,14 +65,14 @@ export function EixoSection({
   const pendingPercent = (pendingInEixo / total) * 100;
 
   return (
-    <section className="rounded-xl overflow-hidden border bg-card shadow-sm">
+    <section className="rounded-md overflow-hidden border-2 border-black bg-card shadow-[4px_4px_0px_0px_#065f46]">
       <div
-        className="px-4 py-3 text-white"
+        className="px-4 py-3 text-white border-b-2 border-black"
         style={{ backgroundColor: eixo.color }}
       >
         <div className="flex items-center justify-between">
-          <h2 className="font-bold text-base">{eixo.name}</h2>
-          <span className="text-xs opacity-90">
+          <h2 className="font-black text-base uppercase tracking-tight">{eixo.name}</h2>
+          <span className="text-xs font-bold opacity-90">
             {approvedInEixo}/{total} blocos
             {pendingInEixo > 0 && ` (+${pendingInEixo} pendente${pendingInEixo > 1 ? "s" : ""})`}
           </span>
@@ -80,7 +80,7 @@ export function EixoSection({
         <Progress
           value={approvedPercent}
           pendingValue={pendingPercent}
-          className="mt-2 h-1.5 bg-white/30 [&>[data-slot=progress-indicator]]:bg-white [&>[data-slot=progress-indicator-pending]]:bg-white"
+          className="mt-2 border-white/60 bg-white/20 [&>[data-slot=progress-indicator]]:bg-white [&>[data-slot=progress-indicator-pending]]:bg-white/50"
         />
       </div>
 

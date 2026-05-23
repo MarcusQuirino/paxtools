@@ -26,18 +26,17 @@ export function OverallProgress({
         return (
           <div
             key={eixo.id}
-            className="rounded-lg border bg-card p-3 space-y-2"
+            className="rounded-md border-2 border-black bg-card p-3 space-y-2 shadow-[3px_3px_0px_0px_#000]"
             style={{ borderLeftWidth: 4, borderLeftColor: eixo.color }}
           >
-            <p className="text-xs font-semibold truncate">{eixo.name}</p>
+            <p className="text-xs font-black uppercase truncate">{eixo.name}</p>
             <Progress
               value={approvedPercent}
               pendingValue={pendingPercent}
-              className="h-1.5"
               indicatorColor={eixo.color}
               pendingColor={eixo.color}
             />
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[10px] font-medium text-muted-foreground">
               {approved}/{total} blocos
               {pending > 0 && ` (+${pending})`}
             </p>

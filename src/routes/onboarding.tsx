@@ -208,16 +208,11 @@ function OnboardingPage() {
     selectedRole === "escotista" ? (escotistaRamos[0] ?? null) : null;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-950 via-green-900 to-emerald-900">
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-green-800/30 blur-3xl" />
-        <div className="absolute -bottom-32 -right-32 h-[30rem] w-[30rem] rounded-full bg-emerald-800/20 blur-3xl" />
-      </div>
-
-      <div className="relative z-10 w-full max-w-md mx-4 my-8">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      <div className="w-full max-w-md my-8">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-white">Bem-vindo ao Paxtools</h1>
-          <p className="text-green-200/70 mt-1 text-sm">
+          <h1 className="text-3xl font-black uppercase text-foreground">Bem-vindo ao Paxtools</h1>
+          <p className="text-muted-foreground mt-1 text-sm font-bold uppercase tracking-wider">
             {step === "role"
               ? "Escolha como você vai usar o app"
               : step === "ramo"
@@ -234,22 +229,22 @@ function OnboardingPage() {
               type="button"
               onClick={() => handleRoleSelect("escoteiro")}
               disabled={settingRole}
-              className="w-full rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/10 p-6 text-left hover:bg-white/[0.12] transition-colors group disabled:opacity-50"
+              className="w-full rounded-md border-2 border-black bg-card p-6 text-left hover:bg-accent/40 transition-all group disabled:opacity-50 shadow-[4px_4px_0px_0px_#065f46]"
             >
               <div className="flex items-start gap-4">
-                <div className="rounded-xl bg-emerald-500/20 p-3">
-                  <Compass className="size-8 text-emerald-300" />
+                <div className="rounded-md border-2 border-black bg-primary p-3">
+                  <Compass className="size-8 text-white" />
                 </div>
                 <div className="flex-1">
-                  <h2 className="text-lg font-semibold text-white">
+                  <h2 className="text-lg font-black uppercase text-foreground">
                     Escoteiro
                   </h2>
-                  <p className="text-sm text-green-200/60 mt-1">
+                  <p className="text-sm text-muted-foreground mt-1">
                     Registre sua progressão pessoal, marque ações completadas e
                     acompanhe seu avanço nas etapas.
                   </p>
                 </div>
-                <ArrowRight className="size-5 text-white/40 mt-1 group-hover:text-white/80 transition-colors" />
+                <ArrowRight className="size-5 text-muted-foreground mt-1 group-hover:text-foreground transition-colors" />
               </div>
             </button>
 
@@ -257,28 +252,28 @@ function OnboardingPage() {
               type="button"
               onClick={() => handleRoleSelect("escotista")}
               disabled={settingRole}
-              className="w-full rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/10 p-6 text-left hover:bg-white/[0.12] transition-colors group disabled:opacity-50"
+              className="w-full rounded-md border-2 border-black bg-card p-6 text-left hover:bg-accent/40 transition-all group disabled:opacity-50 shadow-[4px_4px_0px_0px_#065f46]"
             >
               <div className="flex items-start gap-4">
-                <div className="rounded-xl bg-teal-500/20 p-3">
-                  <Shield className="size-8 text-teal-300" />
+                <div className="rounded-md border-2 border-black bg-teal-600 p-3">
+                  <Shield className="size-8 text-white" />
                 </div>
                 <div className="flex-1">
-                  <h2 className="text-lg font-semibold text-white">
+                  <h2 className="text-lg font-black uppercase text-foreground">
                     Escotista
                   </h2>
-                  <p className="text-sm text-green-200/60 mt-1">
+                  <p className="text-sm text-muted-foreground mt-1">
                     Acompanhe a progressão do seu grupo, aprove itens pendentes
                     e gerencie escoteiros.
                   </p>
                 </div>
-                <ArrowRight className="size-5 text-white/40 mt-1 group-hover:text-white/80 transition-colors" />
+                <ArrowRight className="size-5 text-muted-foreground mt-1 group-hover:text-foreground transition-colors" />
               </div>
             </button>
           </div>
         ) : step === "ramo" ? (
-          <div className="rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/10 p-6 space-y-5">
-            <p className="text-xs text-green-200/60">
+          <div className="rounded-md border-2 border-black bg-card p-6 space-y-5 shadow-[4px_4px_0px_0px_#065f46]">
+            <p className="text-xs font-medium text-muted-foreground">
               {selectedRole === "escotista"
                 ? "Você verá apenas os escoteiros dos ramos que escolher. Pode mudar depois."
                 : "Por enquanto a progressão só está disponível para o ramo Escoteiro. Para outros ramos exibimos 'em breve'."}
@@ -287,14 +282,14 @@ function OnboardingPage() {
             {selectedRole === "escoteiro" ? (
               <RamoPicker
                 mode="single"
-                variant="dark"
+                variant="light"
                 value={escoteiroRamo}
                 onChange={setEscoteiroRamo}
               />
             ) : (
               <RamoPicker
                 mode="multi"
-                variant="dark"
+                variant="light"
                 value={escotistaRamos}
                 onChange={setEscotistaRamos}
               />
@@ -308,24 +303,24 @@ function OnboardingPage() {
                 (selectedRole === "escoteiro" && !escoteiroRamo) ||
                 (selectedRole === "escotista" && escotistaRamos.length === 0)
               }
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="w-full"
             >
               Continuar
             </Button>
           </div>
         ) : (
-          <div className="rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/10 p-6 space-y-5">
+          <div className="rounded-md border-2 border-black bg-card p-6 space-y-5 shadow-[4px_4px_0px_0px_#065f46]">
             {showCreate && selectedRole === "escotista" ? (
               <>
                 <div className="flex items-center gap-3">
-                  <div className="rounded-xl bg-emerald-500/20 p-3">
-                    <Plus className="size-6 text-emerald-300" />
+                  <div className="rounded-md border-2 border-black bg-primary p-3">
+                    <Plus className="size-6 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-white">
+                    <h2 className="text-lg font-black uppercase text-foreground">
                       Criar um grupo
                     </h2>
-                    <p className="text-xs text-green-200/50">
+                    <p className="text-xs font-medium text-muted-foreground">
                       Você será o primeiro administrador
                     </p>
                   </div>
@@ -335,7 +330,7 @@ function OnboardingPage() {
                   <div className="space-y-1">
                     <label
                       htmlFor="group-number"
-                      className="text-xs text-green-200/70"
+                      className="text-xs font-bold uppercase tracking-wider text-foreground"
                     >
                       Número do grupo
                     </label>
@@ -349,14 +344,13 @@ function OnboardingPage() {
                         setError("");
                       }}
                       maxLength={6}
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/30"
                     />
                   </div>
 
                   <div className="space-y-1">
                     <label
                       htmlFor="group-name"
-                      className="text-xs text-green-200/70"
+                      className="text-xs font-bold uppercase tracking-wider text-foreground"
                     >
                       Nome do grupo
                     </label>
@@ -371,12 +365,11 @@ function OnboardingPage() {
                       onKeyDown={(e) =>
                         e.key === "Enter" && handleCreateGroup()
                       }
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/30"
                     />
                   </div>
 
                   {previewRamo && newGroupName.trim() && (
-                    <p className="text-xs text-emerald-200/80">
+                    <p className="text-xs font-medium text-primary">
                       Sua unidade será chamada de{" "}
                       <strong>
                         {RAMO_UNIT_PREFIX[previewRamo]}{" "}
@@ -388,13 +381,12 @@ function OnboardingPage() {
                   )}
 
                   <div className="space-y-1 pt-1">
-                    <label className="text-xs text-green-200/70">
+                    <label className="text-xs font-bold uppercase tracking-wider text-foreground">
                       Nomes das unidades (opcional)
                     </label>
                     <RamoNamesInputs
                       value={newGroupRamoNames}
                       onChange={setNewGroupRamoNames}
-                      variant="dark"
                       groupName={newGroupName}
                     />
                   </div>
@@ -406,7 +398,7 @@ function OnboardingPage() {
                       !newGroupNumber.trim() ||
                       creatingGroup
                     }
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                    className="w-full"
                   >
                     {creatingGroup ? "Criando..." : "Criar grupo"}
                   </Button>
@@ -418,7 +410,7 @@ function OnboardingPage() {
                     setShowCreate(false);
                     setError("");
                   }}
-                  className="w-full text-sm text-green-200/50 hover:text-green-200/80 transition-colors py-1"
+                  className="w-full text-sm font-bold text-muted-foreground hover:text-foreground transition-colors py-1 underline-offset-4 hover:underline"
                 >
                   Entrar em um grupo existente
                 </button>
@@ -426,14 +418,14 @@ function OnboardingPage() {
             ) : (
               <>
                 <div className="flex items-center gap-3">
-                  <div className="rounded-xl bg-blue-500/20 p-3">
-                    <Users className="size-6 text-blue-300" />
+                  <div className="rounded-md border-2 border-black bg-blue-500 p-3">
+                    <Users className="size-6 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-white">
+                    <h2 className="text-lg font-black uppercase text-foreground">
                       Entrar em um grupo
                     </h2>
-                    <p className="text-xs text-green-200/50">
+                    <p className="text-xs font-medium text-muted-foreground">
                       {selectedRole === "escotista"
                         ? "Você precisará da aprovação de um administrador"
                         : "Peça o código ao seu escotista"}
@@ -450,14 +442,14 @@ function OnboardingPage() {
                       setError("");
                     }}
                     onKeyDown={(e) => e.key === "Enter" && handleJoinGroup()}
-                    className="bg-white/10 border-white/20 text-white placeholder:text-white/30 text-center text-lg tracking-widest font-mono"
+                    className="text-center text-lg tracking-widest font-mono"
                     maxLength={6}
                   />
 
                   <Button
                     onClick={handleJoinGroup}
                     disabled={!groupPassword.trim() || joiningGroup}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                    className="w-full"
                   >
                     {joiningGroup ? "Entrando..." : "Entrar no grupo"}
                   </Button>
@@ -465,10 +457,10 @@ function OnboardingPage() {
 
                 {selectedRole === "escotista" && (
                   <>
-                    <div className="flex items-center gap-2 text-xs text-green-200/30">
-                      <div className="flex-1 border-t border-white/10" />
-                      <span>ou</span>
-                      <div className="flex-1 border-t border-white/10" />
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex-1 border-t-2 border-black/10" />
+                      <span className="font-bold uppercase">ou</span>
+                      <div className="flex-1 border-t-2 border-black/10" />
                     </div>
 
                     <Button
@@ -477,7 +469,7 @@ function OnboardingPage() {
                         setShowCreate(true);
                         setError("");
                       }}
-                      className="w-full border-white/20 text-white bg-white/5 hover:bg-white/10"
+                      className="w-full"
                     >
                       <Plus className="size-4 mr-1" />
                       Criar novo grupo
@@ -485,8 +477,8 @@ function OnboardingPage() {
                   </>
                 )}
 
-                <div className="flex items-start gap-2 text-xs text-sky-200/60 bg-sky-900/20 rounded-lg px-3 py-2">
-                  <AlertCircle className="size-3.5 mt-0.5 shrink-0" />
+                <div className="flex items-start gap-2 text-xs font-medium text-foreground bg-blue-50 border-2 border-blue-300 rounded-md px-3 py-2">
+                  <AlertCircle className="size-3.5 mt-0.5 shrink-0 text-blue-600" />
                   <span>
                     {selectedRole === "escotista"
                       ? "Após entrar, sua solicitação ficará pendente até que um administrador do grupo aprove."
@@ -499,7 +491,7 @@ function OnboardingPage() {
             <button
               type="button"
               onClick={handleSkip}
-              className="w-full text-sm text-green-200/50 hover:text-green-200/80 transition-colors py-2"
+              className="w-full text-sm font-bold text-muted-foreground hover:text-foreground transition-colors py-2 underline-offset-4 hover:underline"
             >
               Pular por enquanto
             </button>
@@ -507,20 +499,20 @@ function OnboardingPage() {
         )}
 
         {error && (
-          <div className="mt-4 rounded-lg bg-red-900/30 border border-red-500/30 px-4 py-3 text-sm text-red-200">
+          <div className="mt-4 rounded-md border-2 border-destructive bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
             {error}
           </div>
         )}
 
         <div className="flex justify-center gap-2 mt-6">
           <div
-            className={`h-1.5 w-8 rounded-full transition-colors ${step === "role" ? "bg-white" : "bg-white/30"}`}
+            className={`h-2 w-10 rounded-sm border-2 border-black transition-colors ${step === "role" ? "bg-primary" : "bg-muted"}`}
           />
           <div
-            className={`h-1.5 w-8 rounded-full transition-colors ${step === "ramo" ? "bg-white" : "bg-white/30"}`}
+            className={`h-2 w-10 rounded-sm border-2 border-black transition-colors ${step === "ramo" ? "bg-primary" : "bg-muted"}`}
           />
           <div
-            className={`h-1.5 w-8 rounded-full transition-colors ${step === "group" ? "bg-white" : "bg-white/30"}`}
+            className={`h-2 w-10 rounded-sm border-2 border-black transition-colors ${step === "group" ? "bg-primary" : "bg-muted"}`}
           />
         </div>
 

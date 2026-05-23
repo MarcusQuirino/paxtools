@@ -115,10 +115,10 @@ export function BlocoCard({
       <AccordionTrigger className="px-3 hover:no-underline gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium text-sm">{bloco.name}</span>
+            <span className="font-bold text-sm">{bloco.name}</span>
             {progress.isComplete ? (
               <Badge
-                className="text-[10px] px-1.5 py-0"
+                className="text-[10px] px-1.5 py-0 border-black"
                 style={{ backgroundColor: color }}
               >
                 <Check className="size-3 mr-0.5" />
@@ -127,7 +127,7 @@ export function BlocoCard({
             ) : progress.isPendingComplete && !progress.isComplete ? (
               <Badge
                 variant="outline"
-                className="text-[10px] px-1.5 py-0 text-slate-600 border-slate-300"
+                className="text-[10px] px-1.5 py-0 text-amber-800 border-amber-600 bg-amber-50"
               >
                 <Clock className="size-3 mr-0.5" />
                 Pendente
@@ -141,7 +141,7 @@ export function BlocoCard({
           <Progress
             value={approvedPercent}
             pendingValue={pendingPercent}
-            className="mt-2 h-1.5"
+            className="mt-2"
             indicatorColor={color}
             pendingColor={color}
           />

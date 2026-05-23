@@ -71,12 +71,12 @@ function EscotistaDashboard() {
   return (
     <div className="space-y-4">
       {/* Group stats */}
-      <div className="rounded-xl bg-gradient-to-r from-emerald-900 to-emerald-800 px-4 py-3 text-white shadow-lg">
+      <div className="rounded-md border-2 border-black bg-emerald-800 px-4 py-3 text-white shadow-[4px_4px_0px_0px_#065f46]">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="font-bold text-lg">
+          <h2 className="font-black text-lg uppercase">
             {stats.group.name}
             {stats.group.number ? (
-              <span className="ml-1 text-xs font-normal text-white/70">
+              <span className="ml-1 text-xs font-bold text-white/70">
                 nº {stats.group.number}
               </span>
             ) : null}
@@ -84,7 +84,7 @@ function EscotistaDashboard() {
           <button
             type="button"
             onClick={handleCopyPassword}
-            className="flex items-center gap-1 text-xs bg-white/20 rounded-md px-2 py-1 hover:bg-white/30 transition-colors"
+            className="flex items-center gap-1 text-xs font-bold bg-white/20 border border-white/40 rounded-md px-2 py-1 hover:bg-white/30 transition-colors"
           >
             {copiedPassword ? (
               <Check className="size-3" />
@@ -100,31 +100,31 @@ function EscotistaDashboard() {
             type="button"
             onClick={() => setActiveTab("escoteiros")}
             aria-pressed={activeTab === "escoteiros"}
-            className={`rounded-lg p-2 text-center transition-colors ${
+            className={`rounded-md border-2 p-2 text-center transition-all ${
               activeTab === "escoteiros"
-                ? "bg-white/30 ring-2 ring-white/60"
-                : "bg-white/15 hover:bg-white/20"
+                ? "bg-white text-foreground border-black shadow-[2px_2px_0px_0px_#000]"
+                : "bg-white/15 border-white/30 hover:bg-white/25"
             }`}
           >
-            <p className="text-xl font-bold">{stats.escoteiroCount}</p>
-            <p className="text-[10px] opacity-80">Escoteiros</p>
+            <p className={`text-xl font-black ${activeTab === "escoteiros" ? "text-primary" : ""}`}>{stats.escoteiroCount}</p>
+            <p className={`text-[10px] font-bold ${activeTab === "escoteiros" ? "text-muted-foreground" : "opacity-80"}`}>Escoteiros</p>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("escotistas")}
             aria-pressed={activeTab === "escotistas"}
-            className={`rounded-lg p-2 text-center transition-colors ${
+            className={`rounded-md border-2 p-2 text-center transition-all ${
               activeTab === "escotistas"
-                ? "bg-white/30 ring-2 ring-white/60"
-                : "bg-white/15 hover:bg-white/20"
+                ? "bg-white text-foreground border-black shadow-[2px_2px_0px_0px_#000]"
+                : "bg-white/15 border-white/30 hover:bg-white/25"
             }`}
           >
-            <p className="text-xl font-bold">{stats.escotistaCount}</p>
-            <p className="text-[10px] opacity-80">Escotistas</p>
+            <p className={`text-xl font-black ${activeTab === "escotistas" ? "text-primary" : ""}`}>{stats.escotistaCount}</p>
+            <p className={`text-[10px] font-bold ${activeTab === "escotistas" ? "text-muted-foreground" : "opacity-80"}`}>Escotistas</p>
           </button>
-          <div className="bg-white/15 rounded-lg p-2 text-center">
-            <p className="text-xl font-bold">{stats.totalPending}</p>
-            <p className="text-[10px] opacity-80">Pendentes</p>
+          <div className="bg-white/15 rounded-md border-2 border-white/30 p-2 text-center">
+            <p className="text-xl font-black">{stats.totalPending}</p>
+            <p className="text-[10px] font-bold opacity-80">Pendentes</p>
           </div>
         </div>
       </div>
@@ -209,18 +209,18 @@ function EscotistaCard({
   };
 }) {
   return (
-    <div className="rounded-xl border bg-card p-3 flex items-center gap-3">
-      <Avatar className="size-10">
+    <div className="rounded-md border-2 border-black bg-card p-3 flex items-center gap-3 shadow-[2px_2px_0px_0px_#000]">
+      <Avatar className="size-10 border-2 border-black">
         <AvatarImage src={escotista.image ?? undefined} />
-        <AvatarFallback className="text-xs">
+        <AvatarFallback className="text-xs font-bold">
           {escotista.name?.charAt(0)?.toUpperCase() ?? "?"}
         </AvatarFallback>
       </Avatar>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">
+        <p className="text-sm font-bold truncate">
           {escotista.name ?? "Sem nome"}
         </p>
-        <p className="text-[11px] text-muted-foreground">Escotista</p>
+        <p className="text-[11px] font-medium text-muted-foreground">Escotista</p>
       </div>
     </div>
   );
@@ -243,26 +243,26 @@ function EscoteiroCard({
   onToggleFavorite: () => void;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-3 flex items-center gap-3">
-      <Avatar className="size-10">
+    <div className="rounded-md border-2 border-black bg-card p-3 flex items-center gap-3 shadow-[2px_2px_0px_0px_#000]">
+      <Avatar className="size-10 border-2 border-black">
         <AvatarImage src={escoteiro.image ?? undefined} />
-        <AvatarFallback className="text-xs">
+        <AvatarFallback className="text-xs font-bold">
           {escoteiro.name?.charAt(0)?.toUpperCase() ?? "?"}
         </AvatarFallback>
       </Avatar>
 
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">
+        <p className="text-sm font-bold truncate">
           {escoteiro.name ?? "Sem nome"}
         </p>
         <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-[11px] font-medium text-muted-foreground">
             {escoteiro.approvedActions} aprovadas
           </span>
           {escoteiro.pendingActions > 0 && (
             <Badge
               variant="outline"
-              className="text-[10px] px-1 py-0 text-slate-600 border-slate-300"
+              className="text-[10px] px-1 py-0 text-amber-800 border-amber-600 bg-amber-50"
             >
               <Clock className="size-2.5 mr-0.5" />
               {escoteiro.pendingActions}
@@ -285,10 +285,10 @@ function EscoteiroCard({
         <Link
           to="/escotista/escoteiro/$escoteiroId"
           params={{ escoteiroId: escoteiro._id }}
-          className="p-1.5 rounded-md hover:bg-muted transition-colors"
+          className="p-1.5 rounded-md border-2 border-black bg-primary text-white hover:translate-x-[1px] hover:translate-y-[1px] transition-all shadow-[2px_2px_0px_0px_#000] hover:shadow-none"
           aria-label="Ver progressão"
         >
-          <Eye className="size-4 text-muted-foreground" />
+          <Eye className="size-4" />
         </Link>
       </div>
     </div>
@@ -332,10 +332,10 @@ function NoGroupState() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border bg-card p-5 space-y-4">
+      <div className="rounded-md border-2 border-black bg-card p-5 space-y-4 shadow-[4px_4px_0px_0px_#065f46]">
         <div className="text-center space-y-1">
           <AlertCircle className="size-10 text-muted-foreground mx-auto" />
-          <h2 className="font-semibold">Sem grupo</h2>
+          <h2 className="font-black uppercase">Sem grupo</h2>
           <p className="text-sm text-muted-foreground">
             Crie ou entre em um grupo para acompanhar escoteiros.
           </p>

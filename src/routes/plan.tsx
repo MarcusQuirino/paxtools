@@ -85,8 +85,8 @@ function PlanPage() {
     return (
       <div className="min-h-screen bg-background">
         <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
-          <div className="h-6 w-32 animate-pulse rounded bg-muted" />
-          <div className="h-12 animate-pulse rounded bg-muted" />
+          <div className="h-6 w-32 animate-pulse rounded-md border-2 border-black bg-muted" />
+          <div className="h-12 animate-pulse rounded-md border-2 border-black bg-muted" />
         </div>
       </div>
     );
@@ -98,7 +98,7 @@ function PlanPage() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
         <header className="flex items-center justify-between">
-          <h1 className="text-lg font-bold text-green-800">Paxtools</h1>
+          <h1 className="text-lg font-black uppercase text-foreground">Paxtools</h1>
           <AuthButton />
         </header>
         {showComingSoon ? (
@@ -232,11 +232,11 @@ function ViewToggle({
   onChange: (v: ViewMode) => void;
 }) {
   const base =
-    "flex-1 text-sm h-9 rounded-md font-medium transition-colors";
-  const active = "bg-card text-foreground shadow-sm";
-  const inactive = "text-muted-foreground hover:text-foreground";
+    "flex-1 text-sm h-9 rounded-md font-bold transition-all";
+  const active = "bg-primary text-white border-2 border-black shadow-[2px_2px_0px_0px_#000]";
+  const inactive = "text-foreground border-2 border-transparent hover:border-black hover:bg-white";
   return (
-    <div className="flex gap-1 p-1 bg-muted/60 rounded-lg">
+    <div className="flex gap-1 p-1 bg-muted rounded-md border-2 border-black">
       <button
         type="button"
         onClick={() => onChange("byArea")}
@@ -257,10 +257,10 @@ function ViewToggle({
 
 function EmptyState() {
   return (
-    <div className="rounded-xl border bg-card p-8 text-center space-y-3">
-      <Sparkles className="size-8 mx-auto text-muted-foreground/50" />
-      <p className="text-sm font-medium">Seu plano está vazio</p>
-      <p className="text-xs text-muted-foreground">
+    <div className="rounded-md border-2 border-black bg-card p-8 text-center space-y-3 shadow-[4px_4px_0px_0px_#065f46]">
+      <Sparkles className="size-8 mx-auto text-primary" />
+      <p className="text-sm font-black uppercase">Seu plano está vazio</p>
+      <p className="text-xs font-medium text-muted-foreground">
         Volte para <b>Tudo</b> e toque na estrela ao lado dos itens que você
         quer focar. Eles vão aparecer aqui.
       </p>
@@ -377,7 +377,7 @@ function SortableRow({
     <div
       ref={setNodeRef}
       style={style}
-      className="rounded-lg border bg-card flex items-stretch"
+      className="rounded-md border-2 border-black bg-card flex items-stretch shadow-[2px_2px_0px_0px_#000]"
     >
       <button
         type="button"

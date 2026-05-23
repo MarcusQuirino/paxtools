@@ -35,23 +35,23 @@ export function LisDeOuroSection({
   const pendingPercent = (pendingCount / totalCount) * 100;
 
   return (
-    <section className="rounded-xl overflow-hidden border bg-card shadow-sm">
+    <section className="rounded-md overflow-hidden border-2 border-black bg-card shadow-[4px_4px_0px_0px_#000]">
       <div
-        className="px-4 py-3 text-white"
+        className="px-4 py-3 text-white border-b-2 border-black"
         style={{ backgroundColor: LIS_DE_OURO_COLOR }}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Trophy className="size-4" />
-            <h2 className="font-bold text-base">Reconhecimento de Ramo</h2>
+            <h2 className="font-black text-base uppercase tracking-tight">Reconhecimento de Ramo</h2>
           </div>
           {lisDeOuro ? (
-            <Badge className="bg-white/20 text-white text-[10px] px-1.5 py-0">
+            <Badge className="bg-white/20 text-white text-[10px] px-1.5 py-0 border-white/60">
               <Check className="size-3 mr-0.5" />
               Completo
             </Badge>
           ) : (
-            <span className="text-xs opacity-90">
+            <span className="text-xs font-bold opacity-90">
               {approvedCount}/{totalCount} requisitos
               {pendingCount > 0 && ` (+${pendingCount})`}
             </span>
@@ -60,13 +60,13 @@ export function LisDeOuroSection({
         <Progress
           value={approvedPercent}
           pendingValue={pendingPercent}
-          className="mt-2 h-1.5 bg-white/30 [&>[data-slot=progress-indicator]]:bg-white [&>[data-slot=progress-indicator-pending]]:bg-white"
+          className="mt-2 border-white/60 bg-white/20 [&>[data-slot=progress-indicator]]:bg-white [&>[data-slot=progress-indicator-pending]]:bg-white/50"
         />
       </div>
 
       <div className="p-3 space-y-1">
         {!blocksComplete && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2 mb-2">
+          <div className="flex items-center gap-2 text-xs font-medium text-amber-900 bg-amber-50 rounded-md border-2 border-amber-400 px-3 py-2 mb-2">
             <Lock className="size-3.5 shrink-0" />
             <span>
               Complete todos os 18 blocos para desbloquear o checklist.
@@ -88,10 +88,10 @@ export function LisDeOuroSection({
             <label
               key={item.id}
               htmlFor={item.id}
-              className={`flex items-start gap-3 rounded-lg p-3 min-h-[44px] transition-colors ${
+              className={`flex items-start gap-3 p-3 min-h-[44px] transition-colors ${
                 isDisabled
                   ? "cursor-not-allowed opacity-50"
-                  : "cursor-pointer hover:bg-muted/50 active:bg-muted"
+                  : "cursor-pointer hover:bg-accent/40 active:bg-accent/70"
               }`}
             >
               <Checkbox
@@ -106,7 +106,7 @@ export function LisDeOuroSection({
                   isChecked
                     ? {
                         backgroundColor: LIS_DE_OURO_COLOR,
-                        borderColor: LIS_DE_OURO_COLOR,
+                        borderColor: "#000",
                         opacity: isPending ? 0.4 : 1,
                       }
                     : undefined
@@ -124,7 +124,7 @@ export function LisDeOuroSection({
                 {item.text}
               </span>
               {isPending && (
-                <Clock className="size-3.5 text-slate-400 mt-0.5 shrink-0" />
+                <Clock className="size-3.5 text-amber-600 mt-0.5 shrink-0" />
               )}
             </label>
           );

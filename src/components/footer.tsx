@@ -34,19 +34,19 @@ const bugReportUrl = `${REPO_URL}/issues/new?${new URLSearchParams({
 
 export function Footer({ className }: { className?: string }) {
   return (
-    <footer className={className ?? "py-6 text-center text-xs text-muted-foreground"}>
-      <p className="mb-2 opacity-70">
+    <footer className={className ?? "py-6 text-center text-xs text-muted-foreground border-t-2 border-black/10 mt-4"}>
+      <p className="mb-2 font-medium opacity-70">
         Este serviço não é afiliado à UEB ou ao Paxtu. É um projeto pessoal de
         terceiros.
       </p>
       <div className="flex items-center justify-center gap-3">
-        <span>v{__APP_VERSION__}</span>
+        <span className="font-mono font-bold">v{__APP_VERSION__}</span>
         <span className="text-border">|</span>
         <a
           href={bugReportUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline transition-colors"
+          className="inline-flex items-center gap-1.5 font-bold text-muted-foreground underline-offset-4 hover:text-foreground hover:underline transition-colors"
         >
           <Bug className="size-3.5" />
           Reportar um bug
