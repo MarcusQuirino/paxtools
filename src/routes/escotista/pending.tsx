@@ -411,17 +411,24 @@ function SelectableItem({
   selected: boolean;
   onToggle: () => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   return (
-    <label className="flex items-center gap-3 py-1.5 px-1 cursor-pointer hover:bg-muted/40 rounded-md transition-colors">
+    <div className="flex items-start gap-3 py-1.5 px-1 hover:bg-muted/40 rounded-md transition-colors">
       <Checkbox
         checked={selected}
         onCheckedChange={onToggle}
+        aria-label={text}
+        className="mt-0.5 shrink-0"
       />
-      <span
-        className={`text-sm flex-1 line-clamp-2 ${!selected ? "text-muted-foreground line-through" : ""}`}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className={`text-sm flex-1 text-left ${expanded ? "" : "line-clamp-2"} ${!selected ? "text-muted-foreground line-through" : ""}`}
+        title={expanded ? "Recolher" : "Expandir"}
       >
         {text}
-      </span>
-    </label>
+      </button>
+    </div>
   );
 }
