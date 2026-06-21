@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
-import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useConvexAuth } from "convex/react";
+import { useMutation } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
 import {
   DndContext,
   PointerSensor,
@@ -25,6 +24,7 @@ import { Footer } from "@/components/footer";
 import { PlanNav } from "@/components/progression/plan-nav";
 import { EixoSection } from "@/components/progression/eixo-section";
 import { ActionItem } from "@/components/progression/action-item";
+import { useAuthGate } from "@/hooks/use-auth-gate";
 import { useProgression } from "@/hooks/use-progression";
 import { usePlan } from "@/hooks/use-plan";
 import {
@@ -53,33 +53,9 @@ export const Route = createFileRoute("/plan")({
 });
 
 function PlanPage() {
-  const { isAuthenticated, isLoading } = useConvexAuth();
-  const navigate = useNavigate();
-  const { data: user } = useSuspenseQuery(convexQuery(api.users.viewer, {}));
+  const { ready } = useAuthGate("escoteiro");
 
-  useEffect(() => {
-    if (isLoading) return;
-    if (!isAuthenticated) {
-      void navigate({ to: "/signin" });
-      return;
-    }
-    if (!user) return;
-    if (!user.onboardingComplete) {
-      void navigate({ to: "/onboarding" });
-      return;
-    }
-    if (user.role === "escotista") {
-      void navigate({ to: "/escotista" });
-    }
-  }, [isLoading, isAuthenticated, user, navigate]);
-
-  if (
-    isLoading ||
-    !isAuthenticated ||
-    !user ||
-    !user.onboardingComplete ||
-    user.role === "escotista"
-  ) {
+  if (!ready) {
     return (
       <div className="min-h-screen bg-background">
         <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">

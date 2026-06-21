@@ -1,11 +1,10 @@
-import { useEffect } from "react";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
-import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useConvexAuth } from "convex/react";
+import { useMutation } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { AuthButton } from "@/components/auth/auth-button";
+import { useAuthGate } from "@/hooks/use-auth-gate";
 import { useProgression } from "@/hooks/use-progression";
 import { usePlan } from "@/hooks/use-plan";
 import { StageBanner } from "@/components/progression/stage-banner";
@@ -31,40 +30,10 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const { isAuthenticated, isLoading } = useConvexAuth();
-  const navigate = useNavigate();
+  const { ready } = useAuthGate("escoteiro");
 
-  const { data: user } = useSuspenseQuery(convexQuery(api.users.viewer, {}));
-
-  // Redirect based on auth/role state
-  useEffect(() => {
-    if (isLoading) return;
-
-    if (!isAuthenticated) {
-      void navigate({ to: "/signin" });
-      return;
-    }
-
-    if (!user) return;
-
-    if (!user.onboardingComplete) {
-      void navigate({ to: "/onboarding" });
-      return;
-    }
-
-    if (user.role === "escotista") {
-      void navigate({ to: "/escotista" });
-    }
-  }, [isLoading, isAuthenticated, user, navigate]);
-
-  // Show skeleton while loading OR while user needs onboarding/redirect
-  if (
-    isLoading ||
-    !isAuthenticated ||
-    !user ||
-    !user.onboardingComplete ||
-    user.role === "escotista"
-  ) {
+  // Show skeleton while loading OR while the user needs onboarding/redirect.
+  if (!ready) {
     return (
       <div className="min-h-screen bg-background">
         <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
