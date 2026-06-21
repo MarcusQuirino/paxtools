@@ -54,11 +54,6 @@ export function useProgression(targetUserId?: Id<"users">) {
     [data.actions],
   );
 
-  const allActionIds = useMemo(
-    () => new Set(data.actions.map((a) => a.actionId)),
-    [data.actions],
-  );
-
   const actionStatusMap = useMemo(() => {
     const map = new Map<string, "pending" | "approved">();
     for (const a of data.actions) {
@@ -134,7 +129,6 @@ export function useProgression(targetUserId?: Id<"users">) {
     eixos,
     approvedActionIds,
     pendingActionIds,
-    allActionIds,
     actionStatusMap,
     completedSpecialties: specialtiesWithStatus,
     customActions: customActionsWithStatus,

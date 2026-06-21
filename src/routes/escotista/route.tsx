@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from "react";
+import { Suspense } from "react";
 import { convexQuery } from "@convex-dev/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
@@ -8,8 +8,8 @@ import {
   useNavigate,
   useMatchRoute,
 } from "@tanstack/react-router";
-import { useConvexAuth } from "convex/react";
 import { api } from "../../../convex/_generated/api";
+import { useAuthGate } from "@/hooks/use-auth-gate";
 import { AuthButton } from "@/components/auth/auth-button";
 import { Footer } from "@/components/footer";
 import { PendingApprovalScreen } from "@/components/escotista/pending-approval-screen";
@@ -20,27 +20,11 @@ export const Route = createFileRoute("/escotista")({
 });
 
 function EscotistaLayout() {
-  const { isAuthenticated, isLoading } = useConvexAuth();
   const navigate = useNavigate();
-
-  const { data: user } = useSuspenseQuery(convexQuery(api.users.viewer, {}));
+  const { ready, user } = useAuthGate("escotista");
   const { data: myGroup } = useSuspenseQuery(
     convexQuery(api.groups.getMyGroup, {}),
   );
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      void navigate({ to: "/signin" });
-      return;
-    }
-    if (user && !user.onboardingComplete) {
-      void navigate({ to: "/onboarding" });
-      return;
-    }
-    if (user && user.role !== "escotista") {
-      void navigate({ to: "/" });
-    }
-  }, [isLoading, isAuthenticated, user, navigate]);
 
   const matchRoute = useMatchRoute();
   const isImpersonating = matchRoute({
@@ -54,7 +38,7 @@ function EscotistaLayout() {
     !!myGroup &&
     myGroup.membershipStatus === "pending";
 
-  if (isLoading || !isAuthenticated || !user || user.role !== "escotista") {
+  if (!ready) {
     return (
       <div className="min-h-screen bg-background">
         <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
