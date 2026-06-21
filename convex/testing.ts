@@ -342,19 +342,20 @@ export const seedTestUsers = internalMutation({
     if (!progressionId) {
       throw new Error("escoteiro_with_progression missing after seed");
     }
-    // Use real curriculum-shaped action IDs (see src/data/progression-data.ts
-    // and the ACTION_ID_PATTERN guard in convex/progression.ts). Synthetic IDs
-    // like "test-action-1" are rejected by the input validator BEFORE the
-    // approved-lock check runs, making the lock untestable.
+    // Use real curriculum-shaped action IDs (see src/data/progression-data/
+    // and the ACTION_ID_PATTERN guard in convex/progression.ts). IDs are
+    // 4-part `${ramo}:${blocoId}:${type}:${index}` since the multi-ramo
+    // refactor; synthetic IDs like "test-action-1" are rejected by the input
+    // validator BEFORE the approved-lock check runs, making the lock untestable.
     const completionRows: {
       actionId: string;
       status: "pending" | "approved";
     }[] = [
-      { actionId: "aprendizagem-continua:fixed:0", status: "approved" },
-      { actionId: "aprendizagem-continua:fixed:1", status: "approved" },
-      { actionId: "aprendizagem-continua:variable:0", status: "pending" },
-      { actionId: "aprendizagem-continua:variable:1", status: "pending" },
-      { actionId: "autonomia-lideranca:fixed:0", status: "approved" },
+      { actionId: "escoteiro:aprendizagem-continua:fixed:0", status: "approved" },
+      { actionId: "escoteiro:aprendizagem-continua:fixed:1", status: "approved" },
+      { actionId: "escoteiro:aprendizagem-continua:variable:0", status: "pending" },
+      { actionId: "escoteiro:aprendizagem-continua:variable:1", status: "pending" },
+      { actionId: "escoteiro:autonomia-lideranca:fixed:0", status: "approved" },
     ];
     for (const row of completionRows) {
       const existing = await ctx.db
@@ -374,9 +375,10 @@ export const seedTestUsers = internalMutation({
       });
     }
 
-    // Plan item key shape: `action:<actionId>` per src/lib/plan-keys.ts.
-    // Must reference a real curriculum action so the "Por Área" view renders it.
-    const plannedKey = "action:aprendizagem-continua:variable:2";
+    // Plan item key shape: `action:<actionId>` per src/lib/plan-keys.ts, where
+    // actionId is the 4-part `${ramo}:${blocoId}:${type}:${index}`. Must
+    // reference a real curriculum action so the "Por Área" view renders it.
+    const plannedKey = "action:escoteiro:aprendizagem-continua:variable:2";
     const existingPlanned = await ctx.db
       .query("plannedItems")
       .withIndex("by_userId_and_itemKey", (q) =>
