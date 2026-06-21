@@ -17,6 +17,8 @@ export const getMyPlan = query({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
+    const user = await ctx.db.get(userId);
+    if (!user || user.bannedAt) return [];
 
     return await ctx.db
       .query("plannedItems")

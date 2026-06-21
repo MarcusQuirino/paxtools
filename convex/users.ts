@@ -8,7 +8,11 @@ export const viewer = query({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return null;
-    return await ctx.db.get(userId);
+    const user = await ctx.db.get(userId);
+    // A banned user is treated as logged out (mutations already throw via
+    // getAuthenticatedUser); deny self-reads too for consistency.
+    if (!user || user.bannedAt) return null;
+    return user;
   },
 });
 
