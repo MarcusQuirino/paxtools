@@ -1,14 +1,16 @@
-import type { Eixo, Action } from "./types";
+import type { Eixo, Action } from "../types";
+
+const RAMO = "escoteiro";
 
 function fixed(blocoId: string, index: number, text: string): Action {
-  return { id: `${blocoId}:fixed:${index}`, text, type: "fixed" };
+  return { id: `${RAMO}:${blocoId}:fixed:${index}`, text, type: "fixed" };
 }
 
 function variable(blocoId: string, index: number, text: string): Action {
-  return { id: `${blocoId}:variable:${index}`, text, type: "variable" };
+  return { id: `${RAMO}:${blocoId}:variable:${index}`, text, type: "variable" };
 }
 
-export const EIXOS: Eixo[] = [
+export const EIXOS_ESCOTEIRO: Eixo[] = [
   // ═══════════════════════════════════════════════════════
   // EIXO 1: HABILIDADES PARA A VIDA
   // ═══════════════════════════════════════════════════════

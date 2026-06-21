@@ -1,18 +1,20 @@
-import { EIXOS } from "@/data/progression-data";
+import type { Eixo } from "@/data/types";
 import { Progress } from "@/components/ui/progress";
 
 type OverallProgressProps = {
+  eixos: Eixo[];
   completedBlockIds: Set<string>;
   pendingBlockIds: Set<string>;
 };
 
 export function OverallProgress({
+  eixos,
   completedBlockIds,
   pendingBlockIds,
 }: OverallProgressProps) {
   return (
     <div className="grid grid-cols-2 gap-3">
-      {EIXOS.map((eixo) => {
+      {eixos.map((eixo) => {
         const approved = eixo.blocos.filter((b) =>
           completedBlockIds.has(b.id),
         ).length;

@@ -14,33 +14,35 @@ import {
 } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Check, X, ChevronDown, Inbox } from "lucide-react";
-import { EIXOS } from "@/data/progression-data";
+import {
+  getEixosForRamo,
+  parseActionId,
+  type Ramo,
+} from "@/data/progression-data";
 
 export const Route = createFileRoute("/escotista/pending")({
   component: PendingApprovalsPage,
 });
 
 function getActionLabel(actionId: string): string {
-  const parts = actionId.split(":");
-  const blocoId = parts[0];
-  const type = parts[1];
-  const index = parseInt(parts[2] ?? "0", 10);
-
-  for (const eixo of EIXOS) {
+  const parsed = parseActionId(actionId);
+  if (!parsed) return actionId;
+  const eixos = getEixosForRamo(parsed.ramo);
+  for (const eixo of eixos) {
     for (const bloco of eixo.blocos) {
-      if (bloco.id === blocoId) {
+      if (bloco.id === parsed.blocoId) {
         const actions =
-          type === "fixed" ? bloco.fixedActions : bloco.variableActions;
-        const action = actions[index];
-        return action?.text ?? actionId;
+          parsed.type === "fixed" ? bloco.fixedActions : bloco.variableActions;
+        return actions[parsed.index]?.text ?? actionId;
       }
     }
   }
   return actionId;
 }
 
-function getBlocoName(blocoId: string): string {
-  for (const eixo of EIXOS) {
+function getBlocoName(blocoId: string, ramo: Ramo | null): string {
+  const eixos = getEixosForRamo(ramo);
+  for (const eixo of eixos) {
     for (const bloco of eixo.blocos) {
       if (bloco.id === blocoId) return bloco.name;
     }
@@ -48,8 +50,9 @@ function getBlocoName(blocoId: string): string {
   return blocoId;
 }
 
-function getEixoForBloco(blocoId: string) {
-  for (const eixo of EIXOS) {
+function getEixoForBloco(blocoId: string, ramo: Ramo | null) {
+  const eixos = getEixosForRamo(ramo);
+  for (const eixo of eixos) {
     for (const bloco of eixo.blocos) {
       if (bloco.id === blocoId) return eixo;
     }
@@ -107,6 +110,7 @@ type PendingEntry = {
     _id: Id<"users">;
     name?: string | null;
     image?: string | null;
+    ramo: Ramo | null;
   };
   pendingActions: {
     _id: Id<"actionCompletions">;
@@ -144,19 +148,21 @@ function EscoteiroPendingCard({
   }) => void;
   isBulkPending: boolean;
 }) {
+  const ramo = entry.escoteiro.ramo;
   // Build a flat list of all pending items with unique keys
   const allItems = useMemo(() => {
     const items: PendingItem[] = [];
 
     for (const action of entry.pendingActions) {
-      const blocoId = action.actionId.split(":")[0] ?? "";
+      const parsed = parseActionId(action.actionId);
+      const blocoId = parsed?.blocoId ?? "";
       items.push({
         key: `action:${action._id}`,
         type: "action",
         id: action._id,
         text: getActionLabel(action.actionId),
         blocoId,
-        eixoColor: getEixoForBloco(blocoId)?.color,
+        eixoColor: getEixoForBloco(blocoId, ramo)?.color,
       });
     }
 
@@ -165,7 +171,7 @@ function EscoteiroPendingCard({
         key: `specialty:${s._id}`,
         type: "specialty",
         id: s._id,
-        text: `${s.specialtyName} (${getBlocoName(s.blocoId)})`,
+        text: `${s.specialtyName} (${getBlocoName(s.blocoId, ramo)})`,
         blocoId: s.blocoId,
       });
     }
@@ -186,12 +192,12 @@ function EscoteiroPendingCard({
         id: c._id,
         text: c.text,
         blocoId: c.blocoId,
-        eixoColor: getEixoForBloco(c.blocoId)?.color,
+        eixoColor: getEixoForBloco(c.blocoId, ramo)?.color,
       });
     }
 
     return items;
-  }, [entry]);
+  }, [entry, ramo]);
 
   // All items selected by default
   const [deselected, setDeselected] = useState<Set<string>>(new Set());
@@ -318,7 +324,7 @@ function EscoteiroPendingCard({
                     className="text-xs font-black uppercase tracking-widest"
                     style={{ color: eixoColor }}
                   >
-                    {getBlocoName(blocoId)}
+                    {getBlocoName(blocoId, ramo)}
                   </p>
                   {items.map((item) => (
                     <SelectableItem

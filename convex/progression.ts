@@ -8,7 +8,7 @@ import {
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
-const ACTION_ID_PATTERN = /^[a-z0-9-]+:(fixed|variable):\d+$/;
+const ACTION_ID_PATTERN = /^(lobinho|escoteiro|senior|pioneiro):[a-z0-9-]+:(fixed|variable):\d+$/;
 const BLOCO_ID_PATTERN = /^[a-z0-9-]+$/;
 const VALID_LIS_ITEM_IDS = new Set([
   "lis_promessa",
@@ -74,11 +74,14 @@ export const getMyCompletions = query({
     const userId = await getAuthUserId(ctx);
     if (!userId)
       return {
+        ramo: null,
         actions: [],
         specialties: [],
         customActions: [],
         lisDeOuroItems: [],
       };
+
+    const user = await ctx.db.get(userId);
 
     const actions = await ctx.db
       .query("actionCompletions")
@@ -100,7 +103,13 @@ export const getMyCompletions = query({
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .take(10);
 
-    return { actions, specialties, customActions, lisDeOuroItems };
+    return {
+      ramo: user?.ramo ?? null,
+      actions,
+      specialties,
+      customActions,
+      lisDeOuroItems,
+    };
   },
 });
 
@@ -109,6 +118,8 @@ export const getCompletionsForUser = query({
   handler: async (ctx, args) => {
     await assertEscotistaInSameGroup(ctx, args.targetUserId);
 
+    const target = await ctx.db.get(args.targetUserId);
+
     const actions = await ctx.db
       .query("actionCompletions")
       .withIndex("by_userId", (q) => q.eq("userId", args.targetUserId))
@@ -129,7 +140,13 @@ export const getCompletionsForUser = query({
       .withIndex("by_userId", (q) => q.eq("userId", args.targetUserId))
       .take(10);
 
-    return { actions, specialties, customActions, lisDeOuroItems };
+    return {
+      ramo: target?.ramo ?? null,
+      actions,
+      specialties,
+      customActions,
+      lisDeOuroItems,
+    };
   },
 });
 
