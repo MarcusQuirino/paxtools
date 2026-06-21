@@ -55,9 +55,21 @@ export async function assertEscotistaInSameGroup(
   if (target.groupId !== caller.groupId) {
     throw new Error("Este escoteiro não pertence ao seu grupo");
   }
-  if (!caller.isAdmin && target.role === "escoteiro" && target.ramo) {
+  // A not-yet-approved member must not be readable/approvable yet. The read
+  // paths (getPendingForGroup/getGroupStats) already exclude non-approved
+  // members; the write/approve path must match so a pending member cannot be
+  // acted on before an admin approves them.
+  if ((target.membershipStatus ?? "approved") !== "approved") {
+    throw new Error("Este membro ainda não foi aprovado no grupo");
+  }
+  // Ramo boundary for non-admins. A ramo-less escoteiro (e.g. one demoted from
+  // escotista, which clears escotistaRamos but never sets ramo) must FAIL the
+  // boundary rather than skip it — mirroring the read paths, which exclude
+  // ramo-less escoteiros entirely. Normally-onboarded escoteiros always carry a
+  // ramo, so this is behavior-preserving for them.
+  if (!caller.isAdmin && target.role === "escoteiro") {
     const ramos = caller.escotistaRamos ?? [];
-    if (!ramos.includes(target.ramo)) {
+    if (!target.ramo || !ramos.includes(target.ramo)) {
       throw new Error("Este escoteiro não pertence ao seu ramo");
     }
   }

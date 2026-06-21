@@ -71,17 +71,20 @@ function assertCanRemoveApproved(
 export const getMyCompletions = query({
   args: {},
   handler: async (ctx) => {
+    const empty = {
+      ramo: null,
+      actions: [],
+      specialties: [],
+      customActions: [],
+      lisDeOuroItems: [],
+    };
+
     const userId = await getAuthUserId(ctx);
-    if (!userId)
-      return {
-        ramo: null,
-        actions: [],
-        specialties: [],
-        customActions: [],
-        lisDeOuroItems: [],
-      };
+    if (!userId) return empty;
 
     const user = await ctx.db.get(userId);
+    // Banned users are locked out of self-reads too (mutations already throw).
+    if (!user || user.bannedAt) return empty;
 
     const actions = await ctx.db
       .query("actionCompletions")

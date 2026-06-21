@@ -1,4 +1,6 @@
 import { query, mutation } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import {
@@ -7,6 +9,31 @@ import {
   maybeBackfillUser,
 } from "./lib/authHelpers";
 import { ramoValidator } from "./schema";
+
+/**
+ * Guard the last-admin invariant when a user is about to abandon their current
+ * group (by leaving, joining another, or creating another). A sole admin must
+ * promote another escotista first, otherwise the original group is orphaned
+ * with no one able to approve members, manage roles, or delete it.
+ */
+async function assertNotSoleAdminOfCurrentGroup(
+  ctx: MutationCtx,
+  user: Doc<"users">,
+) {
+  if (!user.groupId || !user.isAdmin) return;
+  const otherAdmin = await ctx.db
+    .query("users")
+    .withIndex("by_groupId", (q) => q.eq("groupId", user.groupId))
+    .filter((q) =>
+      q.and(q.neq(q.field("_id"), user._id), q.eq(q.field("isAdmin"), true)),
+    )
+    .first();
+  if (!otherAdmin) {
+    throw new Error(
+      "Você é o único administrador do seu grupo atual. Promova outro escotista antes de sair dele.",
+    );
+  }
+}
 
 function generatePassword(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -68,6 +95,8 @@ export const createGroup = mutation({
     if (!user.escotistaRamos || user.escotistaRamos.length === 0) {
       throw new Error("Escolha pelo menos um ramo antes de criar um grupo");
     }
+    // Creating a new group reassigns groupId; don't strand the current one.
+    await assertNotSoleAdminOfCurrentGroup(ctx, user);
 
     const name = args.name.trim();
     if (!name || name.length > 100) {
@@ -149,6 +178,8 @@ export const joinGroup = mutation({
     ) {
       throw new Error("Escolha pelo menos um ramo antes de entrar em um grupo");
     }
+    // Joining another group reassigns groupId; don't strand the current one.
+    await assertNotSoleAdminOfCurrentGroup(ctx, user);
 
     await ctx.db.patch(user._id, {
       groupId: group._id,
