@@ -719,8 +719,8 @@ describe("getPendingForGroup", () => {
 
     const res = await as(t, adminId).query(api.approvals.getPendingForGroup, {});
     expect(res.length).toBe(1);
-    expect(res[0].escoteiro._id).toBe(esc);
-    expect(res[0].totalPending).toBe(4);
+    expect(res[0]!.escoteiro._id).toBe(esc);
+    expect(res[0]!.totalPending).toBe(4);
   });
 
   test("only COMPLETED custom actions count; a not-completed-only escoteiro is absent", async () => {
@@ -767,7 +767,7 @@ describe("getPendingForGroup", () => {
 
     const res = await as(t, escotista).query(api.approvals.getPendingForGroup, {});
     expect(res.length).toBe(1);
-    expect(res[0].escoteiro._id).toBe(escSenior);
+    expect(res[0]!.escoteiro._id).toBe(escSenior);
   });
 });
 
