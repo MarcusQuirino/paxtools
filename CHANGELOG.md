@@ -1,5 +1,21 @@
 # paxtools
 
+## 1.1.0
+
+### Minor Changes
+
+- 649f0a3: Refactor progression data into per-ramo modules (lobinho, escoteiro, sênior, pioneiro) and add multi-ramo support. Action IDs now carry the ramo (`ramo:blocoId:type:index`), lookups resolve the correct ramo's eixos, and a migration converts legacy 3-part IDs. Includes a script to regenerate the data from the source spreadsheet.
+
+### Patch Changes
+
+- 5c55418: Add GitHub Actions CI workflow running lint, tests, and build on PRs and pushes to `master`. Pins Bun to 1.3.14.
+- 3e9094c: Fix multi-ramo rollout breakage from the 3-part → 4-part action ID change:
+  - `convex/plan.ts`: widen `ITEM_KEY_PATTERN` to accept 4-part action keys (`action:ramo:blocoId:type:index`) — previously it only accepted legacy 3-part keys, so starring/planning any action threw "Chave de item inválida". The pattern is transition-tolerant (accepts 3- and 4-part) so it works regardless of migration timing.
+  - `convex/migrations.ts`: add `prefixLegacyPlannedItemKeys` to migrate `plannedItems.itemKey` action keys (the existing migration only covered `actionCompletions`), and make both migrations collision-safe — if a legacy row and an already-migrated 4-part row exist for the same `(userId, key)`, merge/drop the legacy one instead of creating a duplicate that would break `.unique()`.
+  - `convex/testing.ts` seed data and the escoteiro e2e specs now use the 4-part ID format.
+
+- 82c1a13: Fix long item text being cut off in the escotista "pendentes" tab. Each item's text is now a tappable control that toggles between a 2-line preview and the full text, so escotistas can read the whole entry. The checkbox keeps its own click target and accessible name.
+
 ## 1.0.0
 
 ### Major Changes
