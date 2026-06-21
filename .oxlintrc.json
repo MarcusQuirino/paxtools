@@ -26,5 +26,13 @@
     "typeCheck": true
   },
   "globals": {},
-  "ignorePatterns": [".agents/skills", ".claude/skills"]
+  "ignorePatterns": [".agents/skills", ".claude/skills"],
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx"],
+      "rules": {
+        "typescript/await-thenable": "off"
+      }
+    }
+  ]
 }
