@@ -13,9 +13,8 @@ import { OverallProgress } from "@/components/progression/overall-progress";
 import { EixoSection } from "@/components/progression/eixo-section";
 import { LisDeOuroSection } from "@/components/progression/lis-de-ouro-section";
 import { PlanNav } from "@/components/progression/plan-nav";
-import { ComingSoon } from "@/components/progression/coming-soon";
 import { Footer } from "@/components/footer";
-import { EIXOS } from "@/data/progression-data";
+import type { Eixo } from "@/data/types";
 
 export const Route = createFileRoute("/")({
   loader: async ({ context }) => {
@@ -80,8 +79,6 @@ function Home() {
     );
   }
 
-  const showComingSoon = user.role === "escoteiro" && user.ramo !== "escoteiro";
-
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
@@ -89,14 +86,8 @@ function Home() {
           <h1 className="text-lg font-black uppercase text-foreground">Paxtools</h1>
           <AuthButton />
         </header>
-        {showComingSoon ? (
-          <ComingSoon ramo={user.ramo ?? null} />
-        ) : (
-          <>
-            <PlanNav />
-            <Dashboard />
-          </>
-        )}
+        <PlanNav />
+        <Dashboard />
         <Footer />
       </div>
     </div>
@@ -105,6 +96,7 @@ function Home() {
 
 export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
   const {
+    eixos,
     approvedActionIds,
     pendingActionIds,
     actionStatusMap,
@@ -187,12 +179,14 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
       />
 
       <OverallProgress
+        eixos={eixos}
         completedBlockIds={completedBlockIds}
         pendingBlockIds={pendingBlockIds}
       />
 
       {showPlanStars ? (
         <DashboardEixosWithPlan
+          eixos={eixos}
           approvedActionIds={approvedActionIds}
           pendingActionIds={pendingActionIds}
           actionStatusMap={actionStatusMap}
@@ -208,7 +202,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
           lockApproved={lockApproved}
         />
       ) : (
-        EIXOS.map((eixo) => (
+        eixos.map((eixo) => (
           <EixoSection
             key={eixo.id}
             eixo={eixo}
@@ -242,6 +236,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
 }
 
 type DashboardEixosWithPlanProps = {
+  eixos: Eixo[];
   approvedActionIds: Set<string>;
   pendingActionIds: Set<string>;
   actionStatusMap: Map<string, "pending" | "approved">;
@@ -259,14 +254,17 @@ type DashboardEixosWithPlanProps = {
   lockApproved?: boolean;
 };
 
-function DashboardEixosWithPlan(props: DashboardEixosWithPlanProps) {
+function DashboardEixosWithPlan({
+  eixos,
+  ...props
+}: DashboardEixosWithPlanProps) {
   const { plannedKeys, togglePlanned } = usePlan();
   const handleTogglePlanned = (itemKey: string) => {
     togglePlanned({ itemKey });
   };
   return (
     <>
-      {EIXOS.map((eixo) => (
+      {eixos.map((eixo) => (
         <EixoSection
           key={eixo.id}
           eixo={eixo}

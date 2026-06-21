@@ -59,7 +59,7 @@ export function StageBanner({
         </span>
       </div>
 
-      <div className="relative pt-5 pb-0.5">
+      <div className="relative pt-5 pb-2">
         {STAGES.map((s) => {
           const position = (s.blocksRequired / LIS_DE_OURO_BLOCKS) * 100;
           const isCompleted = completedBlockCount >= s.blocksRequired;

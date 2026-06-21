@@ -76,6 +76,7 @@ export const getPendingForGroup = query({
             _id: escoteiro._id,
             name: escoteiro.name,
             image: escoteiro.image,
+            ramo: escoteiro.ramo ?? null,
           },
           pendingActions,
           pendingSpecialties,

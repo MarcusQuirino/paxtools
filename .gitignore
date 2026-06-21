@@ -5,6 +5,7 @@ node_modules
 out
 dist
 *.tgz
+.tanstack
 
 # code coverage
 coverage
@@ -44,5 +45,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Playwright
 tests/.auth/
 playwright-report/
+.playwright-cli
 test-results/
 

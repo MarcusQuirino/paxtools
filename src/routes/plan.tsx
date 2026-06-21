@@ -23,12 +23,10 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { AuthButton } from "@/components/auth/auth-button";
 import { Footer } from "@/components/footer";
 import { PlanNav } from "@/components/progression/plan-nav";
-import { ComingSoon } from "@/components/progression/coming-soon";
 import { EixoSection } from "@/components/progression/eixo-section";
 import { ActionItem } from "@/components/progression/action-item";
 import { useProgression } from "@/hooks/use-progression";
 import { usePlan } from "@/hooks/use-plan";
-import { EIXOS } from "@/data/progression-data";
 import {
   buildCatalogIndex,
   resolvePlanItems,
@@ -92,8 +90,6 @@ function PlanPage() {
     );
   }
 
-  const showComingSoon = user.role === "escoteiro" && user.ramo !== "escoteiro";
-
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
@@ -101,14 +97,8 @@ function PlanPage() {
           <h1 className="text-lg font-black uppercase text-foreground">Paxtools</h1>
           <AuthButton />
         </header>
-        {showComingSoon ? (
-          <ComingSoon ramo={user.ramo ?? null} />
-        ) : (
-          <>
-            <PlanNav />
-            <PlanDashboard />
-          </>
-        )}
+        <PlanNav />
+        <PlanDashboard />
         <Footer />
       </div>
     </div>
@@ -120,6 +110,7 @@ type ViewMode = "byArea" | "ordered";
 function PlanDashboard() {
   const [viewMode, setViewMode] = useState<ViewMode>("byArea");
   const {
+    eixos,
     approvedActionIds,
     pendingActionIds,
     actionStatusMap,
@@ -130,7 +121,7 @@ function PlanDashboard() {
   } = useProgression();
   const { items, plannedKeys, togglePlanned, reorderPlan } = usePlan();
 
-  const catalog = useMemo(() => buildCatalogIndex(EIXOS), []);
+  const catalog = useMemo(() => buildCatalogIndex(eixos), [eixos]);
   const resolved = useMemo(
     () =>
       resolvePlanItems(items, {
@@ -178,7 +169,7 @@ function PlanDashboard() {
       <ViewToggle viewMode={viewMode} onChange={setViewMode} />
 
       {viewMode === "byArea" ? (
-        EIXOS.filter((eixo) =>
+        eixos.filter((eixo) =>
           eixo.blocos.some((b) => plannedBlocoIds.has(b.id)),
         ).map((eixo) => (
           <EixoSection

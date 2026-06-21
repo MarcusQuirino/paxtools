@@ -3,7 +3,7 @@ import { convexQuery } from "@convex-dev/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { EIXOS } from "@/data/progression-data";
+import { getEixosForRamo, type Ramo } from "@/data/progression-data";
 import {
   getCompletedBlockIds,
   getCurrentStage,
@@ -19,6 +19,7 @@ export function useProgression(targetUserId?: Id<"users">) {
     ? convexQuery(api.progression.getCompletionsForUser, { targetUserId })
     : convexQuery(api.progression.getMyCompletions, {})) as any;
   const { data } = useSuspenseQuery<{
+    ramo: Ramo | null;
     actions: { actionId: string; status?: string }[];
     specialties: { blocoId: string; specialtyName: string; status?: string }[];
     customActions: {
@@ -30,6 +31,8 @@ export function useProgression(targetUserId?: Id<"users">) {
     }[];
     lisDeOuroItems: { itemId: string; status?: string }[];
   }>(queryOptions);
+
+  const eixos = useMemo(() => getEixosForRamo(data.ramo), [data.ramo]);
 
   const approvedActionIds = useMemo(
     () =>
@@ -85,13 +88,14 @@ export function useProgression(targetUserId?: Id<"users">) {
   const { approved: completedBlockIds, pending: pendingBlockIds } = useMemo(
     () =>
       getCompletedBlockIds(
-        EIXOS,
+        eixos,
         approvedActionIds,
         pendingActionIds,
         customActionsWithStatus,
         specialtiesWithStatus,
       ),
     [
+      eixos,
       approvedActionIds,
       pendingActionIds,
       customActionsWithStatus,
@@ -126,6 +130,8 @@ export function useProgression(targetUserId?: Id<"users">) {
   const lisDeOuro = isLisDeOuroComplete(completedBlockCount, approvedLisItemIds);
 
   return {
+    ramo: data.ramo,
+    eixos,
     approvedActionIds,
     pendingActionIds,
     allActionIds,
