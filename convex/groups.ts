@@ -1,6 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import {
@@ -33,6 +33,21 @@ async function assertNotSoleAdminOfCurrentGroup(
       "Você é o único administrador do seu grupo atual. Promova outro escotista antes de sair dele.",
     );
   }
+}
+
+/**
+ * For an admin action targeting another member: assert the caller is an admin,
+ * load the target user, and verify the target belongs to the caller's group.
+ * Throws "Usuário não pertence ao seu grupo" if the target is missing or in a
+ * different group. Returns both the admin (caller) and the loaded target.
+ */
+async function loadGroupMember(ctx: MutationCtx, targetUserId: Id<"users">) {
+  const admin = await assertAdmin(ctx);
+  const target = await ctx.db.get(targetUserId);
+  if (!target || target.groupId !== admin.groupId) {
+    throw new Error("Usuário não pertence ao seu grupo");
+  }
+  return { admin, target };
 }
 
 function generatePassword(): string {
@@ -325,11 +340,7 @@ export const getPendingMemberships = query({
 export const approveMembership = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    const admin = await assertAdmin(ctx);
-    const target = await ctx.db.get(args.userId);
-    if (!target || target.groupId !== admin.groupId) {
-      throw new Error("Usuário não pertence ao seu grupo");
-    }
+    const { target } = await loadGroupMember(ctx, args.userId);
     if (target.membershipStatus !== "pending") {
       throw new Error("Usuário não está pendente");
     }
@@ -340,11 +351,7 @@ export const approveMembership = mutation({
 export const rejectMembership = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    const admin = await assertAdmin(ctx);
-    const target = await ctx.db.get(args.userId);
-    if (!target || target.groupId !== admin.groupId) {
-      throw new Error("Usuário não pertence ao seu grupo");
-    }
+    const { target } = await loadGroupMember(ctx, args.userId);
     if (target.membershipStatus !== "pending") {
       throw new Error("Usuário não está pendente");
     }
@@ -359,13 +366,9 @@ export const rejectMembership = mutation({
 export const banMember = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    const admin = await assertAdmin(ctx);
-    if (args.userId === admin._id) {
+    const { admin, target } = await loadGroupMember(ctx, args.userId);
+    if (target._id === admin._id) {
       throw new Error("Você não pode banir a si mesmo");
-    }
-    const target = await ctx.db.get(args.userId);
-    if (!target || target.groupId !== admin.groupId) {
-      throw new Error("Usuário não pertence ao seu grupo");
     }
     if (target.isAdmin) {
       const otherAdmins = await ctx.db
@@ -400,13 +403,9 @@ export const changeMemberRole = mutation({
     role: v.union(v.literal("escoteiro"), v.literal("escotista")),
   },
   handler: async (ctx, args) => {
-    const admin = await assertAdmin(ctx);
-    if (args.userId === admin._id) {
+    const { admin, target } = await loadGroupMember(ctx, args.userId);
+    if (target._id === admin._id) {
       throw new Error("Use a tela de configurações para mudar seu próprio papel");
-    }
-    const target = await ctx.db.get(args.userId);
-    if (!target || target.groupId !== admin.groupId) {
-      throw new Error("Usuário não pertence ao seu grupo");
     }
     if (target.role === args.role) return;
 
@@ -424,11 +423,7 @@ export const changeMemberRole = mutation({
 export const setMemberAdmin = mutation({
   args: { userId: v.id("users"), isAdmin: v.boolean() },
   handler: async (ctx, args) => {
-    const admin = await assertAdmin(ctx);
-    const target = await ctx.db.get(args.userId);
-    if (!target || target.groupId !== admin.groupId) {
-      throw new Error("Usuário não pertence ao seu grupo");
-    }
+    const { admin, target } = await loadGroupMember(ctx, args.userId);
     if (target.role !== "escotista") {
       throw new Error("Apenas escotistas podem ser administradores");
     }
@@ -456,11 +451,7 @@ export const setMemberAdmin = mutation({
 export const setMemberRamos = mutation({
   args: { userId: v.id("users"), ramos: v.array(ramoValidator) },
   handler: async (ctx, args) => {
-    const admin = await assertAdmin(ctx);
-    const target = await ctx.db.get(args.userId);
-    if (!target || target.groupId !== admin.groupId) {
-      throw new Error("Usuário não pertence ao seu grupo");
-    }
+    const { target } = await loadGroupMember(ctx, args.userId);
     if (target.role !== "escotista") {
       throw new Error("Apenas escotistas têm múltiplos ramos");
     }
@@ -473,11 +464,7 @@ export const setMemberRamos = mutation({
 export const setMemberRamo = mutation({
   args: { userId: v.id("users"), ramo: ramoValidator },
   handler: async (ctx, args) => {
-    const admin = await assertAdmin(ctx);
-    const target = await ctx.db.get(args.userId);
-    if (!target || target.groupId !== admin.groupId) {
-      throw new Error("Usuário não pertence ao seu grupo");
-    }
+    const { target } = await loadGroupMember(ctx, args.userId);
     if (target.role !== "escoteiro") {
       throw new Error("Apenas escoteiros têm um ramo único");
     }

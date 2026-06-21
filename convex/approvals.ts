@@ -1,10 +1,115 @@
 import { query, mutation } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import {
   getAuthenticatedUser,
   assertEscotistaInSameGroup,
 } from "./lib/authHelpers";
+
+// The three "simple" completion tables share the userId/status shape, so a
+// single union id type lets one helper drive all of them.
+type CompletionId =
+  | Id<"actionCompletions">
+  | Id<"specialtyCompletions">
+  | Id<"lisDeOuroCompletions">;
+
+/**
+ * Approve a single pending completion. Authenticates FIRST (before fetching the
+ * doc) so an unauthenticated caller gets "Não autenticado" even for a dangling
+ * id — preserve this ordering.
+ */
+async function approvePendingCompletion(
+  ctx: MutationCtx,
+  completionId: CompletionId,
+) {
+  const user = await getAuthenticatedUser(ctx);
+  const doc = await ctx.db.get(completionId);
+  if (!doc) throw new Error("Não encontrado");
+  if (doc.status !== "pending") throw new Error("Item não está pendente");
+
+  await assertEscotistaInSameGroup(ctx, doc.userId);
+
+  await ctx.db.patch(completionId, {
+    status: "approved",
+    approvedBy: user._id,
+    approvedAt: Date.now(),
+  });
+}
+
+/**
+ * Reject (delete) a single pending completion. Fetches the doc and checks
+ * existence/status BEFORE auth (auth happens inside assertEscotistaInSameGroup)
+ * — so an unauthenticated caller with a dangling id gets "Não encontrado".
+ * Preserve this ordering.
+ */
+async function rejectPendingCompletion(
+  ctx: MutationCtx,
+  completionId: CompletionId,
+) {
+  const doc = await ctx.db.get(completionId);
+  if (!doc) throw new Error("Não encontrado");
+  if (doc.status !== "pending") throw new Error("Item não está pendente");
+
+  await assertEscotistaInSameGroup(ctx, doc.userId);
+  await ctx.db.delete(completionId);
+}
+
+/**
+ * Bulk approve-or-reject for the three simple completion tables. Approving
+ * patches the row; rejecting deletes it. Non-pending rows are skipped silently.
+ * `approverId` and `now` are passed in so a single shared timestamp can be
+ * stamped across the whole bulk operation.
+ */
+async function bulkProcessSimple(
+  ctx: MutationCtx,
+  ids: CompletionId[],
+  action: "approve" | "reject",
+  approverId: Id<"users">,
+  now: number,
+) {
+  for (const id of ids) {
+    const doc = await ctx.db.get(id);
+    if (!doc || doc.status !== "pending") continue;
+    await assertEscotistaInSameGroup(ctx, doc.userId);
+    if (action === "approve") {
+      await ctx.db.patch(id, {
+        status: "approved",
+        approvedBy: approverId,
+        approvedAt: now,
+      });
+    } else {
+      await ctx.db.delete(id);
+    }
+  }
+}
+
+/**
+ * Patch each already-fetched completion row to approved, stamping a single
+ * shared `now` across the batch. Accepts rows from any of the four completion
+ * tables (their `_id` types form the union below).
+ */
+async function approveRows(
+  ctx: MutationCtx,
+  rows: Array<{
+    _id:
+      | Id<"actionCompletions">
+      | Id<"specialtyCompletions">
+      | Id<"lisDeOuroCompletions">
+      | Id<"customActions">;
+  }>,
+  approverId: Id<"users">,
+  now: number,
+) {
+  for (const row of rows) {
+    await ctx.db.patch(row._id, {
+      status: "approved",
+      approvedBy: approverId,
+      approvedAt: now,
+    });
+  }
+}
 
 export const getPendingForGroup = query({
   args: {},
@@ -179,54 +284,21 @@ export const getGroupStats = query({
 export const approveAction = mutation({
   args: { completionId: v.id("actionCompletions") },
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUser(ctx);
-    const doc = await ctx.db.get(args.completionId);
-    if (!doc) throw new Error("Não encontrado");
-    if (doc.status !== "pending") throw new Error("Item não está pendente");
-
-    await assertEscotistaInSameGroup(ctx, doc.userId);
-
-    await ctx.db.patch(args.completionId, {
-      status: "approved",
-      approvedBy: user._id,
-      approvedAt: Date.now(),
-    });
+    await approvePendingCompletion(ctx, args.completionId);
   },
 });
 
 export const approveSpecialty = mutation({
   args: { completionId: v.id("specialtyCompletions") },
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUser(ctx);
-    const doc = await ctx.db.get(args.completionId);
-    if (!doc) throw new Error("Não encontrado");
-    if (doc.status !== "pending") throw new Error("Item não está pendente");
-
-    await assertEscotistaInSameGroup(ctx, doc.userId);
-
-    await ctx.db.patch(args.completionId, {
-      status: "approved",
-      approvedBy: user._id,
-      approvedAt: Date.now(),
-    });
+    await approvePendingCompletion(ctx, args.completionId);
   },
 });
 
 export const approveLisDeOuroItem = mutation({
   args: { completionId: v.id("lisDeOuroCompletions") },
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUser(ctx);
-    const doc = await ctx.db.get(args.completionId);
-    if (!doc) throw new Error("Não encontrado");
-    if (doc.status !== "pending") throw new Error("Item não está pendente");
-
-    await assertEscotistaInSameGroup(ctx, doc.userId);
-
-    await ctx.db.patch(args.completionId, {
-      status: "approved",
-      approvedBy: user._id,
-      approvedAt: Date.now(),
-    });
+    await approvePendingCompletion(ctx, args.completionId);
   },
 });
 
@@ -271,36 +343,21 @@ export const rejectCustomAction = mutation({
 export const rejectAction = mutation({
   args: { completionId: v.id("actionCompletions") },
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.completionId);
-    if (!doc) throw new Error("Não encontrado");
-    if (doc.status !== "pending") throw new Error("Item não está pendente");
-
-    await assertEscotistaInSameGroup(ctx, doc.userId);
-    await ctx.db.delete(args.completionId);
+    await rejectPendingCompletion(ctx, args.completionId);
   },
 });
 
 export const rejectSpecialty = mutation({
   args: { completionId: v.id("specialtyCompletions") },
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.completionId);
-    if (!doc) throw new Error("Não encontrado");
-    if (doc.status !== "pending") throw new Error("Item não está pendente");
-
-    await assertEscotistaInSameGroup(ctx, doc.userId);
-    await ctx.db.delete(args.completionId);
+    await rejectPendingCompletion(ctx, args.completionId);
   },
 });
 
 export const rejectLisDeOuroItem = mutation({
   args: { completionId: v.id("lisDeOuroCompletions") },
   handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.completionId);
-    if (!doc) throw new Error("Não encontrado");
-    if (doc.status !== "pending") throw new Error("Item não está pendente");
-
-    await assertEscotistaInSameGroup(ctx, doc.userId);
-    await ctx.db.delete(args.completionId);
+    await rejectPendingCompletion(ctx, args.completionId);
   },
 });
 
@@ -316,50 +373,9 @@ export const bulkAction = mutation({
     const user = await getAuthenticatedUser(ctx);
     const now = Date.now();
 
-    for (const id of args.actionIds) {
-      const doc = await ctx.db.get(id);
-      if (!doc || doc.status !== "pending") continue;
-      await assertEscotistaInSameGroup(ctx, doc.userId);
-      if (args.action === "approve") {
-        await ctx.db.patch(id, {
-          status: "approved",
-          approvedBy: user._id,
-          approvedAt: now,
-        });
-      } else {
-        await ctx.db.delete(id);
-      }
-    }
-
-    for (const id of args.specialtyIds) {
-      const doc = await ctx.db.get(id);
-      if (!doc || doc.status !== "pending") continue;
-      await assertEscotistaInSameGroup(ctx, doc.userId);
-      if (args.action === "approve") {
-        await ctx.db.patch(id, {
-          status: "approved",
-          approvedBy: user._id,
-          approvedAt: now,
-        });
-      } else {
-        await ctx.db.delete(id);
-      }
-    }
-
-    for (const id of args.lisIds) {
-      const doc = await ctx.db.get(id);
-      if (!doc || doc.status !== "pending") continue;
-      await assertEscotistaInSameGroup(ctx, doc.userId);
-      if (args.action === "approve") {
-        await ctx.db.patch(id, {
-          status: "approved",
-          approvedBy: user._id,
-          approvedAt: now,
-        });
-      } else {
-        await ctx.db.delete(id);
-      }
-    }
+    await bulkProcessSimple(ctx, args.actionIds, args.action, user._id, now);
+    await bulkProcessSimple(ctx, args.specialtyIds, args.action, user._id, now);
+    await bulkProcessSimple(ctx, args.lisIds, args.action, user._id, now);
 
     for (const id of args.customActionIds ?? []) {
       const doc = await ctx.db.get(id);
@@ -391,20 +407,15 @@ export const approveAllForEscoteiro = mutation({
 
     const now = Date.now();
 
+    // The per-table .take() limits differ (100/100/10/100) and custom filters
+    // on `completed`, so the queries stay inline; only the patch loop is shared.
     const pendingActions = await ctx.db
       .query("actionCompletions")
       .withIndex("by_userId_and_status", (q) =>
         q.eq("userId", args.escoteiroId).eq("status", "pending"),
       )
       .take(100);
-
-    for (const doc of pendingActions) {
-      await ctx.db.patch(doc._id, {
-        status: "approved",
-        approvedBy: user._id,
-        approvedAt: now,
-      });
-    }
+    await approveRows(ctx, pendingActions, user._id, now);
 
     const pendingSpecialties = await ctx.db
       .query("specialtyCompletions")
@@ -412,14 +423,7 @@ export const approveAllForEscoteiro = mutation({
         q.eq("userId", args.escoteiroId).eq("status", "pending"),
       )
       .take(100);
-
-    for (const doc of pendingSpecialties) {
-      await ctx.db.patch(doc._id, {
-        status: "approved",
-        approvedBy: user._id,
-        approvedAt: now,
-      });
-    }
+    await approveRows(ctx, pendingSpecialties, user._id, now);
 
     const pendingLis = await ctx.db
       .query("lisDeOuroCompletions")
@@ -427,14 +431,7 @@ export const approveAllForEscoteiro = mutation({
         q.eq("userId", args.escoteiroId).eq("status", "pending"),
       )
       .take(10);
-
-    for (const doc of pendingLis) {
-      await ctx.db.patch(doc._id, {
-        status: "approved",
-        approvedBy: user._id,
-        approvedAt: now,
-      });
-    }
+    await approveRows(ctx, pendingLis, user._id, now);
 
     const pendingCustomActions = (
       await ctx.db
@@ -444,13 +441,6 @@ export const approveAllForEscoteiro = mutation({
         )
         .take(100)
     ).filter((c) => c.completed);
-
-    for (const doc of pendingCustomActions) {
-      await ctx.db.patch(doc._id, {
-        status: "approved",
-        approvedBy: user._id,
-        approvedAt: now,
-      });
-    }
+    await approveRows(ctx, pendingCustomActions, user._id, now);
   },
 });
