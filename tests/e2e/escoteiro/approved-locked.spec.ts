@@ -3,7 +3,7 @@
  *
  * `escoteiro_with_progression` has `actionCompletions` rows seeded with
  * curriculum-shaped IDs that pass `ACTION_ID_PATTERN` in convex/progression.ts.
- * The fixed action `aprendizagem-continua:fixed:0` is seeded `status:"approved"`.
+ * The fixed action `escoteiro:aprendizagem-continua:fixed:0` is seeded `status:"approved"`.
  *
  * The dashboard's `ActionItem` (src/components/progression/action-item.tsx)
  * renders this with `disabled` on the underlying Radix Checkbox (which surfaces
@@ -14,7 +14,7 @@
 
 import { progressionTest as test, expect } from "../../fixtures/auth";
 
-const APPROVED_ACTION_ID = "aprendizagem-continua:fixed:0";
+const APPROVED_ACTION_ID = "escoteiro:aprendizagem-continua:fixed:0";
 const BLOCO_TRIGGER_TEXT = /Aprendizagem Contínua/i;
 
 test("approved fixed action renders disabled and stays checked when clicked", async ({

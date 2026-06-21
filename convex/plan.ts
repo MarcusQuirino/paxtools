@@ -3,8 +3,12 @@ import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { getAuthenticatedUser } from "./lib/authHelpers";
 
+// Action keys carry the ramo prefix since the multi-ramo refactor
+// (`action:ramo:blocoId:type:index`). We accept 1 or 2 segments before
+// `type:index` so legacy 3-part keys (`action:blocoId:type:index`) still
+// validate during/after the data migration — see migrations.ts.
 const ITEM_KEY_PATTERN =
-  /^(action:[a-z0-9-]+:(fixed|variable):\d+|specialty:[a-z0-9-]+:.+|custom:[a-z0-9]+)$/;
+  /^(action:([a-z0-9-]+:){1,2}(fixed|variable):\d+|specialty:[a-z0-9-]+:.+|custom:[a-z0-9]+)$/;
 
 const MAX_PLANNED_ITEMS = 500;
 
