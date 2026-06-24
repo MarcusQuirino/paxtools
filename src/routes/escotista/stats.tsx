@@ -56,7 +56,7 @@ function StatsPage() {
         onChange={setRamo}
         labels={RAMO_LABELS}
       />
-      <StatsBody ramo={ramo ?? selectableRamos[0]!} />
+      <StatsBody key={ramo ?? selectableRamos[0]!} ramo={ramo ?? selectableRamos[0]!} />
     </div>
   );
 }

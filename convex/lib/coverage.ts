@@ -1,5 +1,6 @@
 import type { QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
+// NOTE: this src/ import chain (plan-view → plan-keys → data/*) must stay browser-free AND path-alias-free — convex dev typechecks it under convex/tsconfig.json, which has neither DOM libs nor the "@/" alias.
 import { getEixosForRamo } from "../../src/data/progression-data";
 import { buildCatalogIndex } from "../../src/lib/plan-view";
 import { STAGES } from "../../src/data/progression-rules";
