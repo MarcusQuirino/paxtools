@@ -9,6 +9,7 @@ import { StageDistribution } from "@/components/escotista/stats/stage-distributi
 import { MostDone } from "@/components/escotista/stats/most-done";
 import { GapList } from "@/components/escotista/stats/gap-list";
 import { Acompanhamento } from "@/components/escotista/stats/acompanhamento";
+import { AiSuggestionsCard } from "@/components/escotista/ai-suggestions-card";
 
 type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
 const RAMO_LABELS: Record<Ramo, string> = {
@@ -183,6 +184,7 @@ function StatsBody({ ramo }: { ramo: Ramo }) {
         typeFilter={typeFilter}
       />
       <Acompanhamento scouts={scouts} />
+      <AiSuggestionsCard ramo={ramo} />
     </div>
   );
 }

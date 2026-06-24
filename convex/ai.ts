@@ -1,6 +1,7 @@
 "use node";
 
 import { v } from "convex/values";
+import { ConvexError } from "convex/values";
 import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { generateObject } from "ai";
@@ -24,7 +25,7 @@ export const suggestActivities = action({
   args: { ramo: v.optional(ramoValidator) },
   handler: async (ctx, args): Promise<SuggestionResult> => {
     if (!process.env.ANTHROPIC_API_KEY) {
-      throw new Error(
+      throw new ConvexError(
         "ANTHROPIC_API_KEY não configurado — configure-o no deployment Convex para usar as sugestões da IA.",
       );
     }
