@@ -55,7 +55,7 @@ export async function computeRamoCoverage(
   const members = await ctx.db
     .query("users")
     .withIndex("by_groupId", (q) => q.eq("groupId", groupId))
-    .take(500);
+    .take(500); // safe cap: a ramo has ≤28 scouts in practice; silent truncation is not a risk at this scale
   const scouts = members.filter(
     (m) =>
       m.role === "escoteiro" &&

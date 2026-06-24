@@ -164,4 +164,151 @@ describe("computeRamoCoverage (Task 2)", () => {
     expect(cov.stageDistribution).toHaveProperty("rumo");
     expect(cov.stageDistribution).toHaveProperty("travessia");
   });
+
+  // Gap 1: undefined/omitted status must count as approved.
+  // A regression to `=== "approved"` would drop this row (undefined !== "approved")
+  // and make completedCount 0, failing the assertion.
+  test("omitted status (undefined) counts as approved — regression guard", async () => {
+    const t = convexTest(schema, modules);
+    const adminId: Id<"users"> = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Admin2", role: "escotista", escotistaRamos: ["escoteiro"],
+        onboardingComplete: true,
+      }),
+    );
+    const groupId: Id<"groups"> = await t.run((ctx) =>
+      ctx.db.insert("groups", {
+        name: "G2", number: "2", password: "BBBBBB",
+        createdBy: adminId, createdAt: 1, ramoNames: {},
+      }),
+    );
+    await t.run((ctx) =>
+      ctx.db.patch(adminId, { groupId, isAdmin: true, membershipStatus: "approved" }),
+    );
+    const scoutId: Id<"users"> = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Scout", role: "escoteiro", ramo: "escoteiro",
+        groupId, membershipStatus: "approved",
+      }),
+    );
+    // Insert a completion row with NO status field (omitted = undefined).
+    await t.run((ctx) =>
+      ctx.db.insert("actionCompletions", {
+        userId: scoutId,
+        actionId: A_FIX0,
+        completedAt: 1,
+        // status is intentionally omitted
+      }),
+    );
+    const cov = await t.run((ctx) =>
+      computeRamoCoverage(ctx, { groupId, ramo: "escoteiro" }),
+    );
+    const byId = new Map(cov.activities.map((x) => [x.actionId, x]));
+    expect(byId.get(A_FIX0)!.completedCount).toBe(1);
+  });
+
+  // Gap 2: eixo aggregates must independently recompute from per-activity data.
+  // Catches wrong denominator, wrong activity subset, or off-by-one without
+  // hardcoding catalog sizes (any catalog change keeps the test valid).
+  test("eixo aggregates match independent recomputation from per-activity data", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedCoverage(t);
+    const cov = await t.run((ctx) =>
+      computeRamoCoverage(ctx, { groupId, ramo: "escoteiro" }),
+    );
+
+    // Local mean — do NOT reuse the impl's mean function.
+    function localMean(xs: number[]): number {
+      if (xs.length === 0) return 0;
+      return xs.reduce((s, x) => s + x, 0) / xs.length;
+    }
+
+    const EPS = 1e-9;
+    const n = cov.scoutCount; // must be >0 for seed
+
+    for (const eixo of cov.eixos) {
+      const inEixo = cov.activities.filter((x) => x.eixoId === eixo.eixoId);
+      const fixed = inEixo.filter((x) => x.type === "fixed");
+      const variable = inEixo.filter((x) => x.type === "variable");
+
+      const expectedFixedAvg = n === 0 ? 0 : localMean(fixed.map((x) => x.completedCount / n));
+      const expectedVarAvg = n === 0 ? 0 : localMean(variable.map((x) => x.completedCount / n));
+      const expectedCovPct = n === 0 ? 0 : localMean(inEixo.map((x) => x.completedCount / n)) * 100;
+
+      expect(Math.abs(eixo.fixedAvgCompletion - expectedFixedAvg)).toBeLessThan(EPS);
+      expect(Math.abs(eixo.variableAvgCompletion - expectedVarAvg)).toBeLessThan(EPS);
+      expect(Math.abs(eixo.coveragePct - expectedCovPct)).toBeLessThan(EPS);
+    }
+  });
+
+  // Gap 3: duplicate completion rows for the same scout/action must count once;
+  // a foreign actionId not in the catalog must be silently dropped.
+  test("duplicate rows count once per scout; foreign actionId does not inflate counts", async () => {
+    const t = convexTest(schema, modules);
+    const adminId: Id<"users"> = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Admin3", role: "escotista", escotistaRamos: ["escoteiro"],
+        onboardingComplete: true,
+      }),
+    );
+    const groupId: Id<"groups"> = await t.run((ctx) =>
+      ctx.db.insert("groups", {
+        name: "G3", number: "3", password: "CCCCCC",
+        createdBy: adminId, createdAt: 1, ramoNames: {},
+      }),
+    );
+    await t.run((ctx) =>
+      ctx.db.patch(adminId, { groupId, isAdmin: true, membershipStatus: "approved" }),
+    );
+    const scoutId: Id<"users"> = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Scout", role: "escoteiro", ramo: "escoteiro",
+        groupId, membershipStatus: "approved",
+      }),
+    );
+    // Insert A_FIX0 twice for the same scout (duplicate).
+    await t.run((ctx) =>
+      ctx.db.insert("actionCompletions", {
+        userId: scoutId, actionId: A_FIX0, completedAt: 1, status: "approved",
+      }),
+    );
+    await t.run((ctx) =>
+      ctx.db.insert("actionCompletions", {
+        userId: scoutId, actionId: A_FIX0, completedAt: 2, status: "approved",
+      }),
+    );
+    // Insert a foreign actionId not in the escoteiro catalog.
+    await t.run((ctx) =>
+      ctx.db.insert("actionCompletions", {
+        userId: scoutId,
+        actionId: "escoteiro:does-not-exist:fixed:0",
+        completedAt: 3, status: "approved",
+      }),
+    );
+    const cov = await t.run((ctx) =>
+      computeRamoCoverage(ctx, { groupId, ramo: "escoteiro" }),
+    );
+    const byId = new Map(cov.activities.map((x) => [x.actionId, x]));
+    // Duplicate rows must count as 1, not 2.
+    expect(byId.get(A_FIX0)!.completedCount).toBe(1);
+    // Foreign actionId must not appear in activities.
+    expect(byId.has("escoteiro:does-not-exist:fixed:0")).toBe(false);
+  });
+
+  // Gap 4: among equal-completedCount entries in mostDone (e.g. the many
+  // zero-count actions), actionId must be in ascending order (tie-break rule).
+  test("mostDone ties broken by actionId ascending", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedCoverage(t);
+    const cov = await t.run((ctx) =>
+      computeRamoCoverage(ctx, { groupId, ramo: "escoteiro" }),
+    );
+    // Collect the tail of zero-count entries (catalog has many zero-count actions).
+    const zeroTail = cov.mostDone.filter((x) => x.completedCount === 0).map((x) => x.actionId);
+    // Must be sorted ascending by actionId.
+    const sorted = [...zeroTail].sort();
+    expect(zeroTail).toEqual(sorted);
+    // Ensure we actually tested a non-trivial tail.
+    expect(zeroTail.length).toBeGreaterThan(1);
+  });
 });
