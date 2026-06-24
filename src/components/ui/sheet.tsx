@@ -56,7 +56,7 @@ function SheetContent({
         )}
         {...props}
       >
-        <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
+        <DialogPrimitive.Title data-slot="sheet-title" className="sr-only">{title}</DialogPrimitive.Title>
         {children}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>

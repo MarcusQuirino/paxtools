@@ -174,34 +174,38 @@ function EscotistaBottomNav({ isAdmin }: { isAdmin: boolean }) {
             </Link>
           );
         }
-        const Icon = item.icon;
-        const moreActive = sheetOpen || onSecondaryRoute;
-        return (
-          <Sheet key={item.label} open={sheetOpen} onOpenChange={setSheetOpen}>
-            <SheetTrigger
-              className={moreActive ? PRIMARY_ACTIVE : PRIMARY_INACTIVE}
-            >
-              <Icon className="size-5" />
-              {item.label}
-            </SheetTrigger>
-            <SheetContent title="Mais opções">
-              {secondary.map((dest) => {
-                const DestIcon = dest.icon;
-                return (
-                  <SheetClose asChild key={dest.to}>
-                    <Link
-                      to={dest.to}
-                      className="flex items-center gap-3 rounded-md border-2 border-black bg-white px-4 py-3 text-sm font-bold text-foreground shadow-[2px_2px_0px_0px_#000] transition-all hover:bg-muted"
-                    >
-                      <DestIcon className="size-5" />
-                      {dest.label}
-                    </Link>
-                  </SheetClose>
-                );
-              })}
-            </SheetContent>
-          </Sheet>
-        );
+        if (item.kind === "sheet") {
+          const Icon = item.icon;
+          const moreActive = sheetOpen || onSecondaryRoute;
+          return (
+            <Sheet key={item.label} open={sheetOpen} onOpenChange={setSheetOpen}>
+              <SheetTrigger
+                className={moreActive ? PRIMARY_ACTIVE : PRIMARY_INACTIVE}
+              >
+                <Icon className="size-5" />
+                {item.label}
+              </SheetTrigger>
+              <SheetContent title="Mais opções">
+                {secondary.map((dest) => {
+                  const DestIcon = dest.icon;
+                  return (
+                    <SheetClose asChild key={dest.to}>
+                      <Link
+                        to={dest.to}
+                        className="flex items-center gap-3 rounded-md border-2 border-black bg-white px-4 py-3 text-sm font-bold text-foreground shadow-[2px_2px_0px_0px_#000] transition-all hover:bg-muted"
+                      >
+                        <DestIcon className="size-5" />
+                        {dest.label}
+                      </Link>
+                    </SheetClose>
+                  );
+                })}
+              </SheetContent>
+            </Sheet>
+          );
+        }
+        const _exhaustive: never = item;
+        return _exhaustive;
       })}
     </nav>
   );
