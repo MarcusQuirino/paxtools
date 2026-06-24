@@ -89,7 +89,7 @@ export const getRamoScouts = query({
     rows.sort((a, b) =>
       a.completedBlockCount !== b.completedBlockCount
         ? a.completedBlockCount - b.completedBlockCount
-        : b.joinedAt - a.joinedAt,
+        : a.joinedAt - b.joinedAt, // ASC joinedAt: newest accounts last among ties (brand-new member doesn't falsely lead "who is behind")
     );
     return rows;
   },

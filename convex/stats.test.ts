@@ -199,4 +199,34 @@ describe("getRamoScouts (Task 4)", () => {
     const counts = rows.map((r) => r.completedBlockCount);
     expect([...counts].sort((a, b) => a - b)).toEqual(counts);
   });
+
+  test("tie-break: among tied block counts, older accounts come first (newest last)", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seed(t);
+    // Insert "older" then "newer" scout sequentially; _creationTime increases.
+    const olderId: Id<"users"> = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Older", role: "escoteiro", ramo: "escoteiro", groupId,
+        membershipStatus: "approved",
+      }),
+    );
+    const newerId: Id<"users"> = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Newer", role: "escoteiro", ramo: "escoteiro", groupId,
+        membershipStatus: "approved",
+      }),
+    );
+    const rows = await as(t, adminId).query(api.stats.getRamoScouts, {
+      ramo: "escoteiro",
+    });
+    // All have 0 blocks; among ties oldest should be first (lowest joinedAt index 0),
+    // newest should be last (highest joinedAt).
+    const joinedAts = rows.map((r) => r.joinedAt);
+    expect([...joinedAts].sort((a, b) => a - b)).toEqual(joinedAts);
+    // The newer scout must not be at index 0 (brand-new member doesn't falsely lead).
+    const newerRow = rows.find((r) => r._id === newerId)!;
+    const olderRow = rows.find((r) => r._id === olderId)!;
+    expect(olderRow.joinedAt).toBeLessThanOrEqual(newerRow.joinedAt);
+    expect(rows.indexOf(olderRow)).toBeLessThan(rows.indexOf(newerRow));
+  });
 });
