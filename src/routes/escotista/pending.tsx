@@ -19,6 +19,7 @@ import {
   parseActionId,
   type Ramo,
 } from "@/data/progression-data";
+import { notifyLevelUps } from "@/lib/level-up-toast";
 
 export const Route = createFileRoute("/escotista/pending")({
   component: PendingApprovalsPage,
@@ -77,6 +78,7 @@ function PendingApprovalsPage() {
   const bulkActionFn = useConvexMutation(api.approvals.bulkAction);
   const { mutate: bulkAction, isPending: isBulkPending } = useMutation({
     mutationFn: bulkActionFn,
+    onSuccess: notifyLevelUps,
   });
 
   if (pendingData.length === 0) {

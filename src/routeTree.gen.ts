@@ -16,6 +16,7 @@ import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as EscotistaRouteRouteImport } from './routes/escotista/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EscotistaIndexRouteImport } from './routes/escotista/index'
+import { Route as EscotistaTimelineRouteImport } from './routes/escotista/timeline'
 import { Route as EscotistaPendingRouteImport } from './routes/escotista/pending'
 import { Route as EscotistaAdminRouteImport } from './routes/escotista/admin'
 import { Route as EscotistaEscoteiroEscoteiroIdRouteImport } from './routes/escotista/escoteiro.$escoteiroId'
@@ -55,6 +56,11 @@ const EscotistaIndexRoute = EscotistaIndexRouteImport.update({
   path: '/',
   getParentRoute: () => EscotistaRouteRoute,
 } as any)
+const EscotistaTimelineRoute = EscotistaTimelineRouteImport.update({
+  id: '/timeline',
+  path: '/timeline',
+  getParentRoute: () => EscotistaRouteRoute,
+} as any)
 const EscotistaPendingRoute = EscotistaPendingRouteImport.update({
   id: '/pending',
   path: '/pending',
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/signin': typeof SigninRoute
   '/escotista/admin': typeof EscotistaAdminRoute
   '/escotista/pending': typeof EscotistaPendingRoute
+  '/escotista/timeline': typeof EscotistaTimelineRoute
   '/escotista/': typeof EscotistaIndexRoute
   '/escotista/escoteiro/$escoteiroId': typeof EscotistaEscoteiroEscoteiroIdRoute
 }
@@ -92,6 +99,7 @@ export interface FileRoutesByTo {
   '/signin': typeof SigninRoute
   '/escotista/admin': typeof EscotistaAdminRoute
   '/escotista/pending': typeof EscotistaPendingRoute
+  '/escotista/timeline': typeof EscotistaTimelineRoute
   '/escotista': typeof EscotistaIndexRoute
   '/escotista/escoteiro/$escoteiroId': typeof EscotistaEscoteiroEscoteiroIdRoute
 }
@@ -105,6 +113,7 @@ export interface FileRoutesById {
   '/signin': typeof SigninRoute
   '/escotista/admin': typeof EscotistaAdminRoute
   '/escotista/pending': typeof EscotistaPendingRoute
+  '/escotista/timeline': typeof EscotistaTimelineRoute
   '/escotista/': typeof EscotistaIndexRoute
   '/escotista/escoteiro/$escoteiroId': typeof EscotistaEscoteiroEscoteiroIdRoute
 }
@@ -119,6 +128,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/escotista/admin'
     | '/escotista/pending'
+    | '/escotista/timeline'
     | '/escotista/'
     | '/escotista/escoteiro/$escoteiroId'
   fileRoutesByTo: FileRoutesByTo
@@ -130,6 +140,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/escotista/admin'
     | '/escotista/pending'
+    | '/escotista/timeline'
     | '/escotista'
     | '/escotista/escoteiro/$escoteiroId'
   id:
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/escotista/admin'
     | '/escotista/pending'
+    | '/escotista/timeline'
     | '/escotista/'
     | '/escotista/escoteiro/$escoteiroId'
   fileRoutesById: FileRoutesById
@@ -206,6 +218,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EscotistaIndexRouteImport
       parentRoute: typeof EscotistaRouteRoute
     }
+    '/escotista/timeline': {
+      id: '/escotista/timeline'
+      path: '/timeline'
+      fullPath: '/escotista/timeline'
+      preLoaderRoute: typeof EscotistaTimelineRouteImport
+      parentRoute: typeof EscotistaRouteRoute
+    }
     '/escotista/pending': {
       id: '/escotista/pending'
       path: '/pending'
@@ -233,6 +252,7 @@ declare module '@tanstack/react-router' {
 interface EscotistaRouteRouteChildren {
   EscotistaAdminRoute: typeof EscotistaAdminRoute
   EscotistaPendingRoute: typeof EscotistaPendingRoute
+  EscotistaTimelineRoute: typeof EscotistaTimelineRoute
   EscotistaIndexRoute: typeof EscotistaIndexRoute
   EscotistaEscoteiroEscoteiroIdRoute: typeof EscotistaEscoteiroEscoteiroIdRoute
 }
@@ -240,6 +260,7 @@ interface EscotistaRouteRouteChildren {
 const EscotistaRouteRouteChildren: EscotistaRouteRouteChildren = {
   EscotistaAdminRoute: EscotistaAdminRoute,
   EscotistaPendingRoute: EscotistaPendingRoute,
+  EscotistaTimelineRoute: EscotistaTimelineRoute,
   EscotistaIndexRoute: EscotistaIndexRoute,
   EscotistaEscoteiroEscoteiroIdRoute: EscotistaEscoteiroEscoteiroIdRoute,
 }

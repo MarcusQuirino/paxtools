@@ -13,7 +13,13 @@ import { useAuthGate } from "@/hooks/use-auth-gate";
 import { AuthButton } from "@/components/auth/auth-button";
 import { Footer } from "@/components/footer";
 import { PendingApprovalScreen } from "@/components/escotista/pending-approval-screen";
-import { LayoutDashboard, Clock, ArrowLeft, Shield } from "lucide-react";
+import {
+  LayoutDashboard,
+  Clock,
+  ArrowLeft,
+  Shield,
+  ScrollText,
+} from "lucide-react";
 
 export const Route = createFileRoute("/escotista")({
   component: EscotistaLayout,
@@ -72,6 +78,11 @@ function EscotistaLayout() {
           <nav className="flex gap-1 rounded-md border-2 border-black bg-muted p-1">
             <NavTab to="/escotista" icon={LayoutDashboard} label="Painel" />
             <NavTab to="/escotista/pending" icon={Clock} label="Pendentes" />
+            <NavTab
+              to="/escotista/timeline"
+              icon={ScrollText}
+              label="Histórico"
+            />
             {myGroup?.isAdmin && (
               <NavTab to="/escotista/admin" icon={Shield} label="Admin" />
             )}

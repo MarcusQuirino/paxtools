@@ -122,4 +122,40 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_userId_and_itemKey", ["userId", "itemKey"])
     .index("by_userId_and_position", ["userId", "position"]),
+
+  // Audit timeline. Every row is one thing that happened in a group. Two scopes:
+  //   - "ramo": about an escoteiro's progression (approval/rejection/levelUp/
+  //     lisDeOuro). Carries `subjectRamo` so non-admin escotistas see only their
+  //     ramos. Visible to any escotista whose ramos include subjectRamo.
+  //   - "group": membership/admin actions (memberJoin/memberBan/ramoChange/
+  //     accessChange). `subjectRamo` is absent; visible to admins only.
+  // Names are denormalized for cheap rendering; `summary` is server-rendered at
+  // write time so the audit line stays accurate even if labels change later.
+  events: defineTable({
+    type: v.union(
+      v.literal("approval"),
+      v.literal("rejection"),
+      v.literal("levelUp"),
+      v.literal("lisDeOuro"),
+      v.literal("memberJoin"),
+      v.literal("memberBan"),
+      v.literal("ramoChange"),
+      v.literal("accessChange"),
+    ),
+    scope: v.union(v.literal("ramo"), v.literal("group")),
+    groupId: v.id("groups"),
+    subjectRamo: v.optional(ramoValidator),
+    actorUserId: v.id("users"),
+    actorName: v.optional(v.string()),
+    subjectUserId: v.id("users"),
+    subjectName: v.optional(v.string()),
+    summary: v.optional(v.string()),
+    stageId: v.optional(v.string()),
+    stageName: v.optional(v.string()),
+  })
+    // [groupId, _creationTime] — admin feed + MVP per-page visibility filter.
+    .index("by_group", ["groupId"])
+    // [groupId, subjectRamo, _creationTime] — per-ramo streams (kept so a future
+    // strict merged-stream pagination needs no migration).
+    .index("by_group_and_ramo", ["groupId", "subjectRamo"]),
 });

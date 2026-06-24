@@ -13,6 +13,7 @@ import { EixoSection } from "@/components/progression/eixo-section";
 import { LisDeOuroSection } from "@/components/progression/lis-de-ouro-section";
 import { PlanNav } from "@/components/progression/plan-nav";
 import { Footer } from "@/components/footer";
+import { notifyLevelUps } from "@/lib/level-up-toast";
 import type { Eixo } from "@/data/types";
 
 export const Route = createFileRoute("/")({
@@ -90,18 +91,25 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
   const lockApproved = !targetUserId;
 
   const toggleActionFn = useConvexMutation(api.progression.toggleAction);
-  const { mutate: toggleAction } = useMutation({ mutationFn: toggleActionFn });
+  const { mutate: toggleAction } = useMutation({
+    mutationFn: toggleActionFn,
+    onSuccess: notifyLevelUps,
+  });
 
   const toggleSpecialtyFn = useConvexMutation(api.progression.toggleSpecialty);
   const { mutate: toggleSpecialty } = useMutation({
     mutationFn: toggleSpecialtyFn,
+    onSuccess: notifyLevelUps,
   });
 
   const addCustomFn = useConvexMutation(api.progression.addCustomAction);
   const { mutate: addCustom } = useMutation({ mutationFn: addCustomFn });
 
   const toggleCustomFn = useConvexMutation(api.progression.toggleCustomAction);
-  const { mutate: toggleCustom } = useMutation({ mutationFn: toggleCustomFn });
+  const { mutate: toggleCustom } = useMutation({
+    mutationFn: toggleCustomFn,
+    onSuccess: notifyLevelUps,
+  });
 
   const deleteCustomFn = useConvexMutation(api.progression.deleteCustomAction);
   const { mutate: deleteCustom } = useMutation({ mutationFn: deleteCustomFn });
@@ -111,6 +119,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
   );
   const { mutate: toggleLisItem } = useMutation({
     mutationFn: toggleLisItemFn,
+    onSuccess: notifyLevelUps,
   });
 
   const handleToggleAction = (actionId: string) => {
