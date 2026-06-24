@@ -29,7 +29,8 @@ test("admin sees pending escotista in Solicitações pendentes", async ({
   ).toBeVisible({ timeout: 10_000 });
 });
 
-test("admin sees Admin tab in escotista nav", async ({ page }) => {
+test("admin sees Admin destination in the Mais sheet", async ({ page }) => {
   await page.goto("/escotista");
+  await page.getByRole("button", { name: "Mais" }).click();
   await expect(page.getByRole("link", { name: "Admin" })).toBeVisible();
 });
