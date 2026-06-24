@@ -7,6 +7,8 @@ import { useAuthGate } from "@/hooks/use-auth-gate";
 import { CoverageBars } from "@/components/escotista/stats/coverage-bars";
 import { StageDistribution } from "@/components/escotista/stats/stage-distribution";
 import { MostDone } from "@/components/escotista/stats/most-done";
+import { GapList } from "@/components/escotista/stats/gap-list";
+import { Acompanhamento } from "@/components/escotista/stats/acompanhamento";
 
 type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
 const RAMO_LABELS: Record<Ramo, string> = {
@@ -111,6 +113,9 @@ function StatsBody({ ramo }: { ramo: Ramo }) {
   const { data: scouts } = useSuspenseQuery(
     convexQuery(api.stats.getRamoScouts, { ramo }),
   );
+  const [eixoFilter, setEixoFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "fixed" | "variable">("all");
+
   if (coverage.scoutCount === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground" data-testid="stats-empty">
@@ -118,12 +123,66 @@ function StatsBody({ ramo }: { ramo: Ramo }) {
       </p>
     );
   }
-  void scouts; // consumed by Task 10
+
+  const chipClass = (active: boolean) =>
+    `rounded-md px-2 py-1.5 text-sm font-bold transition-all ${
+      active
+        ? "border-2 border-black bg-primary text-white shadow-[2px_2px_0px_0px_#000]"
+        : "text-muted-foreground hover:bg-white/50"
+    }`;
+
   return (
     <div className="space-y-6" data-testid="stats-sections">
       <CoverageBars eixos={coverage.eixos} />
       <StageDistribution distribution={coverage.stageDistribution} scoutCount={coverage.scoutCount} />
       <MostDone activities={coverage.mostDone} scoutCount={coverage.scoutCount} />
+      <div className="space-y-2" data-testid="stats-filters">
+        <div className="flex flex-wrap gap-1 rounded-md border-2 border-black bg-muted p-1">
+          <button
+            type="button"
+            onClick={() => setEixoFilter("all")}
+            className={chipClass(eixoFilter === "all")}
+          >
+            Todas as áreas
+          </button>
+          {coverage.eixos.map((e) => (
+            <button
+              key={e.eixoId}
+              type="button"
+              onClick={() => setEixoFilter(e.eixoId)}
+              className={chipClass(eixoFilter === e.eixoId)}
+            >
+              {e.eixoName}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1 rounded-md border-2 border-black bg-muted p-1">
+          {(
+            [
+              ["all", "Todas"],
+              ["fixed", "Fixas"],
+              ["variable", "Variáveis"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTypeFilter(value)}
+              className={chipClass(typeFilter === value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <GapList
+        topGapsFixed={coverage.topGapsFixed}
+        neglectedVariable={coverage.neglectedVariable}
+        scoutCount={coverage.scoutCount}
+        eixoFilter={eixoFilter}
+        typeFilter={typeFilter}
+      />
+      <Acompanhamento scouts={scouts} />
     </div>
   );
 }
