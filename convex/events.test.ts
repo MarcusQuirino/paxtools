@@ -474,6 +474,71 @@ describe("listTimeline visibility", () => {
     expect(res.page).toEqual([]);
   });
 
+  // With a mix of matching, other-ramo, and group-level events, a non-admin
+  // sees ONLY their-ramo events. (Real Convex can under-fill filtered pages
+  // mid-stream — the UI auto-advances through empty pages; convex-test reads
+  // ahead and fills, so that path is covered by reasoning + the e2e, not here.)
+  test("non-admin scoping holds amid a mix of other-ramo and group events", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+    const escId = await seedEscoteiro(t, groupId, "escoteiro");
+    const leadId = await t.run(async (ctx) =>
+      ctx.db.insert("users", {
+        name: "Lead",
+        role: "escotista",
+        escotistaRamos: ["escoteiro"],
+        groupId,
+        membershipStatus: "approved",
+        isAdmin: false,
+      }),
+    );
+
+    // Oldest → newest: 2 matching (escoteiro), then 3 non-matching. Newest-first
+    // ordering means the first window (numItems 2) is entirely non-matching.
+    await t.run(async (ctx) => {
+      for (const s of ["match-a", "match-b"]) {
+        await ctx.db.insert("events", {
+          type: "approval",
+          scope: "ramo",
+          groupId,
+          subjectRamo: "escoteiro",
+          actorUserId: adminId,
+          subjectUserId: escId,
+          summary: s,
+        });
+      }
+      for (const s of ["other-1", "other-2"]) {
+        await ctx.db.insert("events", {
+          type: "approval",
+          scope: "ramo",
+          groupId,
+          subjectRamo: "pioneiro",
+          actorUserId: adminId,
+          subjectUserId: escId,
+          summary: s,
+        });
+      }
+      await ctx.db.insert("events", {
+        type: "memberBan",
+        scope: "group",
+        groupId,
+        actorUserId: adminId,
+        subjectUserId: escId,
+        summary: "grp",
+      });
+    });
+
+    const res = await as(t, leadId).query(api.events.listTimeline, {
+      paginationOpts: { numItems: 50, cursor: null },
+    });
+    const seen = res.page
+      .map((e) => e.summary)
+      .filter((s): s is string => !!s)
+      .sort();
+    // Only the two escoteiro-ramo events surface — never other-ramo or group.
+    expect(seen).toEqual(["match-a", "match-b"]);
+  });
+
   test("paginates", async () => {
     const t = convexTest(schema, modules);
     const { adminId, groupId } = await seedGroup(t);

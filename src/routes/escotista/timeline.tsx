@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { usePaginatedQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
@@ -66,7 +67,25 @@ function TimelinePage() {
     { initialNumItems: 25 },
   );
 
-  if (!ready || status === "LoadingFirstPage") {
+  // The backend filters each page AFTER reading numItems from the index, so a
+  // ramo-scoped non-admin can get an empty first page while matching events
+  // still sit on later pages. Keep advancing until something shows or the feed
+  // is genuinely exhausted — otherwise the viewer is stranded on a false empty
+  // state.
+  useEffect(() => {
+    if (results.length === 0 && status === "CanLoadMore") {
+      loadMore(25);
+    }
+  }, [results.length, status, loadMore]);
+
+  const loadingInitial = !ready || status === "LoadingFirstPage";
+  // While we're still chasing empty filtered pages, show the skeleton, not the
+  // empty state.
+  const chasingPages =
+    results.length === 0 &&
+    (status === "CanLoadMore" || status === "LoadingMore");
+
+  if (loadingInitial || chasingPages) {
     return (
       <div className="space-y-2">
         {Array.from({ length: 5 }).map((_, i) => (
