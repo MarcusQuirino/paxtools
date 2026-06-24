@@ -21,7 +21,7 @@ export function StageDistribution({
       <div className="grid grid-cols-4 gap-2">
         {STAGE_ORDER.map((s) => {
           const count = distribution[s.id] ?? 0;
-          const pct = scoutCount === 0 ? 0 : Math.round((count / scoutCount) * 100);
+          const pct = scoutCount === 0 ? 0 : Math.min(100, Math.round((count / scoutCount) * 100));
           return (
             <div
               key={s.id}

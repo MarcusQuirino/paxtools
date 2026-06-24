@@ -36,7 +36,12 @@ export function MostDone({
               <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full rounded-full bg-primary"
-                  style={{ width: `${pct}%` }}
+                  style={{ width: `${Math.min(100, pct)}%` }}
+                  role="meter"
+                  aria-valuenow={Math.min(100, pct)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={`${a.text}: ${a.completedCount}/${scoutCount}`}
                 />
               </div>
             </li>
