@@ -8,11 +8,13 @@
  * @module
  */
 
+import type * as aiHelpers from "../aiHelpers.js";
 import type * as approvals from "../approvals.js";
 import type * as auth from "../auth.js";
 import type * as events from "../events.js";
 import type * as groups from "../groups.js";
 import type * as http from "../http.js";
+import type * as lib_aiPrompt from "../lib/aiPrompt.js";
 import type * as lib_authHelpers from "../lib/authHelpers.js";
 import type * as lib_coverage from "../lib/coverage.js";
 import type * as lib_events from "../lib/events.js";
@@ -32,11 +34,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  aiHelpers: typeof aiHelpers;
   approvals: typeof approvals;
   auth: typeof auth;
   events: typeof events;
   groups: typeof groups;
   http: typeof http;
+  "lib/aiPrompt": typeof lib_aiPrompt;
   "lib/authHelpers": typeof lib_authHelpers;
   "lib/coverage": typeof lib_coverage;
   "lib/events": typeof lib_events;
