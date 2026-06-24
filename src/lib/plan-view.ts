@@ -1,4 +1,4 @@
-import type { Bloco, CustomAction, Eixo } from "@/data/types";
+import type { Bloco, CustomAction, Eixo } from "../data/types";
 import type { Doc } from "../../convex/_generated/dataModel";
 import { decodePlanKey } from "./plan-keys";
 
