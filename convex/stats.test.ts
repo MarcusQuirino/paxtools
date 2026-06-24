@@ -80,7 +80,7 @@ describe("getRamoCoverage authz (Task 3)", () => {
     const { escotistaId } = await seed(t);
     await expect(
       as(t, escotistaId).query(api.stats.getRamoCoverage, { ramo: "senior" }),
-    ).rejects.toThrow("ramo");
+    ).rejects.toThrow("Você não acompanha esse ramo");
   });
 
   test("admin may read any ramo", async () => {
@@ -106,5 +106,56 @@ describe("getRamoCoverage authz (Task 3)", () => {
     await expect(
       as(t, scout).query(api.stats.getRamoCoverage, { ramo: "escoteiro" }),
     ).rejects.toThrow();
+  });
+
+  test("escotista only sees their own group's scouts (group isolation)", async () => {
+    const t = convexTest(schema, modules);
+    // group1 has 1 escoteiro in "escoteiro" (seeded by seed())
+    const { escotistaId } = await seed(t);
+
+    // Build a second group with 2 escoteiros in "escoteiro" — same field shape as seed().
+    const admin2Id: Id<"users"> = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Admin2", role: "escotista", escotistaRamos: ["escoteiro"],
+        onboardingComplete: true,
+      }),
+    );
+    const group2Id: Id<"groups"> = await t.run((ctx) =>
+      ctx.db.insert("groups", {
+        name: "G2", number: "2", password: "BBBBBB",
+        createdBy: admin2Id, createdAt: 2, ramoNames: {},
+      }),
+    );
+    await t.run((ctx) =>
+      ctx.db.patch(admin2Id, { groupId: group2Id, membershipStatus: "approved" }),
+    );
+    // escotista2 — non-admin, scoped to "escoteiro", member of group2
+    const escotista2Id: Id<"users"> = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Esc2", role: "escotista", escotistaRamos: ["escoteiro"],
+        groupId: group2Id, membershipStatus: "approved", onboardingComplete: true,
+      }),
+    );
+    // 2 escoteiros in group2 — mirrors seed() scout shape exactly
+    for (const name of ["S2a", "S2b"]) {
+      await t.run((ctx) =>
+        ctx.db.insert("users", {
+          name, role: "escoteiro", ramo: "escoteiro", groupId: group2Id,
+          membershipStatus: "approved",
+        }),
+      );
+    }
+
+    // group1's escotista sees only group1's 1 scout, not group2's 2 scouts
+    const cov1 = await as(t, escotistaId).query(api.stats.getRamoCoverage, {
+      ramo: "escoteiro",
+    });
+    expect(cov1.scoutCount).toBe(1);
+
+    // group2's escotista sees only group2's 2 scouts (proves they ARE real + countable)
+    const cov2 = await as(t, escotista2Id).query(api.stats.getRamoCoverage, {
+      ramo: "escoteiro",
+    });
+    expect(cov2.scoutCount).toBe(2);
   });
 });
