@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internalQuery, internalMutation, query } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
@@ -73,7 +73,7 @@ export const prepareSuggestion = internalQuery({
       cachedAt !== null &&
       Date.now() - cachedAt < REGEN_COOLDOWN_MS
     ) {
-      throw new Error("Aguarde um momento antes de gerar novamente");
+      throw new ConvexError("Aguarde um momento antes de gerar novamente");
     }
     const coverage = await computeRamoCoverage(ctx, { groupId, ramo });
     return { groupId, ramo, coverage, cachedAt };

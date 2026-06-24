@@ -39,12 +39,20 @@ export const suggestActivities = action({
     // Defence-in-depth: the coverage type carries no names, but assert anyway.
     assertNoPII(`${system}\n${prompt}`, []);
 
-    const { object } = await generateObject({
-      model: anthropic("claude-sonnet-4-6"),
-      schema: suggestionSchema,
-      system,
-      prompt,
-    });
+    let object: SuggestionResult;
+    try {
+      ({ object } = await generateObject({
+        model: anthropic("claude-sonnet-4-6"),
+        schema: suggestionSchema,
+        system,
+        prompt,
+      }));
+    } catch (err) {
+      console.error("AI generateObject failed:", err);
+      throw new ConvexError(
+        "Não foi possível gerar sugestões agora. Verifique a chave da IA no deployment ou tente novamente.",
+      );
+    }
 
     await ctx.runMutation(internal.aiHelpers.saveSuggestion, {
       groupId,
