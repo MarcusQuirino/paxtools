@@ -4,6 +4,9 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { api } from "../../../convex/_generated/api";
 import { useAuthGate } from "@/hooks/use-auth-gate";
+import { CoverageBars } from "@/components/escotista/stats/coverage-bars";
+import { StageDistribution } from "@/components/escotista/stats/stage-distribution";
+import { MostDone } from "@/components/escotista/stats/most-done";
 
 type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
 const RAMO_LABELS: Record<Ramo, string> = {
@@ -115,10 +118,12 @@ function StatsBody({ ramo }: { ramo: Ramo }) {
       </p>
     );
   }
-  // Sections are wired in Tasks 6-10. Placeholder until then.
+  void scouts; // consumed by Task 10
   return (
     <div className="space-y-6" data-testid="stats-sections">
-      <pre className="hidden">{JSON.stringify({ coverage, scouts })}</pre>
+      <CoverageBars eixos={coverage.eixos} />
+      <StageDistribution distribution={coverage.stageDistribution} scoutCount={coverage.scoutCount} />
+      <MostDone activities={coverage.mostDone} scoutCount={coverage.scoutCount} />
     </div>
   );
 }
