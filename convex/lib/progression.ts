@@ -1,4 +1,4 @@
-import type { MutationCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import {
   getCompletedBlockIds,
@@ -20,6 +20,7 @@ export type ProgressionSnapshot = {
   stageId: string;
   stageName: string;
   lisDeOuro: boolean;
+  completedBlockCount: number;
 };
 
 /**
@@ -29,7 +30,7 @@ export type ProgressionSnapshot = {
  * stage and needs no detection.
  */
 export async function snapshotProgression(
-  ctx: MutationCtx,
+  ctx: QueryCtx | MutationCtx,
   userId: Id<"users">,
 ): Promise<ProgressionSnapshot> {
   const user = await ctx.db.get(userId);
@@ -81,7 +82,13 @@ export async function snapshotProgression(
   );
   const lisDeOuro = isLisDeOuroComplete(completedBlockCount, approvedLisItemIds);
 
-  return { stageIndex, stageId: stage.id, stageName: stage.name, lisDeOuro };
+  return {
+    stageIndex,
+    stageId: stage.id,
+    stageName: stage.name,
+    lisDeOuro,
+    completedBlockCount,
+  };
 }
 
 export type LevelUp =

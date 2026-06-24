@@ -89,6 +89,7 @@ describe("diffProgression", () => {
     stageId: "x",
     stageName: "x",
     lisDeOuro,
+    completedBlockCount: 0,
   });
 
   test("no crossing → no level-ups", () => {
