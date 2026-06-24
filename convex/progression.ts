@@ -5,7 +5,18 @@ import {
   getAuthenticatedUser,
   assertEscotistaInSameGroup,
 } from "./lib/authHelpers";
-import type { Id } from "./_generated/dataModel";
+import {
+  snapshotProgression,
+  detectLevelUps,
+  type LevelUpToast,
+  type ProgressionSnapshot,
+} from "./lib/progression";
+import {
+  logRamoEvent,
+  describeCompletion,
+  type CompletionKind,
+} from "./lib/events";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
 const ACTION_ID_PATTERN = /^(lobinho|escoteiro|senior|pioneiro):[a-z0-9-]+:(fixed|variable):\d+$/;
@@ -29,6 +40,7 @@ async function resolveTargetAndStatus(
   status: CompletionStatus;
   approvedBy?: Id<"users">;
   callerIsEscotista: boolean;
+  caller: Doc<"users">;
 }> {
   const caller = await getAuthenticatedUser(ctx);
 
@@ -39,6 +51,7 @@ async function resolveTargetAndStatus(
       status: "approved",
       approvedBy: caller._id,
       callerIsEscotista: true,
+      caller,
     };
   }
 
@@ -47,6 +60,7 @@ async function resolveTargetAndStatus(
       effectiveUserId: caller._id,
       status: "approved",
       callerIsEscotista: true,
+      caller,
     };
   }
 
@@ -54,7 +68,38 @@ async function resolveTargetAndStatus(
     effectiveUserId: caller._id,
     status: "pending",
     callerIsEscotista: false,
+    caller,
   };
+}
+
+/**
+ * Finish an escotista-driven mark that resulted in a new approval: log the
+ * approval event and detect level-ups. Only fires when an escotista acted on an
+ * escoteiro's items (`targetUserId` set) AND an approval actually landed —
+ * self-marks and un-marks return no toasts. `before` is the pre-write snapshot.
+ */
+async function finishApproval(
+  ctx: MutationCtx,
+  opts: {
+    targetUserId: Id<"users"> | undefined;
+    caller: Doc<"users">;
+    subjectId: Id<"users">;
+    before: ProgressionSnapshot | null;
+    approved: boolean;
+    kind: CompletionKind;
+    ref: { actionId?: string; specialtyName?: string; itemId?: string; text?: string };
+  },
+): Promise<LevelUpToast[]> {
+  if (!opts.targetUserId || !opts.approved || !opts.before) return [];
+  const subject = await ctx.db.get(opts.subjectId);
+  if (!subject) return [];
+  await logRamoEvent(ctx, {
+    type: "approval",
+    actor: opts.caller,
+    subject,
+    summary: `Aprovou: ${describeCompletion(subject.ramo, opts.kind, opts.ref)}`,
+  });
+  return detectLevelUps(ctx, opts.caller, subject, opts.before);
 }
 
 function assertCanRemoveApproved(
@@ -158,8 +203,8 @@ export const toggleAction = mutation({
     actionId: v.string(),
     targetUserId: v.optional(v.id("users")),
   },
-  handler: async (ctx, args) => {
-    const { effectiveUserId, status, approvedBy, callerIsEscotista } =
+  handler: async (ctx, args): Promise<LevelUpToast[]> => {
+    const { effectiveUserId, status, approvedBy, callerIsEscotista, caller } =
       await resolveTargetAndStatus(ctx, args.targetUserId);
 
     if (!ACTION_ID_PATTERN.test(args.actionId))
@@ -172,6 +217,11 @@ export const toggleAction = mutation({
       )
       .unique();
 
+    const before = args.targetUserId
+      ? await snapshotProgression(ctx, effectiveUserId)
+      : null;
+    let approved = false;
+
     if (existing) {
       if (existing.status === "pending" && status === "approved") {
         // Escotista clicking a pending item → approve it
@@ -180,6 +230,7 @@ export const toggleAction = mutation({
           approvedBy,
           approvedAt: Date.now(),
         });
+        approved = true;
       } else {
         assertCanRemoveApproved(existing.status, callerIsEscotista);
         await ctx.db.delete(existing._id);
@@ -193,7 +244,18 @@ export const toggleAction = mutation({
         approvedBy,
         approvedAt: approvedBy ? Date.now() : undefined,
       });
+      if (status === "approved") approved = true;
     }
+
+    return finishApproval(ctx, {
+      targetUserId: args.targetUserId,
+      caller,
+      subjectId: effectiveUserId,
+      before,
+      approved,
+      kind: "action",
+      ref: { actionId: args.actionId },
+    });
   },
 });
 
@@ -203,8 +265,8 @@ export const toggleSpecialty = mutation({
     specialtyName: v.string(),
     targetUserId: v.optional(v.id("users")),
   },
-  handler: async (ctx, args) => {
-    const { effectiveUserId, status, approvedBy, callerIsEscotista } =
+  handler: async (ctx, args): Promise<LevelUpToast[]> => {
+    const { effectiveUserId, status, approvedBy, callerIsEscotista, caller } =
       await resolveTargetAndStatus(ctx, args.targetUserId);
 
     if (!BLOCO_ID_PATTERN.test(args.blocoId))
@@ -222,6 +284,11 @@ export const toggleSpecialty = mutation({
       )
       .unique();
 
+    const before = args.targetUserId
+      ? await snapshotProgression(ctx, effectiveUserId)
+      : null;
+    let approved = false;
+
     if (existing) {
       if (existing.status === "pending" && status === "approved") {
         await ctx.db.patch(existing._id, {
@@ -229,6 +296,7 @@ export const toggleSpecialty = mutation({
           approvedBy,
           approvedAt: Date.now(),
         });
+        approved = true;
       } else {
         assertCanRemoveApproved(existing.status, callerIsEscotista);
         await ctx.db.delete(existing._id);
@@ -243,7 +311,18 @@ export const toggleSpecialty = mutation({
         approvedBy,
         approvedAt: approvedBy ? Date.now() : undefined,
       });
+      if (status === "approved") approved = true;
     }
+
+    return finishApproval(ctx, {
+      targetUserId: args.targetUserId,
+      caller,
+      subjectId: effectiveUserId,
+      before,
+      approved,
+      kind: "specialty",
+      ref: { specialtyName: args.specialtyName },
+    });
   },
 });
 
@@ -290,13 +369,18 @@ export const toggleCustomAction = mutation({
     customActionId: v.id("customActions"),
     targetUserId: v.optional(v.id("users")),
   },
-  handler: async (ctx, args) => {
-    const { effectiveUserId, status, approvedBy, callerIsEscotista } =
+  handler: async (ctx, args): Promise<LevelUpToast[]> => {
+    const { effectiveUserId, status, approvedBy, callerIsEscotista, caller } =
       await resolveTargetAndStatus(ctx, args.targetUserId);
 
     const doc = await ctx.db.get(args.customActionId);
     if (!doc || doc.userId !== effectiveUserId)
       throw new Error("Não encontrado");
+
+    const before = args.targetUserId
+      ? await snapshotProgression(ctx, effectiveUserId)
+      : null;
+    let approved = false;
 
     if (doc.completed && doc.status === "pending" && status === "approved") {
       // Escotista clicking a pending custom action → approve it
@@ -305,6 +389,7 @@ export const toggleCustomAction = mutation({
         approvedBy,
         approvedAt: Date.now(),
       });
+      approved = true;
     } else {
       // Unchecking a completed custom action requires approval lock check.
       if (doc.completed) {
@@ -316,7 +401,18 @@ export const toggleCustomAction = mutation({
         approvedBy: !doc.completed ? approvedBy : undefined,
         approvedAt: !doc.completed && approvedBy ? Date.now() : undefined,
       });
+      if (!doc.completed && status === "approved") approved = true;
     }
+
+    return finishApproval(ctx, {
+      targetUserId: args.targetUserId,
+      caller,
+      subjectId: effectiveUserId,
+      before,
+      approved,
+      kind: "custom",
+      ref: { text: doc.text },
+    });
   },
 });
 
@@ -346,8 +442,8 @@ export const toggleLisDeOuroItem = mutation({
     itemId: v.string(),
     targetUserId: v.optional(v.id("users")),
   },
-  handler: async (ctx, args) => {
-    const { effectiveUserId, status, approvedBy, callerIsEscotista } =
+  handler: async (ctx, args): Promise<LevelUpToast[]> => {
+    const { effectiveUserId, status, approvedBy, callerIsEscotista, caller } =
       await resolveTargetAndStatus(ctx, args.targetUserId);
 
     if (!VALID_LIS_ITEM_IDS.has(args.itemId))
@@ -360,6 +456,11 @@ export const toggleLisDeOuroItem = mutation({
       )
       .unique();
 
+    const before = args.targetUserId
+      ? await snapshotProgression(ctx, effectiveUserId)
+      : null;
+    let approved = false;
+
     if (existing) {
       if (existing.status === "pending" && status === "approved") {
         await ctx.db.patch(existing._id, {
@@ -367,6 +468,7 @@ export const toggleLisDeOuroItem = mutation({
           approvedBy,
           approvedAt: Date.now(),
         });
+        approved = true;
       } else {
         assertCanRemoveApproved(existing.status, callerIsEscotista);
         await ctx.db.delete(existing._id);
@@ -380,6 +482,17 @@ export const toggleLisDeOuroItem = mutation({
         approvedBy,
         approvedAt: approvedBy ? Date.now() : undefined,
       });
+      if (status === "approved") approved = true;
     }
+
+    return finishApproval(ctx, {
+      targetUserId: args.targetUserId,
+      caller,
+      subjectId: effectiveUserId,
+      before,
+      approved,
+      kind: "lis",
+      ref: { itemId: args.itemId },
+    });
   },
 });

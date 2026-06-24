@@ -1,10 +1,10 @@
-import type { Bloco, Eixo } from "@/data/types";
+import type { Bloco, Eixo } from "../data/types";
 import {
   STAGES,
   LIS_DE_OURO_BLOCKS,
   LIS_DE_OURO_ITEMS,
   type Stage,
-} from "@/data/progression-rules";
+} from "../data/progression-rules";
 
 export type BlocoProgress = {
   fixedDone: number;

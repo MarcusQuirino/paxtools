@@ -7,6 +7,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import { Toaster } from "@/components/ui/sonner";
 import "../../styles/globals.css";
 
 class ErrorBoundary extends Component<
@@ -95,6 +96,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
         <ErrorBoundary>
           {children}
         </ErrorBoundary>
+        <Toaster />
         <Scripts />
       </body>
     </html>

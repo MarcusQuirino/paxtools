@@ -8,6 +8,7 @@ import {
   assertAdmin,
   maybeBackfillUser,
 } from "./lib/authHelpers";
+import { logGroupEvent } from "./lib/events";
 import { ramoValidator } from "./schema";
 
 /**
@@ -340,11 +341,18 @@ export const getPendingMemberships = query({
 export const approveMembership = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    const { target } = await loadGroupMember(ctx, args.userId);
+    const { admin, target } = await loadGroupMember(ctx, args.userId);
     if (target.membershipStatus !== "pending") {
       throw new Error("Usuário não está pendente");
     }
     await ctx.db.patch(target._id, { membershipStatus: "approved" });
+    await logGroupEvent(ctx, {
+      type: "memberJoin",
+      actor: admin,
+      subject: target,
+      groupId: admin.groupId!,
+      summary: "Entrou no grupo",
+    });
   },
 });
 
@@ -394,6 +402,13 @@ export const banMember = mutation({
       bannedAt: Date.now(),
       bannedBy: admin._id,
     });
+    await logGroupEvent(ctx, {
+      type: "memberBan",
+      actor: admin,
+      subject: target,
+      groupId: admin.groupId!,
+      summary: "Foi removido do grupo",
+    });
   },
 });
 
@@ -417,6 +432,14 @@ export const changeMemberRole = mutation({
       patch.ramo = undefined;
     }
     await ctx.db.patch(target._id, patch);
+    await logGroupEvent(ctx, {
+      type: "accessChange",
+      actor: admin,
+      subject: target,
+      groupId: admin.groupId!,
+      summary:
+        args.role === "escotista" ? "Tornou-se escotista" : "Tornou-se escoteiro",
+    });
   },
 });
 
@@ -445,30 +468,63 @@ export const setMemberAdmin = mutation({
       }
     }
     await ctx.db.patch(target._id, { isAdmin: args.isAdmin });
+    await logGroupEvent(ctx, {
+      type: "accessChange",
+      actor: admin,
+      subject: target,
+      groupId: admin.groupId!,
+      summary: args.isAdmin
+        ? "Promovido a administrador"
+        : "Removido de administrador",
+    });
   },
 });
 
 export const setMemberRamos = mutation({
   args: { userId: v.id("users"), ramos: v.array(ramoValidator) },
   handler: async (ctx, args) => {
-    const { target } = await loadGroupMember(ctx, args.userId);
+    const { admin, target } = await loadGroupMember(ctx, args.userId);
     if (target.role !== "escotista") {
       throw new Error("Apenas escotistas têm múltiplos ramos");
     }
     const dedup = Array.from(new Set(args.ramos));
     if (dedup.length === 0) throw new Error("Selecione pelo menos um ramo");
+    // Skip no-op saves so the audit timeline isn't littered with phantom changes.
+    const sortedNew = [...dedup].sort();
+    const sortedCur = [...(target.escotistaRamos ?? [])].sort();
+    if (
+      sortedCur.length === sortedNew.length &&
+      sortedCur.every((r, i) => r === sortedNew[i])
+    ) {
+      return;
+    }
     await ctx.db.patch(target._id, { escotistaRamos: dedup });
+    await logGroupEvent(ctx, {
+      type: "ramoChange",
+      actor: admin,
+      subject: target,
+      groupId: admin.groupId!,
+      summary: `Ramos atualizados: ${dedup.join(", ")}`,
+    });
   },
 });
 
 export const setMemberRamo = mutation({
   args: { userId: v.id("users"), ramo: ramoValidator },
   handler: async (ctx, args) => {
-    const { target } = await loadGroupMember(ctx, args.userId);
+    const { admin, target } = await loadGroupMember(ctx, args.userId);
     if (target.role !== "escoteiro") {
       throw new Error("Apenas escoteiros têm um ramo único");
     }
+    if (target.ramo === args.ramo) return; // no-op: don't log a phantom change
     await ctx.db.patch(target._id, { ramo: args.ramo });
+    await logGroupEvent(ctx, {
+      type: "ramoChange",
+      actor: admin,
+      subject: target,
+      groupId: admin.groupId!,
+      summary: `Ramo alterado para ${args.ramo}`,
+    });
   },
 });
 
