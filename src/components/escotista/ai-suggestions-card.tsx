@@ -3,6 +3,7 @@ import { useAction } from "convex/react";
 import { convexQuery } from "@convex-dev/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { ConvexError } from "convex/values";
 import { Sparkles, RefreshCw } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,12 @@ export function AiSuggestionsCard({ ramo }: { ramo?: Ramo }) {
     try {
       await suggest({ ramo });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Falha ao gerar sugestões";
+      const msg =
+        err instanceof ConvexError && typeof err.data === "string"
+          ? err.data
+          : err instanceof Error
+            ? err.message
+            : "Falha ao gerar sugestões";
       toast.error(msg);
     } finally {
       setLoading(false);
