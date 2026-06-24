@@ -2,6 +2,7 @@ import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthenticatedUser } from "./lib/authHelpers";
 import { computeRamoCoverage, type Ramo } from "./lib/coverage";
+import { snapshotProgression } from "./lib/progression";
 import type { QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
@@ -46,5 +47,50 @@ export const getRamoCoverage = query({
   handler: async (ctx, args) => {
     const { groupId, ramo } = await resolveScopedRamo(ctx, args.ramo);
     return computeRamoCoverage(ctx, { groupId, ramo });
+  },
+});
+
+export type ScoutRow = {
+  _id: Id<"users">;
+  name: string | null;
+  stageId: string;
+  stageName: string;
+  completedBlockCount: number;
+  joinedAt: number; // user account _creationTime (approximation of group-join)
+};
+
+export const getRamoScouts = query({
+  args: { ramo: ramoArg },
+  handler: async (ctx, args) => {
+    const { groupId, ramo } = await resolveScopedRamo(ctx, args.ramo);
+    const members = await ctx.db
+      .query("users")
+      .withIndex("by_groupId", (q) => q.eq("groupId", groupId))
+      .take(500);
+    const scouts = members.filter(
+      (m) =>
+        m.role === "escoteiro" &&
+        !m.bannedAt &&
+        (m.membershipStatus ?? "approved") === "approved" &&
+        m.ramo === ramo,
+    );
+    const rows: ScoutRow[] = [];
+    for (const s of scouts) {
+      const snap = await snapshotProgression(ctx, s._id);
+      rows.push({
+        _id: s._id,
+        name: s.name ?? null,
+        stageId: snap.stageId,
+        stageName: snap.stageName,
+        completedBlockCount: snap.completedBlockCount,
+        joinedAt: s._creationTime,
+      });
+    }
+    rows.sort((a, b) =>
+      a.completedBlockCount !== b.completedBlockCount
+        ? a.completedBlockCount - b.completedBlockCount
+        : b.joinedAt - a.joinedAt,
+    );
+    return rows;
   },
 });

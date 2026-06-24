@@ -159,3 +159,44 @@ describe("getRamoCoverage authz (Task 3)", () => {
     expect(cov2.scoutCount).toBe(2);
   });
 });
+
+describe("getRamoScouts (Task 4)", () => {
+  test("returns the ramo's scouts with stage + block count + name + joinedAt", async () => {
+    const t = convexTest(schema, modules);
+    const { escotistaId, scout } = await seed(t);
+    const rows = await as(t, escotistaId).query(api.stats.getRamoScouts, {
+      ramo: "escoteiro",
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!._id).toBe(scout);
+    expect(rows[0]!.name).toBe("S");
+    expect(rows[0]!.stageId).toBe("pista");
+    expect(rows[0]!.completedBlockCount).toBe(0);
+    expect(typeof rows[0]!.joinedAt).toBe("number");
+  });
+
+  test("is rejected for a non-admin's out-of-scope ramo", async () => {
+    const t = convexTest(schema, modules);
+    const { escotistaId } = await seed(t);
+    await expect(
+      as(t, escotistaId).query(api.stats.getRamoScouts, { ramo: "senior" }),
+    ).rejects.toThrow("Você não acompanha esse ramo");
+  });
+
+  test("sorts ascending by completedBlockCount (who is behind first)", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seed(t);
+    // Add a second scout with NO completions (also 0 blocks).
+    await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Z", role: "escoteiro", ramo: "escoteiro", groupId,
+        membershipStatus: "approved",
+      }),
+    );
+    const rows = await as(t, adminId).query(api.stats.getRamoScouts, {
+      ramo: "escoteiro",
+    });
+    const counts = rows.map((r) => r.completedBlockCount);
+    expect([...counts].sort((a, b) => a - b)).toEqual(counts);
+  });
+});
