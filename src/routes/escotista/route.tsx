@@ -44,7 +44,6 @@ type NavItem =
 const NAV_ITEMS: NavItem[] = [
   { kind: "link", to: "/escotista", label: "Painel", icon: LayoutDashboard, exact: true },
   { kind: "link", to: "/escotista/pending", label: "Pendentes", icon: Clock },
-  // PLAN B INSERTION POINT
   { kind: "link", to: "/escotista/stats", label: "Stats", icon: BarChart3 },
   { kind: "sheet", label: "Mais", icon: MoreHorizontal },
 ];
