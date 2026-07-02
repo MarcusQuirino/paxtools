@@ -158,4 +158,36 @@ export default defineSchema({
     // [groupId, subjectRamo, _creationTime] — per-ramo streams (kept so a future
     // strict merged-stream pagination needs no migration).
     .index("by_group_and_ramo", ["groupId", "subjectRamo"]),
+
+  // Cached AI activity suggestions, one row per (group, ramo). Regenerated on
+  // demand from the stats page; the page shows the cached row otherwise. Only
+  // activity TEXTS + counts feed the model — never scout names/PII.
+  // Content fields are optional because a row may exist as a claim stub
+  // (requestedAt set, no content yet) while the LLM call is in flight — the
+  // claim is what makes the regen cooldown race-free across concurrent calls.
+  aiSuggestions: defineTable({
+    groupId: v.id("groups"),
+    ramo: ramoValidator,
+    perEixoIdeas: v.optional(
+      v.array(
+        v.object({
+          eixoId: v.string(),
+          eixoName: v.string(),
+          idea: v.string(),
+          groundedOn: v.array(v.string()),
+        }),
+      ),
+    ),
+    overview: v.optional(v.string()),
+    generatedAt: v.optional(v.number()),
+    requestedAt: v.optional(v.number()),
+  }).index("by_group_and_ramo", ["groupId", "ramo"]),
+
+  // Runtime feature flags, one row per key. Missing row = flag OFF. Toggle via
+  // dashboard (edit the row / run featureFlags:setFlag) or CLI:
+  //   bunx convex run featureFlags:setFlag '{"key":"ai_suggestions","enabled":true}'
+  featureFlags: defineTable({
+    key: v.string(),
+    enabled: v.boolean(),
+  }).index("by_key", ["key"]),
 });

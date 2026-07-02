@@ -21,6 +21,7 @@ import {
   ScrollText,
   MoreHorizontal,
   Settings,
+  BarChart3,
 } from "lucide-react";
 import {
   Sheet,
@@ -43,9 +44,7 @@ type NavItem =
 const NAV_ITEMS: NavItem[] = [
   { kind: "link", to: "/escotista", label: "Painel", icon: LayoutDashboard, exact: true },
   { kind: "link", to: "/escotista/pending", label: "Pendentes", icon: Clock },
-  // PLAN B INSERTION POINT: add the "Stats" primary slot HERE, between
-  // Pendentes and Mais, e.g.
-  //   { kind: "link", to: "/escotista/stats", label: "Stats", icon: BarChart3 },
+  { kind: "link", to: "/escotista/stats", label: "Stats", icon: BarChart3 },
   { kind: "sheet", label: "Mais", icon: MoreHorizontal },
 ];
 

@@ -8,18 +8,24 @@
  * @module
  */
 
+import type * as ai from "../ai.js";
+import type * as aiHelpers from "../aiHelpers.js";
 import type * as approvals from "../approvals.js";
 import type * as auth from "../auth.js";
 import type * as events from "../events.js";
+import type * as featureFlags from "../featureFlags.js";
 import type * as groups from "../groups.js";
 import type * as http from "../http.js";
+import type * as lib_aiPrompt from "../lib/aiPrompt.js";
 import type * as lib_authHelpers from "../lib/authHelpers.js";
+import type * as lib_coverage from "../lib/coverage.js";
 import type * as lib_events from "../lib/events.js";
 import type * as lib_progression from "../lib/progression.js";
 import type * as migrations from "../migrations.js";
 import type * as onboarding from "../onboarding.js";
 import type * as plan from "../plan.js";
 import type * as progression from "../progression.js";
+import type * as stats from "../stats.js";
 import type * as testing from "../testing.js";
 import type * as users from "../users.js";
 
@@ -30,18 +36,24 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  ai: typeof ai;
+  aiHelpers: typeof aiHelpers;
   approvals: typeof approvals;
   auth: typeof auth;
   events: typeof events;
+  featureFlags: typeof featureFlags;
   groups: typeof groups;
   http: typeof http;
+  "lib/aiPrompt": typeof lib_aiPrompt;
   "lib/authHelpers": typeof lib_authHelpers;
+  "lib/coverage": typeof lib_coverage;
   "lib/events": typeof lib_events;
   "lib/progression": typeof lib_progression;
   migrations: typeof migrations;
   onboarding: typeof onboarding;
   plan: typeof plan;
   progression: typeof progression;
+  stats: typeof stats;
   testing: typeof testing;
   users: typeof users;
 }>;
