@@ -13,6 +13,7 @@ import type * as aiHelpers from "../aiHelpers.js";
 import type * as approvals from "../approvals.js";
 import type * as auth from "../auth.js";
 import type * as events from "../events.js";
+import type * as featureFlags from "../featureFlags.js";
 import type * as groups from "../groups.js";
 import type * as http from "../http.js";
 import type * as lib_aiPrompt from "../lib/aiPrompt.js";
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   approvals: typeof approvals;
   auth: typeof auth;
   events: typeof events;
+  featureFlags: typeof featureFlags;
   groups: typeof groups;
   http: typeof http;
   "lib/aiPrompt": typeof lib_aiPrompt;

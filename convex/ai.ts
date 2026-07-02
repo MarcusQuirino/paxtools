@@ -29,10 +29,12 @@ export const suggestActivities = action({
       );
     }
 
-    // Authz + rate-limit + coverage happen in the V8 query (force regen).
-    const { groupId, ramo, coverage } = await ctx.runQuery(
+    // Flag gate + authz + cooldown claim + coverage happen in one V8 mutation
+    // (a "use node" file has no ctx.db of its own); the claim makes concurrent
+    // generate calls serialize instead of racing into duplicate LLM calls.
+    const { groupId, ramo, coverage } = await ctx.runMutation(
       internal.aiHelpers.prepareSuggestion,
-      { ramo: args.ramo, force: true },
+      { ramo: args.ramo },
     );
 
     const { system, prompt } = buildSuggestionPrompt(coverage);
@@ -46,6 +48,8 @@ export const suggestActivities = action({
         schema: suggestionSchema,
         system,
         prompt,
+        // Cost ceiling per call; the zod schema also bounds what we persist.
+        maxOutputTokens: 3000,
       }));
     } catch (err) {
       console.error("AI generateObject failed:", err);

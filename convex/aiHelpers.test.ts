@@ -14,6 +14,7 @@ const modules = {
   "./aiHelpers.ts": () => import("./aiHelpers"),
   "./auth.config.ts": () => import("./auth.config"),
   "./auth.ts": () => import("./auth"),
+  "./featureFlags.ts": () => import("./featureFlags"),
   "./http.ts": () => import("./http"),
 };
 
@@ -21,6 +22,13 @@ type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
 
 function as(t: ReturnType<typeof convexTest>, userId: Id<"users">) {
   return t.withIdentity({ subject: userId });
+}
+
+async function enableAiFlag(t: ReturnType<typeof convexTest>) {
+  await t.mutation(internal.featureFlags.setFlag, {
+    key: "ai_suggestions",
+    enabled: true,
+  });
 }
 
 async function seedGroupWithAdmin(t: ReturnType<typeof convexTest>) {
@@ -53,14 +61,48 @@ async function seedEscotista(
   );
 }
 
-describe("prepareSuggestion authz", () => {
-  test("escotista in ramo gets coverage for that ramo", async () => {
+describe("ai_suggestions feature flag", () => {
+  test("prepareSuggestion throws while the flag is off (default)", async () => {
     const t = convexTest(schema, modules);
     const { groupId } = await seedGroupWithAdmin(t);
     const escId = await seedEscotista(t, groupId, ["escoteiro"]);
-    const out = await as(t, escId).query(internal.aiHelpers.prepareSuggestion, {
+    await expect(
+      as(t, escId).mutation(internal.aiHelpers.prepareSuggestion, { ramo: "escoteiro" }),
+    ).rejects.toThrow();
+  });
+
+  test("getCachedSuggestion returns null while the flag is off, even with a cached row", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedGroupWithAdmin(t);
+    const escId = await seedEscotista(t, groupId, ["escoteiro"]);
+    await t.mutation(internal.aiHelpers.saveSuggestion, {
+      groupId,
       ramo: "escoteiro",
-      force: false,
+      perEixoIdeas: [{ eixoId: "a", eixoName: "A", idea: "x", groundedOn: [] }],
+      overview: "hidden",
+    });
+    const cached = await as(t, escId).query(api.aiHelpers.getCachedSuggestion, { ramo: "escoteiro" });
+    expect(cached).toBeNull();
+  });
+
+  test("isEnabled reflects setFlag on/off", async () => {
+    const t = convexTest(schema, modules);
+    expect(await t.query(api.featureFlags.isEnabled, { key: "ai_suggestions" })).toBe(false);
+    await enableAiFlag(t);
+    expect(await t.query(api.featureFlags.isEnabled, { key: "ai_suggestions" })).toBe(true);
+    await t.mutation(internal.featureFlags.setFlag, { key: "ai_suggestions", enabled: false });
+    expect(await t.query(api.featureFlags.isEnabled, { key: "ai_suggestions" })).toBe(false);
+  });
+});
+
+describe("prepareSuggestion authz", () => {
+  test("escotista in ramo gets coverage for that ramo", async () => {
+    const t = convexTest(schema, modules);
+    await enableAiFlag(t);
+    const { groupId } = await seedGroupWithAdmin(t);
+    const escId = await seedEscotista(t, groupId, ["escoteiro"]);
+    const out = await as(t, escId).mutation(internal.aiHelpers.prepareSuggestion, {
+      ramo: "escoteiro",
     });
     expect(out.ramo).toBe("escoteiro");
     expect(out.groupId).toBe(groupId);
@@ -70,35 +112,38 @@ describe("prepareSuggestion authz", () => {
 
   test("non-admin asking for a ramo outside escotistaRamos is rejected", async () => {
     const t = convexTest(schema, modules);
+    await enableAiFlag(t);
     const { groupId } = await seedGroupWithAdmin(t);
     const escId = await seedEscotista(t, groupId, ["escoteiro"]);
     await expect(
-      as(t, escId).query(internal.aiHelpers.prepareSuggestion, { ramo: "lobinho", force: false }),
+      as(t, escId).mutation(internal.aiHelpers.prepareSuggestion, { ramo: "lobinho" }),
     ).rejects.toThrow();
   });
 
   test("admin may request any ramo", async () => {
     const t = convexTest(schema, modules);
+    await enableAiFlag(t);
     const { adminId } = await seedGroupWithAdmin(t);
-    const out = await as(t, adminId).query(internal.aiHelpers.prepareSuggestion, {
+    const out = await as(t, adminId).mutation(internal.aiHelpers.prepareSuggestion, {
       ramo: "pioneiro",
-      force: false,
     });
     expect(out.ramo).toBe("pioneiro");
   });
 
   test("omitted ramo defaults to caller's first escotistaRamos entry", async () => {
     const t = convexTest(schema, modules);
+    await enableAiFlag(t);
     const { groupId } = await seedGroupWithAdmin(t);
     const escId = await seedEscotista(t, groupId, ["senior", "pioneiro"]);
-    const out = await as(t, escId).query(internal.aiHelpers.prepareSuggestion, { force: false });
+    const out = await as(t, escId).mutation(internal.aiHelpers.prepareSuggestion, {});
     expect(out.ramo).toBe("senior");
   });
 });
 
 describe("saveSuggestion + getCachedSuggestion + rate limit", () => {
-  test("save then read back the cached row; force re-prepare within 30s throws", async () => {
+  test("save then read back the cached row; re-prepare within 30s throws", async () => {
     const t = convexTest(schema, modules);
+    await enableAiFlag(t);
     const { groupId } = await seedGroupWithAdmin(t);
     const escId = await seedEscotista(t, groupId, ["escoteiro"]);
 
@@ -116,14 +161,39 @@ describe("saveSuggestion + getCachedSuggestion + rate limit", () => {
     expect(cached!.overview).toBe("pesado em X");
     expect(cached!.perEixoIdeas).toHaveLength(1);
 
-    // freshly generated → force should be rate-limited
+    // freshly generated → re-prepare should be rate-limited
     await expect(
-      as(t, escId).query(internal.aiHelpers.prepareSuggestion, { ramo: "escoteiro", force: true }),
+      as(t, escId).mutation(internal.aiHelpers.prepareSuggestion, { ramo: "escoteiro" }),
     ).rejects.toThrow();
+  });
+
+  test("prepare claims the cooldown atomically: a second prepare right after the first throws", async () => {
+    const t = convexTest(schema, modules);
+    await enableAiFlag(t);
+    const { groupId } = await seedGroupWithAdmin(t);
+    const escId = await seedEscotista(t, groupId, ["escoteiro"]);
+
+    // No cached content yet — the claim alone must arm the cooldown, otherwise
+    // concurrent generate clicks would each pay for an LLM call.
+    await as(t, escId).mutation(internal.aiHelpers.prepareSuggestion, { ramo: "escoteiro" });
+    await expect(
+      as(t, escId).mutation(internal.aiHelpers.prepareSuggestion, { ramo: "escoteiro" }),
+    ).rejects.toThrow();
+  });
+
+  test("getCachedSuggestion returns null for a claim stub without content", async () => {
+    const t = convexTest(schema, modules);
+    await enableAiFlag(t);
+    const { groupId } = await seedGroupWithAdmin(t);
+    const escId = await seedEscotista(t, groupId, ["escoteiro"]);
+    await as(t, escId).mutation(internal.aiHelpers.prepareSuggestion, { ramo: "escoteiro" });
+    const cached = await as(t, escId).query(api.aiHelpers.getCachedSuggestion, { ramo: "escoteiro" });
+    expect(cached).toBeNull();
   });
 
   test("getCachedSuggestion returns null when nothing cached", async () => {
     const t = convexTest(schema, modules);
+    await enableAiFlag(t);
     const { groupId } = await seedGroupWithAdmin(t);
     const escId = await seedEscotista(t, groupId, ["escoteiro"]);
     const cached = await as(t, escId).query(api.aiHelpers.getCachedSuggestion, { ramo: "escoteiro" });

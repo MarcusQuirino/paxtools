@@ -13,13 +13,19 @@ import type { Ramo } from "@/data/progression-data";
  * "Sugestões da IA (beta)" — on-demand helper. The generate/regenerate button
  * fires the node action (which writes a cache row); the rendered content comes
  * from the reactive cached query, so a successful run updates the UI on its own.
+ * Renders nothing while the `ai_suggestions` feature flag is off; the backend
+ * enforces the same flag, so this is presentation, not the security boundary.
  */
 export function AiSuggestionsCard({ ramo }: { ramo?: Ramo }) {
   const suggest = useAction(api.ai.suggestActivities);
   const [loading, setLoading] = useState(false);
-  const { data: cached } = useQuery(
-    convexQuery(api.aiHelpers.getCachedSuggestion, { ramo }),
+  const { data: flagEnabled } = useQuery(
+    convexQuery(api.featureFlags.isEnabled, { key: "ai_suggestions" }),
   );
+  const { data: cached } = useQuery({
+    ...convexQuery(api.aiHelpers.getCachedSuggestion, { ramo }),
+    enabled: flagEnabled === true,
+  });
 
   async function onGenerate() {
     setLoading(true);
@@ -37,6 +43,8 @@ export function AiSuggestionsCard({ ramo }: { ramo?: Ramo }) {
       setLoading(false);
     }
   }
+
+  if (flagEnabled !== true) return null;
 
   const hasResult = !!cached;
 

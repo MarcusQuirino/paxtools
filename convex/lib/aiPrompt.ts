@@ -12,16 +12,21 @@ export type SuggestionResult = {
   overview: string;
 };
 
+// Generous upper bounds — far above anything the prompt asks for, but they cap
+// what a misbehaving generation can write into the cache row (Convex documents
+// have a 1MB limit and this row is re-sent to every subscribed client).
 export const suggestionSchema: z.ZodType<SuggestionResult> = z.object({
-  perEixoIdeas: z.array(
-    z.object({
-      eixoId: z.string(),
-      eixoName: z.string(),
-      idea: z.string(),
-      groundedOn: z.array(z.string()),
-    }),
-  ),
-  overview: z.string(),
+  perEixoIdeas: z
+    .array(
+      z.object({
+        eixoId: z.string().max(100),
+        eixoName: z.string().max(200),
+        idea: z.string().max(2000),
+        groundedOn: z.array(z.string().max(500)).max(10),
+      }),
+    )
+    .max(12),
+  overview: z.string().max(2000),
 });
 
 /**
