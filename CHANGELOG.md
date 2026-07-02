@@ -1,5 +1,53 @@
 # paxtools
 
+## 1.2.0
+
+### Minor Changes
+
+- d51c524: AI activity suggestions (beta) on the troop-stats page: an on-demand helper that, given a ramo's coverage, proposes one game/dynamic idea per development area (eixo) grounded in that area's most under-covered activities, plus a short plain-language overview — cached per group+ramo. Built on a Convex `"use node"` action calling Claude Sonnet via the AI SDK; the model is fed only PII-free coverage + activity texts (no scout names). Requires the `ANTHROPIC_API_KEY` Convex env var to be set on the deployment; until then the card surfaces a clear "not configured" message.
+- 08915ad: Add an audit timeline tab for escotistas plus celebratory level-up toasts.
+  - New `events` table records what happens in a group: approvals, rejections, level-ups, Lis de Ouro, and membership/admin actions (joins, bans, ramo and access changes). Rejection paths now log-before-delete so denials leave a trail.
+  - New **Histórico** tab (`/escotista/timeline`) shows a paginated, newest-first feed. Progression events are scoped to each escotista's ramos; group/membership events are admin-only.
+  - Backend level-up detection: approving completions now recomputes an escoteiro's stage (Pista→Trilha→Rumo→Travessia) and Lis de Ouro before/after and surfaces a toast to the approving escotista — works from the pending queue and bulk approvals. Detection reuses the same block/stage logic as the client (relocated to a shared, backend-importable module).
+
+- 17b4ab1: Escotista navigation: replace the cramped top tab strip with a mobile-native fixed bottom bar (Painel, Pendentes, Mais). "Mais" opens an accessible bottom sheet listing Histórico, Ajustes, and Admin (admin-only). Adds a reusable bottom-anchored `Sheet` UI primitive (`src/components/ui/sheet.tsx`). Leaves a documented insertion point for a future Stats tab. Pure nav restructure — no behavior change to destinations.
+- d51c524: Runtime feature-flag system on Convex (`featureFlags` table + `isEnabled` query + internal `setFlag` mutation; missing row = off) and the AI activity suggestions feature is now gated behind the `ai_suggestions` flag — toggleable without a deploy via `bunx convex run featureFlags:setFlag '{"key":"ai_suggestions","enabled":true}'` or the dashboard. Also hardens the AI path: the regen cooldown is now claimed atomically in a mutation before the LLM call (concurrent generate clicks can no longer race into duplicate paid calls), the LLM call gets a `maxOutputTokens` ceiling, and the suggestion schema bounds string/array sizes before anything is persisted.
+- d51c524: Add the escotista Stats page (/escotista/stats): per-eixo coverage bars, stage
+  distribution, most-done activities, a gap engine (fixed gaps + neglected
+  variables), and a per-scout acompanhamento list. Backed by a shared, PII-free
+  coverage contract (convex/lib/coverage.ts#computeRamoCoverage) and the
+  convex/stats.ts getRamoCoverage / getRamoScouts queries with ramo-scoped authz
+  (admins get a ramo switcher). No cross-ramo aggregation.
+
+### Patch Changes
+
+- e10a635: Add convex-test characterization tests for the backend mutation/query surface (groups, approvals, progression, plan, onboarding, users, authHelpers), pinning current behavior with a bias toward the security-critical paths: cross-group/ramo authorization, banned-user gating, the approval lock, and pending→approved transitions. Test-only change; no runtime behavior is modified.
+- 50d6d06: Internal refactor: remove duplication in the backend approval/membership mutations with no behavior change.
+  - `convex/approvals.ts`: the six single-item approve/reject mutations now delegate to `approvePendingCompletion` (auth-first) and `rejectPendingCompletion` (existence-first), preserving each path's exact check ordering. `bulkAction`'s three identical loops collapse into `bulkProcessSimple`, and `approveAllForEscoteiro`'s repeated patch loop into `approveRows` (per-table `.take` limits and the custom-action filter kept inline). Shared bulk timestamps preserved.
+  - `convex/groups.ts`: the seven member-admin mutations share a `loadGroupMember` helper (assert admin → load target → verify same group). `banMember`/`changeMemberRole` no longer double-call `assertAdmin`.
+
+  No exported function signatures or error messages changed. Verified by the full unit suite (268 pass), `oxlint` (0 errors), and `tsc --noEmit`.
+
+- 9b87d62: Add end-to-end coverage for the core mutating user workflows, complementing the existing read-only specs:
+  - `escoteiro/mark-action`: an escoteiro self-marks a progression action (pending) and unmarks it (self-cleaning).
+  - `escoteiro/onboarding-complete`: the full role → ramo → skip-group onboarding flow lands a new escoteiro on the dashboard (repeatable — the seed resets this fixture each run).
+  - `escotista/approval-workflow`: an escoteiro marks an action → it appears in the escotista's pending queue → the escotista rejects it → it is removed (two browser contexts; reject deletes the row so no approved/locked state leaks between runs).
+
+  All specs follow the existing fixture/storageState conventions and pass against the dev backend (`bun test:e2e`, 13/13).
+
+- c0f9706: Frontend cleanup: extract the route auth/onboarding guard into a shared `useAuthGate` hook, removing three near-identical copies.
+
+  `/`, `/plan`, and the `/escotista` layout each carried their own `useConvexAuth` + viewer query + redirect `useEffect` + "ready" skeleton condition. They now call `useAuthGate("escoteiro" | "escotista")`, which centralizes the redirect rules (`/signin` when unauthenticated, `/onboarding` when incomplete, the other role's home on role mismatch) and returns `{ ready, user }`. Behavior preserved — verified by the full e2e routing suite (13/13). Also removes the dead `allActionIds` value that `useProgression` computed and returned but nothing consumed.
+
+- 2bec4f2: Security hardening of the backend authorization surface (behavior-preserving for legitimate users; only abuse paths are now rejected):
+  - **Block self privilege-escalation**: `setRole` can no longer change an existing role once the user is in a group (previously an approved member could self-promote escoteiro→escotista because the join flow never sets `onboardingComplete`).
+  - **Lock the test-auth provider to `signIn`**: the env-gated test-password provider now rejects every non-`signIn` flow, closing the `signUp` path that could mint `@test.paxtools.local` sessions without the shared secret.
+  - **Block ramo self-expansion**: `setEscoteiroRamo`/`setEscotistaRamos` now refuse to change ramos once the user is in a group (ramo changes go through the admin-gated member setters).
+  - **Close cross-ramo IDOR**: `assertEscotistaInSameGroup` now fails the ramo boundary for a ramo-less escoteiro instead of skipping it, matching the read-path filters.
+  - **Gate pending members**: `assertEscotistaInSameGroup` now rejects targets who are not yet approved members, so a pending member cannot be read/approved before admin approval.
+  - **Banned-user self-reads**: `viewer`, `getMyCompletions`, and `getMyPlan` now return empty for banned users (mutations already blocked them).
+  - **Preserve the last-admin invariant**: `joinGroup`/`createGroup` now refuse to strand a group whose sole admin is the caller.
+
 ## 1.1.0
 
 ### Minor Changes
