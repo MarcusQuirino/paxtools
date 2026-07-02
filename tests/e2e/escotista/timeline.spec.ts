@@ -12,6 +12,7 @@ import { escotistaTest, approvedTest, expect } from "../../fixtures/auth";
 escotistaTest("escotista opens the Histórico timeline tab", async ({ page }) => {
   await page.goto("/escotista");
 
+  await page.getByRole("button", { name: "Mais" }).click();
   const tab = page.getByRole("link", { name: "Histórico" });
   await expect(tab).toBeVisible();
   await tab.click();
