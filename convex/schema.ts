@@ -158,4 +158,22 @@ export default defineSchema({
     // [groupId, subjectRamo, _creationTime] — per-ramo streams (kept so a future
     // strict merged-stream pagination needs no migration).
     .index("by_group_and_ramo", ["groupId", "subjectRamo"]),
+
+  // Cached AI activity suggestions, one row per (group, ramo). Regenerated on
+  // demand from the stats page; the page shows the cached row otherwise. Only
+  // activity TEXTS + counts feed the model — never scout names/PII.
+  aiSuggestions: defineTable({
+    groupId: v.id("groups"),
+    ramo: ramoValidator,
+    perEixoIdeas: v.array(
+      v.object({
+        eixoId: v.string(),
+        eixoName: v.string(),
+        idea: v.string(),
+        groundedOn: v.array(v.string()),
+      }),
+    ),
+    overview: v.string(),
+    generatedAt: v.number(),
+  }).index("by_group_and_ramo", ["groupId", "ramo"]),
 });
