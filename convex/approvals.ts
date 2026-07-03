@@ -3,10 +3,8 @@ import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import {
-  getAuthenticatedUser,
-  assertEscotistaInSameGroup,
-} from "./lib/authHelpers";
+import { getAuthenticatedUser } from "./lib/authHelpers";
+import { assertCanActOnEscoteiro } from "./lib/ramoVisibility";
 import {
   snapshotProgression,
   detectLevelUps,
@@ -43,7 +41,7 @@ async function approvePendingCompletion(
   if (!doc) throw new Error("Não encontrado");
   if (doc.status !== "pending") throw new Error("Item não está pendente");
 
-  const { target } = await assertEscotistaInSameGroup(ctx, doc.userId);
+  const { target } = await assertCanActOnEscoteiro(ctx, doc.userId);
 
   const before = await snapshotProgression(ctx, doc.userId);
   await ctx.db.patch(completionId, {
@@ -62,7 +60,7 @@ async function approvePendingCompletion(
 
 /**
  * Reject (delete) a single pending completion. Fetches the doc and checks
- * existence/status BEFORE auth (auth happens inside assertEscotistaInSameGroup)
+ * existence/status BEFORE auth (auth happens inside assertCanActOnEscoteiro)
  * — so an unauthenticated caller with a dangling id gets "Não encontrado".
  * Preserve this ordering.
  */
@@ -75,7 +73,7 @@ async function rejectPendingCompletion(
   if (!doc) throw new Error("Não encontrado");
   if (doc.status !== "pending") throw new Error("Item não está pendente");
 
-  const { caller, target } = await assertEscotistaInSameGroup(ctx, doc.userId);
+  const { caller, target } = await assertCanActOnEscoteiro(ctx, doc.userId);
   await logRamoEvent(ctx, {
     type: "rejection",
     actor: caller,
@@ -105,7 +103,7 @@ async function collectPending(
     const doc = await ctx.db.get(id);
     if (!doc || doc.status !== "pending") continue;
     if (requireCompleted && !(doc as Doc<"customActions">).completed) continue;
-    await assertEscotistaInSameGroup(ctx, doc.userId);
+    await assertCanActOnEscoteiro(ctx, doc.userId);
     hits.push({ kind, doc: doc as CompletionDoc });
   }
   return hits;
@@ -308,7 +306,7 @@ export const approveCustomAction = mutation({
     if (!doc.completed || doc.status !== "pending")
       throw new Error("Item não está pendente");
 
-    const { target } = await assertEscotistaInSameGroup(ctx, doc.userId);
+    const { target } = await assertCanActOnEscoteiro(ctx, doc.userId);
 
     const before = await snapshotProgression(ctx, doc.userId);
     await ctx.db.patch(args.completionId, {
@@ -334,7 +332,7 @@ export const rejectCustomAction = mutation({
     if (!doc.completed || doc.status !== "pending")
       throw new Error("Item não está pendente");
 
-    const { caller, target } = await assertEscotistaInSameGroup(ctx, doc.userId);
+    const { caller, target } = await assertCanActOnEscoteiro(ctx, doc.userId);
     await logRamoEvent(ctx, {
       type: "rejection",
       actor: caller,
@@ -463,7 +461,7 @@ export const approveAllForEscoteiro = mutation({
   args: { escoteiroId: v.id("users") },
   handler: async (ctx, args): Promise<LevelUpToast[]> => {
     const user = await getAuthenticatedUser(ctx);
-    const { target } = await assertEscotistaInSameGroup(ctx, args.escoteiroId);
+    const { target } = await assertCanActOnEscoteiro(ctx, args.escoteiroId);
 
     const now = Date.now();
     const before = await snapshotProgression(ctx, args.escoteiroId);

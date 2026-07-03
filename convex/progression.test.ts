@@ -766,4 +766,66 @@ describe("getCompletionsForUser", () => {
     expect(res.actions).toHaveLength(1);
     expect(res.actions[0]!.actionId).toBe(VALID_ACTION_ID);
   });
+
+  test("unstamped (undefined) membershipStatus caller gets results", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedGroup(t);
+    // Legacy escotista: membershipStatus was never stamped. Queries cannot
+    // backfill, so the visibility rule itself must treat undefined as approved.
+    const escotista = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+    });
+    const escoteiro = await insertUser(t, {
+      role: "escoteiro",
+      ramo: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+    });
+    const res = await as(t, escotista).query(api.progression.getCompletionsForUser, {
+      targetUserId: escoteiro,
+    });
+    expect(res.ramo).toBe("escoteiro");
+  });
+
+  test("same-grupo escotista target is readable regardless of ramo", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedGroup(t);
+    // Caller accompanies only 'senior'; target is a fellow escotista with no
+    // ramo at all — the ramo rule applies to escoteiro targets only.
+    const caller = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["senior"],
+      groupId,
+      membershipStatus: "approved",
+    });
+    const fellow = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["lobinho"],
+      groupId,
+      membershipStatus: "approved",
+    });
+    const res = await as(t, caller).query(api.progression.getCompletionsForUser, {
+      targetUserId: fellow,
+    });
+    expect(res.actions).toEqual([]);
+  });
+
+  test("banned escoteiro's completions are not readable", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+    const escoteiro = await insertUser(t, {
+      role: "escoteiro",
+      ramo: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+      bannedAt: 123,
+    });
+    await expect(
+      as(t, adminId).query(api.progression.getCompletionsForUser, {
+        targetUserId: escoteiro,
+      }),
+    ).rejects.toThrow("banido");
+  });
 });

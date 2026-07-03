@@ -373,7 +373,7 @@ describe("rejectAction / rejectSpecialty / rejectLisDeOuroItem (delete)", () => 
   });
 
   // NOTE: possible bug — reject*/rejectCustomAction check doc-existence and
-  // status BEFORE any authentication/authorization (assertEscotistaInSameGroup
+  // status BEFORE any authentication/authorization (assertCanActOnEscoteiro
   // runs only after the status check), unlike approve* which authenticate
   // first. So an UNAUTHENTICATED caller hitting a dangling id gets
   // "Não encontrado" rather than an auth error — a small existence/status
@@ -500,6 +500,48 @@ describe("ramo authorization", () => {
     const esc = await seedEscoteiro(t, groupId, "senior");
     const id = await insertAction(t, esc);
     await as(t, adminId).mutation(api.approvals.approveAction, { completionId: id });
+    const row = await t.run(async (ctx) => ctx.db.get(id));
+    expect(row?.status).toBe("approved");
+  });
+
+  test("approving a banned escoteiro's stale pending conclusão fails", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+    const esc = await seedEscoteiro(t, groupId, "escoteiro");
+    const id = await insertAction(t, esc); // pending row left behind by the ban
+    await t.run(async (ctx) => ctx.db.patch(esc, { bannedAt: 123 }));
+    await expect(
+      as(t, adminId).mutation(api.approvals.approveAction, { completionId: id }),
+    ).rejects.toThrow("banido");
+    const row = await t.run(async (ctx) => ctx.db.get(id));
+    expect(row?.status).toBe("pending");
+  });
+
+  test("rejecting a banned escoteiro's stale pending conclusão fails", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+    const esc = await seedEscoteiro(t, groupId, "escoteiro");
+    const id = await insertAction(t, esc);
+    await t.run(async (ctx) => ctx.db.patch(esc, { bannedAt: 123 }));
+    await expect(
+      as(t, adminId).mutation(api.approvals.rejectAction, { completionId: id }),
+    ).rejects.toThrow("banido");
+    const row = await t.run(async (ctx) => ctx.db.get(id));
+    expect(row).not.toBeNull();
+  });
+
+  test("unstamped (undefined) membershipStatus caller can approve an in-ramo escoteiro", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedGroup(t);
+    // Legacy escotista: membershipStatus was never stamped.
+    const escotista = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+    });
+    const esc = await seedEscoteiro(t, groupId, "escoteiro");
+    const id = await insertAction(t, esc);
+    await as(t, escotista).mutation(api.approvals.approveAction, { completionId: id });
     const row = await t.run(async (ctx) => ctx.db.get(id));
     expect(row?.status).toBe("approved");
   });
