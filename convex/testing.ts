@@ -1,6 +1,7 @@
 import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
+import { getEixosForRamo } from "../src/data/progression-data";
 
 const TEST_EMAIL_SUFFIX = "@test.paxtools.local";
 const TEST_GROUP_PREFIX = "__TEST__";
@@ -408,5 +409,132 @@ export const getTestUserByEmail = internalQuery({
       .query("users")
       .withIndex("email", (q) => q.eq("email", email))
       .unique();
+  },
+});
+
+// Simulated demo troop: 15 escoteiros in the test group's `escoteiro` ramo,
+// spread across all four stages by completed-block count (Pista 0 / Trilha 4 /
+// Rumo 8 / Travessia 13). Each scout fully completes its first N blocks (all
+// fixed + `variableRequired` variable actions, approved) so snapshotProgression
+// derives the intended stage. Idempotent: re-running replaces the prior sim
+// scouts (email prefix `sim-troop-`). Requires testing:seedTestUsers first
+// (for the group + the admin/escotista login accounts). All scouts share
+// _creationTime=now, so the acompanhamento "novo membro" hint flags them all —
+// a seeding artifact, not a bug.
+const SIM_EMAIL_PREFIX = "sim-troop-";
+
+const SIM_SCOUTS: { name: string; blocks: number }[] = [
+  { name: "Ana Lima", blocks: 0 },
+  { name: "Bruno Sá", blocks: 1 },
+  { name: "Carla Reis", blocks: 2 },
+  { name: "Diego Alves", blocks: 3 },
+  { name: "Elisa Nunes", blocks: 4 },
+  { name: "Felipe Rocha", blocks: 5 },
+  { name: "Gabriela Pinto", blocks: 6 },
+  { name: "Heitor Dias", blocks: 7 },
+  { name: "Íris Campos", blocks: 8 },
+  { name: "João Mendes", blocks: 9 },
+  { name: "Kelly Faria", blocks: 11 },
+  { name: "Lucas Teixeira", blocks: 13 },
+  { name: "Marina Costa", blocks: 14 },
+  { name: "Nina Barros", blocks: 16 },
+  { name: "Otávio Freitas", blocks: 18 },
+];
+
+export const seedSimulatedTroop = internalMutation({
+  args: {},
+  handler: async (
+    ctx,
+  ): Promise<{
+    created: number;
+    groupId: Id<"groups">;
+    perStage: Record<string, number>;
+  }> => {
+    assertTestEnv();
+
+    const admin = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", "admin@test.paxtools.local"))
+      .unique();
+    if (!admin) {
+      throw new Error("run testing:seedTestUsers first (admin login missing)");
+    }
+    const groups = await ctx.db.query("groups").collect();
+    const group = groups.find(
+      (g) => g.name === TEST_GROUP_NAME && !g.deletedAt,
+    );
+    if (!group) {
+      throw new Error("run testing:seedTestUsers first (test group missing)");
+    }
+
+    // Ordered flat list of the escoteiro ramo's 18 blocos.
+    const blocos = getEixosForRamo("escoteiro").flatMap((e) => e.blocos);
+
+    // Idempotent: drop any previously-seeded sim scouts + their completions.
+    for (const u of await ctx.db.query("users").collect()) {
+      if (typeof u.email === "string" && u.email.startsWith(SIM_EMAIL_PREFIX)) {
+        for (const c of await ctx.db
+          .query("actionCompletions")
+          .withIndex("by_userId", (q) => q.eq("userId", u._id))
+          .collect()) {
+          await ctx.db.delete(c._id);
+        }
+        await ctx.db.delete(u._id);
+      }
+    }
+
+    const now = Date.now();
+    const perStage: Record<string, number> = {
+      pista: 0,
+      trilha: 0,
+      rumo: 0,
+      travessia: 0,
+    };
+    let created = 0;
+    let idx = 0;
+    for (const scout of SIM_SCOUTS) {
+      idx += 1;
+      const email = `${SIM_EMAIL_PREFIX}${idx}@test.paxtools.local`;
+      const userId = await ctx.db.insert("users", {
+        email,
+        name: scout.name,
+      });
+      await ctx.db.patch(userId, {
+        name: scout.name,
+        role: "escoteiro",
+        ramo: "escoteiro",
+        membershipStatus: "approved",
+        onboardingComplete: true,
+        groupId: group._id,
+      });
+
+      // Fully complete the first `blocks` blocos.
+      for (const b of blocos.slice(0, scout.blocks)) {
+        const actionIds = [
+          ...b.fixedActions.map((a) => a.id),
+          ...b.variableActions
+            .slice(0, Math.min(b.variableRequired, b.variableActions.length))
+            .map((a) => a.id),
+        ];
+        for (const actionId of actionIds) {
+          await ctx.db.insert("actionCompletions", {
+            userId,
+            actionId,
+            completedAt: now,
+            status: "approved",
+            approvedBy: admin._id,
+            approvedAt: now,
+          });
+        }
+      }
+
+      const n = scout.blocks;
+      const stage =
+        n >= 13 ? "travessia" : n >= 8 ? "rumo" : n >= 4 ? "trilha" : "pista";
+      perStage[stage] = (perStage[stage] ?? 0) + 1;
+      created += 1;
+    }
+
+    return { created, groupId: group._id, perStage };
   },
 });
