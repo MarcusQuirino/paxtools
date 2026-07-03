@@ -1,9 +1,8 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
-import { getAuthenticatedUser } from "./lib/authHelpers";
-import { computeRamoCoverage, type Ramo } from "./lib/coverage";
+import { computeRamoCoverage } from "./lib/coverage";
 import { snapshotProgression } from "./lib/progression";
-import type { QueryCtx } from "./_generated/server";
+import { filterVisibleEscoteiros, resolveRamoAccess } from "./lib/ramoVisibility";
 import type { Id } from "./_generated/dataModel";
 
 const ramoArg = v.optional(
@@ -15,37 +14,10 @@ const ramoArg = v.optional(
   ),
 );
 
-/**
- * Resolve the caller (must be an approved escotista in a group) and the ramo
- * they are allowed to view. Non-admins are scoped to their escotistaRamos; an
- * admin may pass any ramo. An omitted ramo defaults to the caller's first
- * escotistaRamos entry.
- */
-async function resolveScopedRamo(
-  ctx: QueryCtx,
-  requested: Ramo | undefined,
-): Promise<{ groupId: Id<"groups">; ramo: Ramo }> {
-  const caller = await getAuthenticatedUser(ctx);
-  if (caller.role !== "escotista") {
-    throw new Error("Apenas escotistas podem ver as estatísticas");
-  }
-  if (!caller.groupId) throw new Error("Você não está em nenhum grupo");
-  if ((caller.membershipStatus ?? "approved") !== "approved") {
-    throw new Error("Sua entrada no grupo ainda não foi aprovada");
-  }
-  const ramos = (caller.escotistaRamos ?? []) as Ramo[];
-  const ramo = requested ?? ramos[0];
-  if (!ramo) throw new Error("Selecione um ramo");
-  if (!caller.isAdmin && !ramos.includes(ramo)) {
-    throw new Error("Você não acompanha esse ramo");
-  }
-  return { groupId: caller.groupId, ramo };
-}
-
 export const getRamoCoverage = query({
   args: { ramo: ramoArg },
   handler: async (ctx, args) => {
-    const { groupId, ramo } = await resolveScopedRamo(ctx, args.ramo);
+    const { groupId, ramo } = await resolveRamoAccess(ctx, args.ramo);
     return computeRamoCoverage(ctx, { groupId, ramo });
   },
 });
@@ -62,18 +34,18 @@ export type ScoutRow = {
 export const getRamoScouts = query({
   args: { ramo: ramoArg },
   handler: async (ctx, args) => {
-    const { groupId, ramo } = await resolveScopedRamo(ctx, args.ramo);
+    const { groupId, ramo } = await resolveRamoAccess(ctx, args.ramo);
     const members = await ctx.db
       .query("users")
       .withIndex("by_groupId", (q) => q.eq("groupId", groupId))
       .take(500);
-    const scouts = members.filter(
-      (m) =>
-        m.role === "escoteiro" &&
-        !m.bannedAt &&
-        (m.membershipStatus ?? "approved") === "approved" &&
-        m.ramo === ramo,
-    );
+    // Admin-scoped filter is deliberate: access to (groupId, ramo) was already
+    // asserted upstream by resolveRamoAccess; the roster is ramo-selected
+    // grupo-wide, not re-scoped to the caller's own ramos.
+    const scouts = filterVisibleEscoteiros(
+      { groupId, isAdmin: true, ramos: [] },
+      members,
+    ).filter((m) => m.role === "escoteiro" && m.ramo === ramo);
     const rows: ScoutRow[] = [];
     for (const s of scouts) {
       const snap = await snapshotProgression(ctx, s._id);

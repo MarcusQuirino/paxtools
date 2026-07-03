@@ -100,12 +100,12 @@ describe("getRamoCoverage authz (Task 3)", () => {
     expect(cov.ramo).toBe("escoteiro");
   });
 
-  test("a non-escotista is rejected", async () => {
+  test("a non-escotista is rejected with the module's generic message", async () => {
     const t = convexTest(schema, modules);
     const { scout } = await seed(t);
     await expect(
       as(t, scout).query(api.stats.getRamoCoverage, { ramo: "escoteiro" }),
-    ).rejects.toThrow();
+    ).rejects.toThrow("Apenas escotistas podem realizar esta ação");
   });
 
   test("escotista only sees their own group's scouts (group isolation)", async () => {
@@ -160,6 +160,55 @@ describe("getRamoCoverage authz (Task 3)", () => {
   });
 });
 
+describe("legacy grupo-creator admin scope", () => {
+  // A creator that predates the isAdmin flag: createdBy points at them but the
+  // flag was never set. The module resolves them as admin on every surface, so
+  // stats must accept a ramo they do not accompany (previously timeline-only).
+  async function seedLegacyCreator(t: ReturnType<typeof convexTest>) {
+    const creatorId: Id<"users"> = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Legacy", role: "escotista", escotistaRamos: ["senior"],
+        membershipStatus: "approved", onboardingComplete: true,
+      }),
+    );
+    const groupId: Id<"groups"> = await t.run((ctx) =>
+      ctx.db.insert("groups", {
+        name: "GL", number: "7", password: "LLLLLL",
+        createdBy: creatorId, createdAt: 1, ramoNames: {},
+      }),
+    );
+    // groupId only — isAdmin deliberately stays unset.
+    await t.run((ctx) => ctx.db.patch(creatorId, { groupId }));
+    const scout: Id<"users"> = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "LS", role: "escoteiro", ramo: "escoteiro", groupId,
+        membershipStatus: "approved",
+      }),
+    );
+    return { creatorId, groupId, scout };
+  }
+
+  test("creator (isAdmin unset) may read coverage for a ramo they do not accompany", async () => {
+    const t = convexTest(schema, modules);
+    const { creatorId } = await seedLegacyCreator(t);
+    const cov = await as(t, creatorId).query(api.stats.getRamoCoverage, {
+      ramo: "escoteiro",
+    });
+    expect(cov.ramo).toBe("escoteiro");
+    expect(cov.scoutCount).toBe(1);
+  });
+
+  test("creator (isAdmin unset) may read the scout roster for a ramo they do not accompany", async () => {
+    const t = convexTest(schema, modules);
+    const { creatorId, scout } = await seedLegacyCreator(t);
+    const rows = await as(t, creatorId).query(api.stats.getRamoScouts, {
+      ramo: "escoteiro",
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!._id).toBe(scout);
+  });
+});
+
 describe("getRamoScouts (Task 4)", () => {
   test("returns the ramo's scouts with stage + block count + name + joinedAt", async () => {
     const t = convexTest(schema, modules);
@@ -181,6 +230,28 @@ describe("getRamoScouts (Task 4)", () => {
     await expect(
       as(t, escotistaId).query(api.stats.getRamoScouts, { ramo: "senior" }),
     ).rejects.toThrow("Você não acompanha esse ramo");
+  });
+
+  test("excludes banned and pending scouts from the roster", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId, scout } = await seed(t);
+    await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Banned", role: "escoteiro", ramo: "escoteiro", groupId,
+        membershipStatus: "approved", bannedAt: 1,
+      }),
+    );
+    await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "Pending", role: "escoteiro", ramo: "escoteiro", groupId,
+        membershipStatus: "pending",
+      }),
+    );
+    const rows = await as(t, adminId).query(api.stats.getRamoScouts, {
+      ramo: "escoteiro",
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!._id).toBe(scout);
   });
 
   test("sorts ascending by completedBlockCount (who is behind first)", async () => {
