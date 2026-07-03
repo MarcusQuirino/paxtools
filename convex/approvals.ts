@@ -5,6 +5,7 @@ import { v } from "convex/values";
 import { getAuthenticatedUser } from "./lib/authHelpers";
 import {
   assertCanActOnEscoteiro,
+  filterActiveGrupoMembers,
   filterVisibleEscoteiros,
   tryResolveRamoViewer,
 } from "./lib/ramoVisibility";
@@ -201,13 +202,9 @@ export const getGroupStats = query({
       .withIndex("by_groupId", (q) => q.eq("groupId", viewer.groupId))
       .take(500);
 
-    // Deliberately admin-scoped: member counts are grupo-wide (approved,
-    // non-banned, same grupo — no ramo boundary); only escoteiroStats is
+    // Member counts are grupo-wide on purpose; only escoteiroStats is
     // ramo-scoped to the actual viewer.
-    const activeMembers = filterVisibleEscoteiros(
-      { groupId: viewer.groupId, isAdmin: true, ramos: [] },
-      members,
-    );
+    const activeMembers = filterActiveGrupoMembers(viewer.groupId, members);
 
     const escoteiros = filterVisibleEscoteiros(viewer, members).filter(
       (m) => m.role === "escoteiro",

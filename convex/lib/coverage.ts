@@ -5,7 +5,7 @@ import { getEixosForRamo } from "../../src/data/progression-data";
 import { buildCatalogIndex } from "../../src/lib/plan-view";
 import { STAGES } from "../../src/data/progression-rules";
 import { snapshotProgression } from "./progression";
-import { filterVisibleEscoteiros } from "./ramoVisibility";
+import { filterActiveGrupoMembers } from "./ramoVisibility";
 
 export type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
 
@@ -58,13 +58,12 @@ export async function computeRamoCoverage(
     .query("users")
     .withIndex("by_groupId", (q) => q.eq("groupId", groupId))
     .take(500); // safe cap: a ramo has ≤28 scouts in practice; silent truncation is not a risk at this scale
-  // Admin-scoped filter is deliberate: access to (groupId, ramo) was already
-  // asserted upstream by resolveRamoAccess; the coverage set is ramo-selected
-  // grupo-wide, not re-scoped to any caller's own ramos.
-  const scouts = filterVisibleEscoteiros(
-    { groupId, isAdmin: true, ramos: [] },
-    members,
-  ).filter((m) => m.role === "escoteiro" && m.ramo === ramo);
+  // Grupo-wide on purpose: access to (groupId, ramo) was already asserted
+  // upstream by resolveRamoAccess; the coverage set is ramo-selected, not
+  // re-scoped to any caller's own ramos.
+  const scouts = filterActiveGrupoMembers(groupId, members).filter(
+    (m) => m.role === "escoteiro" && m.ramo === ramo,
+  );
   const scoutCount = scouts.length;
 
   // Per-actionId approved scout count (restricted to the ramo catalog).

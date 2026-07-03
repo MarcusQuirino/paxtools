@@ -2,7 +2,7 @@ import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { computeRamoCoverage } from "./lib/coverage";
 import { snapshotProgression } from "./lib/progression";
-import { filterVisibleEscoteiros, resolveRamoAccess } from "./lib/ramoVisibility";
+import { filterActiveGrupoMembers, resolveRamoAccess } from "./lib/ramoVisibility";
 import type { Id } from "./_generated/dataModel";
 
 const ramoArg = v.optional(
@@ -39,13 +39,12 @@ export const getRamoScouts = query({
       .query("users")
       .withIndex("by_groupId", (q) => q.eq("groupId", groupId))
       .take(500);
-    // Admin-scoped filter is deliberate: access to (groupId, ramo) was already
-    // asserted upstream by resolveRamoAccess; the roster is ramo-selected
-    // grupo-wide, not re-scoped to the caller's own ramos.
-    const scouts = filterVisibleEscoteiros(
-      { groupId, isAdmin: true, ramos: [] },
-      members,
-    ).filter((m) => m.role === "escoteiro" && m.ramo === ramo);
+    // Grupo-wide on purpose: access to (groupId, ramo) was already asserted
+    // upstream by resolveRamoAccess; the roster is ramo-selected, not
+    // re-scoped to the caller's own ramos.
+    const scouts = filterActiveGrupoMembers(groupId, members).filter(
+      (m) => m.role === "escoteiro" && m.ramo === ramo,
+    );
     const rows: ScoutRow[] = [];
     for (const s of scouts) {
       const snap = await snapshotProgression(ctx, s._id);

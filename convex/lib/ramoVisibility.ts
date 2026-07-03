@@ -138,7 +138,11 @@ export function isEscoteiroVisible(
   return explainTargetDenial(viewer, target) === null;
 }
 
-/** Keep only the targets the viewer may see — no database access. */
+/**
+ * Keep only the targets the viewer may see — no database access. Non-escoteiro
+ * targets (fellow escotistas, role-less users) pass whenever they are active
+ * members of the viewer's grupo; the ramo rule applies to escoteiros only.
+ */
 export function filterVisibleEscoteiros<T extends VisibilityTarget>(
   viewer: ViewerAccess,
   targets: T[],
@@ -147,8 +151,23 @@ export function filterVisibleEscoteiros<T extends VisibilityTarget>(
 }
 
 /**
- * Throwing write-path guard: the caller must be a valid viewer and the target
- * must be visible to them. Returns both docs for logging/snapshotting.
+ * Grupo-wide view of the active membership: approved, non-banned members of
+ * the grupo, with no ramo boundary — exactly what an admin sees. For surfaces
+ * whose (grupo, ramo) access was already asserted upstream, or whose member
+ * counts are deliberately grupo-wide.
+ */
+export function filterActiveGrupoMembers<T extends VisibilityTarget>(
+  groupId: Id<"groups">,
+  targets: T[],
+): T[] {
+  return filterVisibleEscoteiros({ groupId, isAdmin: true, ramos: [] }, targets);
+}
+
+/**
+ * Throwing guard for acting on one specific escoteiro — used by the approval
+ * and progression mutations, and by throwing single-target reads that must
+ * enforce the same rule. The caller must be a valid viewer and the target must
+ * be visible to them. Returns both docs for logging/snapshotting.
  */
 export async function assertCanActOnEscoteiro(
   ctx: QueryCtx | MutationCtx,
