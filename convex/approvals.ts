@@ -2,9 +2,12 @@ import { query, mutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { getAuthenticatedUser } from "./lib/authHelpers";
-import { assertCanActOnEscoteiro } from "./lib/ramoVisibility";
+import {
+  assertCanActOnEscoteiro,
+  filterVisibleEscoteiros,
+  tryResolveRamoViewer,
+} from "./lib/ramoVisibility";
 import {
   snapshotProgression,
   detectLevelUps,
@@ -112,27 +115,17 @@ async function collectPending(
 export const getPendingForGroup = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-    const user = await ctx.db.get(userId);
-    if (!user || user.role !== "escotista") return [];
-    if (!user.groupId) return [];
-    if (user.membershipStatus && user.membershipStatus !== "approved") return [];
+    const viewer = await tryResolveRamoViewer(ctx);
+    if (!viewer) return [];
 
     const all = await ctx.db
       .query("users")
       .withIndex("by_groupId_and_role", (q) =>
-        q.eq("groupId", user.groupId).eq("role", "escoteiro"),
+        q.eq("groupId", viewer.groupId).eq("role", "escoteiro"),
       )
       .take(500);
 
-    const escoteiros = all.filter((e) => {
-      if (e.bannedAt) return false;
-      if ((e.membershipStatus ?? "approved") !== "approved") return false;
-      if (user.isAdmin) return true;
-      if (!e.ramo) return false;
-      return (user.escotistaRamos ?? []).includes(e.ramo);
-    });
+    const escoteiros = filterVisibleEscoteiros(viewer, all);
 
     const result = [];
 
@@ -197,36 +190,29 @@ export const getPendingForGroup = query({
 export const getGroupStats = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return null;
-    const user = await ctx.db.get(userId);
-    if (!user || user.role !== "escotista") return null;
-    if (!user.groupId) return null;
+    const viewer = await tryResolveRamoViewer(ctx);
+    if (!viewer) return null;
 
-    const group = await ctx.db.get(user.groupId);
+    const group = await ctx.db.get(viewer.groupId);
     if (!group) return null;
-    if (user.membershipStatus && user.membershipStatus !== "approved")
-      return null;
 
-    const members = (
-      await ctx.db
-        .query("users")
-        .withIndex("by_groupId", (q) => q.eq("groupId", user.groupId))
-        .take(500)
-    ).filter(
-      (m) =>
-        !m.bannedAt && (m.membershipStatus ?? "approved") === "approved",
+    const members = await ctx.db
+      .query("users")
+      .withIndex("by_groupId", (q) => q.eq("groupId", viewer.groupId))
+      .take(500);
+
+    // Deliberately admin-scoped: member counts are grupo-wide (approved,
+    // non-banned, same grupo — no ramo boundary); only escoteiroStats is
+    // ramo-scoped to the actual viewer.
+    const activeMembers = filterVisibleEscoteiros(
+      { groupId: viewer.groupId, isAdmin: true, ramos: [] },
+      members,
     );
 
-    const visibleEscoteiros = members
-      .filter((m) => m.role === "escoteiro")
-      .filter((m) => {
-        if (user.isAdmin) return true;
-        if (!m.ramo) return false;
-        return (user.escotistaRamos ?? []).includes(m.ramo);
-      });
-    const escoteiros = visibleEscoteiros;
-    const escotistas = members.filter((m) => m.role === "escotista");
+    const escoteiros = filterVisibleEscoteiros(viewer, members).filter(
+      (m) => m.role === "escoteiro",
+    );
+    const escotistas = activeMembers.filter((m) => m.role === "escotista");
 
     let totalPending = 0;
     const escoteiroStats = [];
@@ -268,8 +254,8 @@ export const getGroupStats = query({
         number: group.number ?? null,
         password: group.password,
       },
-      isAdmin: user.isAdmin === true,
-      totalMembers: members.length,
+      isAdmin: viewer.isAdmin,
+      totalMembers: activeMembers.length,
       escoteiroCount: escoteiros.length,
       escotistaCount: escotistas.length,
       totalPending,

@@ -811,6 +811,79 @@ describe("getPendingForGroup", () => {
     expect(res.length).toBe(1);
     expect(res[0]!.escoteiro._id).toBe(escSenior);
   });
+
+  test("unstamped (undefined membershipStatus) escotista caller gets results", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedGroup(t);
+    // Legacy escotista row: membershipStatus was never stamped.
+    const escotista = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+    });
+    const esc = await seedEscoteiro(t, groupId, "escoteiro");
+    await insertAction(t, esc);
+    const res = await as(t, escotista).query(api.approvals.getPendingForGroup, {});
+    expect(res.map((r) => r.escoteiro._id)).toEqual([esc]);
+  });
+
+  test("legacy grupo-creator (isAdmin unset) sees every ramo's escoteiros", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedGroup(t);
+    // Creator predating the isAdmin flag: admin only via group.createdBy.
+    const creator = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      membershipStatus: "approved",
+    });
+    await t.run(async (ctx) => ctx.db.patch(groupId, { createdBy: creator }));
+    const escSenior = await seedEscoteiro(t, groupId, "senior");
+    await insertAction(t, escSenior);
+    const res = await as(t, creator).query(api.approvals.getPendingForGroup, {});
+    expect(res.map((r) => r.escoteiro._id)).toEqual([escSenior]);
+  });
+
+  test("banned escotista caller gets [] (not an error)", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedGroup(t);
+    const banned = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      membershipStatus: "approved",
+      bannedAt: 123,
+    });
+    const esc = await seedEscoteiro(t, groupId, "escoteiro");
+    await insertAction(t, esc);
+    const res = await as(t, banned).query(api.approvals.getPendingForGroup, {});
+    expect(res).toEqual([]);
+  });
+
+  test("ramo-less escoteiro's pendências are visible to admins only", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+    const nonAdmin = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["lobinho", "escoteiro", "senior", "pioneiro"],
+      groupId,
+      isAdmin: false,
+      membershipStatus: "approved",
+    });
+    // Escoteiro without a ramo (never picked one).
+    const ramoless = await insertUser(t, {
+      role: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+    });
+    await insertAction(t, ramoless);
+
+    const adminRes = await as(t, adminId).query(api.approvals.getPendingForGroup, {});
+    expect(adminRes.map((r) => r.escoteiro._id)).toEqual([ramoless]);
+
+    const nonAdminRes = await as(t, nonAdmin).query(api.approvals.getPendingForGroup, {});
+    expect(nonAdminRes).toEqual([]);
+  });
 });
 
 // ===========================================================================
@@ -881,5 +954,110 @@ describe("getGroupStats", () => {
     expect(ids).not.toContain(escEscoteiro);
     // escoteiroCount reflects only the visible (ramo-filtered) escoteiros.
     expect(res?.escoteiroCount).toBe(1);
+  });
+
+  test("totalMembers/escotistaStats stay grupo-wide for a non-admin viewer", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+    const escotista = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["senior"],
+      groupId,
+      isAdmin: false,
+      membershipStatus: "approved",
+    });
+    const escSenior = await seedEscoteiro(t, groupId, "senior");
+    await seedEscoteiro(t, groupId, "escoteiro"); // outside the viewer's ramos
+
+    const res = await as(t, escotista).query(api.approvals.getGroupStats, {});
+    expect(res).not.toBeNull();
+    // Member counts never apply the ramo rule: admin + escotista + 2 escoteiros.
+    expect(res?.totalMembers).toBe(4);
+    expect(res?.escotistaCount).toBe(2);
+    expect(res?.escotistaStats.map((s) => s._id).sort()).toEqual(
+      [adminId, escotista].sort(),
+    );
+    // Only escoteiroStats/escoteiroCount are scoped to the viewer's ramos.
+    expect(res?.escoteiroCount).toBe(1);
+    expect(res?.escoteiroStats.map((s) => s._id)).toEqual([escSenior]);
+  });
+
+  test("legacy grupo-creator (isAdmin unset) gets isAdmin=true and sees all ramos", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedGroup(t);
+    const creator = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      membershipStatus: "approved",
+    });
+    await t.run(async (ctx) => ctx.db.patch(groupId, { createdBy: creator }));
+    const escSenior = await seedEscoteiro(t, groupId, "senior");
+
+    const res = await as(t, creator).query(api.approvals.getGroupStats, {});
+    expect(res).not.toBeNull();
+    expect(res?.isAdmin).toBe(true);
+    expect(res?.escoteiroStats.map((s) => s._id)).toContain(escSenior);
+  });
+
+  test("banned escotista caller gets null (not an error)", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedGroup(t);
+    const banned = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      membershipStatus: "approved",
+      bannedAt: 123,
+    });
+    const res = await as(t, banned).query(api.approvals.getGroupStats, {});
+    expect(res).toBeNull();
+  });
+});
+
+// ===========================================================================
+// 10. Cross-surface consistency (visibilidade de ramo)
+// ===========================================================================
+
+describe("cross-surface consistency", () => {
+  test("getPendingForGroup and getGroupMembers expose the same escoteiros to a non-admin escotista", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedGroup(t);
+    // Non-admin viewer accompanying a single ramo.
+    const viewer = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      isAdmin: false,
+      membershipStatus: "approved",
+    });
+    // Escoteiros across two ramos and every edge status.
+    const inRamo = await seedEscoteiro(t, groupId, "escoteiro");
+    const otherRamo = await seedEscoteiro(t, groupId, "senior");
+    const pendingMember = await seedEscoteiro(t, groupId, "escoteiro", {
+      membershipStatus: "pending",
+    });
+    const banned = await seedEscoteiro(t, groupId, "escoteiro", { bannedAt: 123 });
+    const ramoless = await insertUser(t, {
+      role: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+    });
+    // One pending action each, so every escoteiro would appear in the
+    // pending list if (and only if) visible.
+    for (const esc of [inRamo, otherRamo, pendingMember, banned, ramoless]) {
+      await insertAction(t, esc);
+    }
+
+    const pending = await as(t, viewer).query(api.approvals.getPendingForGroup, {});
+    const members = await as(t, viewer).query(api.groups.getGroupMembers, {});
+
+    const pendingIds = pending.map((p) => p.escoteiro._id).sort();
+    const memberIds = members
+      .filter((m) => m.role === "escoteiro")
+      .map((m) => m._id)
+      .sort();
+    expect(pendingIds).toEqual(memberIds);
+    expect(pendingIds).toEqual([inRamo]);
   });
 });
