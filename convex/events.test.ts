@@ -475,6 +475,49 @@ describe("listTimeline visibility", () => {
     expect(res.page).toEqual([]);
   });
 
+  test("unauthenticated, banned, and pending callers get a terminal empty page", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+    const escId = await seedEscoteiro(t, groupId, "escoteiro");
+    await seedEvents(t, groupId, adminId, escId);
+
+    // Unauthenticated: silent empty, never a throw.
+    const anon = await t.query(api.events.listTimeline, { paginationOpts: PAGE });
+    expect(anon.page).toEqual([]);
+    expect(anon.isDone).toBe(true);
+
+    // Banned escotista.
+    const bannedId = await t.run(async (ctx) =>
+      ctx.db.insert("users", {
+        name: "Banned",
+        role: "escotista",
+        escotistaRamos: ["escoteiro"],
+        groupId,
+        membershipStatus: "approved",
+        bannedAt: 1,
+      }),
+    );
+    const banned = await as(t, bannedId).query(api.events.listTimeline, {
+      paginationOpts: PAGE,
+    });
+    expect(banned.page).toEqual([]);
+
+    // Pending-membership escotista.
+    const pendingId = await t.run(async (ctx) =>
+      ctx.db.insert("users", {
+        name: "Pending",
+        role: "escotista",
+        escotistaRamos: ["escoteiro"],
+        groupId,
+        membershipStatus: "pending",
+      }),
+    );
+    const pending = await as(t, pendingId).query(api.events.listTimeline, {
+      paginationOpts: PAGE,
+    });
+    expect(pending.page).toEqual([]);
+  });
+
   // With a mix of matching, other-ramo, and group-level events, a non-admin
   // sees ONLY their-ramo events. (Real Convex can under-fill filtered pages
   // mid-stream — the UI auto-advances through empty pages; convex-test reads

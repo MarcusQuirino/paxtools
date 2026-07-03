@@ -448,6 +448,108 @@ describe("group queries: visibility & filtering", () => {
     expect(escoteiros.map((m) => m.ramo)).toEqual(["senior"]);
   });
 
+  test("getGroupMembers: unstamped (undefined membershipStatus) escotista caller gets results", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedGroup(t);
+    // Legacy escotista row: membershipStatus was never stamped.
+    const escotista = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+    });
+    const esc = await insertUser(t, {
+      role: "escoteiro",
+      ramo: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+    });
+    const members = await as(t, escotista).query(api.groups.getGroupMembers, {});
+    expect(members.map((m) => m._id)).toContain(esc);
+  });
+
+  test("getGroupMembers: legacy grupo-creator (isAdmin unset) sees every ramo's escoteiros", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedGroup(t);
+    // Creator predating the isAdmin flag: admin only via group.createdBy.
+    const creator = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      membershipStatus: "approved",
+    });
+    await t.run(async (ctx) => ctx.db.patch(groupId, { createdBy: creator }));
+    const escSenior = await insertUser(t, {
+      role: "escoteiro",
+      ramo: "senior",
+      groupId,
+      membershipStatus: "approved",
+    });
+    const members = await as(t, creator).query(api.groups.getGroupMembers, {});
+    expect(members.map((m) => m._id)).toContain(escSenior);
+  });
+
+  test("getGroupMembers: escoteiro caller gets [] (not an error)", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedGroup(t);
+    const esc = await insertUser(t, {
+      role: "escoteiro",
+      ramo: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+    });
+    const members = await as(t, esc).query(api.groups.getGroupMembers, {});
+    expect(members).toEqual([]);
+  });
+
+  test("getGroupMembers: banned escotista caller gets [] (not an error)", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedGroup(t);
+    const banned = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      membershipStatus: "approved",
+      bannedAt: 123,
+    });
+    const members = await as(t, banned).query(api.groups.getGroupMembers, {});
+    expect(members).toEqual([]);
+  });
+
+  test("getGroupMembers: escotista in no group gets [] (not an error)", async () => {
+    const t = convexTest(schema, modules);
+    await seedGroup(t);
+    const outsider = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+    });
+    const members = await as(t, outsider).query(api.groups.getGroupMembers, {});
+    expect(members).toEqual([]);
+  });
+
+  test("getGroupMembers: ramo-less escoteiro is visible to admins only", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+    const nonAdmin = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["lobinho", "escoteiro", "senior", "pioneiro"],
+      groupId,
+      isAdmin: false,
+      membershipStatus: "approved",
+    });
+    // Escoteiro without a ramo (never picked one).
+    const ramoless = await insertUser(t, {
+      role: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+    });
+
+    const adminView = await as(t, adminId).query(api.groups.getGroupMembers, {});
+    expect(adminView.map((m) => m._id)).toContain(ramoless);
+
+    const nonAdminView = await as(t, nonAdmin).query(api.groups.getGroupMembers, {});
+    expect(nonAdminView.map((m) => m._id)).not.toContain(ramoless);
+  });
+
   test("getMyGroup exposes password only to approved escotistas", async () => {
     const t = convexTest(schema, modules);
     const { adminId, groupId } = await seedGroup(t);

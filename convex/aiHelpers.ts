@@ -1,10 +1,9 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, query } from "./_generated/server";
-import type { QueryCtx, MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { ramoValidator } from "./schema";
-import { getAuthenticatedUser } from "./lib/authHelpers";
 import { isFlagEnabled } from "./featureFlags";
+import { resolveRamoAccess } from "./lib/ramoVisibility";
 import { computeRamoCoverage, type Ramo, type RamoCoverage } from "./lib/coverage";
 
 const REGEN_COOLDOWN_MS = 30_000;
@@ -17,33 +16,6 @@ const ideasValidator = v.array(
     groundedOn: v.array(v.string()),
   }),
 );
-
-/**
- * Resolve which ramo the caller may act on and assert access — mirrors Plan B's
- * resolveScopedRamo authz. Approved escotista in a group; non-admin scoped to
- * escotistaRamos; admin may pass any ramo; omitted ramo defaults to the first
- * escotistaRamos entry.
- */
-async function resolveRamoAccess(
-  ctx: QueryCtx | MutationCtx,
-  requested: Ramo | undefined,
-): Promise<{ groupId: Id<"groups">; ramo: Ramo }> {
-  const caller = await getAuthenticatedUser(ctx);
-  if (caller.role !== "escotista") {
-    throw new Error("Apenas escotistas podem usar as sugestões da IA");
-  }
-  if (!caller.groupId) throw new Error("Você não está em nenhum grupo");
-  if ((caller.membershipStatus ?? "approved") !== "approved") {
-    throw new Error("Sua entrada no grupo ainda não foi aprovada");
-  }
-  const ramos = (caller.escotistaRamos ?? []) as Ramo[];
-  const ramo = requested ?? ramos[0];
-  if (!ramo) throw new Error("Você não tem nenhum ramo atribuído");
-  if (!caller.isAdmin && !ramos.includes(ramo)) {
-    throw new Error("Este ramo não pertence a você");
-  }
-  return { groupId: caller.groupId, ramo };
-}
 
 /**
  * Flag gate + authz + cooldown claim + coverage, all in one transaction (called

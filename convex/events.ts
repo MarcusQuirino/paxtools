@@ -1,6 +1,6 @@
 import { query } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
-import { getAuthUserId } from "@convex-dev/auth/server";
+import { tryResolveRamoViewer } from "./lib/ramoVisibility";
 
 // A terminal, empty page for viewers who may see nothing. Shaped like a real
 // PaginationResult so the client's usePaginatedQuery treats it as "done".
@@ -22,37 +22,23 @@ const EMPTY_PAGE = { page: [], isDone: true, continueCursor: "" };
 export const listTimeline = query({
   args: { paginationOpts: paginationOptsValidator },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return EMPTY_PAGE;
-    const user = await ctx.db.get(userId);
-    if (!user || user.role !== "escotista") return EMPTY_PAGE;
-    if (!user.groupId) return EMPTY_PAGE;
-    if (user.bannedAt) return EMPTY_PAGE;
-    if (user.membershipStatus && user.membershipStatus !== "approved")
-      return EMPTY_PAGE;
-
-    const groupId = user.groupId;
-    // Legacy group creators may predate the isAdmin flag; queries don't run the
-    // backfill, so mirror the createdBy fallback used by the other admin reads.
-    let isAdmin = user.isAdmin === true;
-    if (!isAdmin) {
-      const group = await ctx.db.get(groupId);
-      if (group && group.createdBy === user._id) isAdmin = true;
-    }
-    const ramos = user.escotistaRamos ?? [];
-    if (!isAdmin && ramos.length === 0) return EMPTY_PAGE;
+    // The module validates the caller and resolves isAdmin including the
+    // legacy grupo-creator (createdBy) fallback — silent empty on any failure.
+    const viewer = await tryResolveRamoViewer(ctx);
+    if (!viewer) return EMPTY_PAGE;
+    if (!viewer.isAdmin && viewer.ramos.length === 0) return EMPTY_PAGE;
 
     const base = ctx.db
       .query("events")
-      .withIndex("by_group", (q) => q.eq("groupId", groupId))
+      .withIndex("by_group", (q) => q.eq("groupId", viewer.groupId))
       .order("desc");
 
-    const filtered = isAdmin
+    const filtered = viewer.isAdmin
       ? base
       : base.filter((q) =>
           q.and(
             q.eq(q.field("scope"), "ramo"),
-            q.or(...ramos.map((r) => q.eq(q.field("subjectRamo"), r))),
+            q.or(...viewer.ramos.map((r) => q.eq(q.field("subjectRamo"), r))),
           ),
         );
 

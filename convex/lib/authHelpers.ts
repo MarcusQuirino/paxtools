@@ -1,5 +1,5 @@
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import type { Doc, Id } from "../_generated/dataModel";
+import type { Doc } from "../_generated/dataModel";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 export async function getAuthenticatedUser(ctx: QueryCtx | MutationCtx) {
@@ -34,46 +34,6 @@ export async function maybeBackfillUser(
   if (Object.keys(patch).length === 0) return user;
   await ctx.db.patch(user._id, patch);
   return { ...user, ...patch };
-}
-
-export async function assertEscotistaInSameGroup(
-  ctx: QueryCtx | MutationCtx,
-  targetUserId: Id<"users">,
-) {
-  const caller = await getAuthenticatedUser(ctx);
-  if (caller.role !== "escotista") {
-    throw new Error("Apenas escotistas podem realizar esta ação");
-  }
-  if (!caller.groupId) {
-    throw new Error("Você não está em nenhum grupo");
-  }
-  if (caller.membershipStatus !== "approved") {
-    throw new Error("Sua entrada no grupo ainda não foi aprovada");
-  }
-  const target = await ctx.db.get(targetUserId);
-  if (!target) throw new Error("Escoteiro não encontrado");
-  if (target.groupId !== caller.groupId) {
-    throw new Error("Este escoteiro não pertence ao seu grupo");
-  }
-  // A not-yet-approved member must not be readable/approvable yet. The read
-  // paths (getPendingForGroup/getGroupStats) already exclude non-approved
-  // members; the write/approve path must match so a pending member cannot be
-  // acted on before an admin approves them.
-  if ((target.membershipStatus ?? "approved") !== "approved") {
-    throw new Error("Este membro ainda não foi aprovado no grupo");
-  }
-  // Ramo boundary for non-admins. A ramo-less escoteiro (e.g. one demoted from
-  // escotista, which clears escotistaRamos but never sets ramo) must FAIL the
-  // boundary rather than skip it — mirroring the read paths, which exclude
-  // ramo-less escoteiros entirely. Normally-onboarded escoteiros always carry a
-  // ramo, so this is behavior-preserving for them.
-  if (!caller.isAdmin && target.role === "escoteiro") {
-    const ramos = caller.escotistaRamos ?? [];
-    if (!target.ramo || !ramos.includes(target.ramo)) {
-      throw new Error("Este escoteiro não pertence ao seu ramo");
-    }
-  }
-  return { caller, target };
 }
 
 export async function assertAdmin(ctx: QueryCtx | MutationCtx) {

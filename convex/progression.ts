@@ -1,10 +1,8 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import {
-  getAuthenticatedUser,
-  assertEscotistaInSameGroup,
-} from "./lib/authHelpers";
+import { getAuthenticatedUser } from "./lib/authHelpers";
+import { assertCanActOnEscoteiro } from "./lib/ramoVisibility";
 import {
   snapshotProgression,
   detectLevelUps,
@@ -45,7 +43,7 @@ async function resolveTargetAndStatus(
   const caller = await getAuthenticatedUser(ctx);
 
   if (targetUserId) {
-    await assertEscotistaInSameGroup(ctx, targetUserId);
+    await assertCanActOnEscoteiro(ctx, targetUserId);
     return {
       effectiveUserId: targetUserId,
       status: "approved",
@@ -164,7 +162,7 @@ export const getMyCompletions = query({
 export const getCompletionsForUser = query({
   args: { targetUserId: v.id("users") },
   handler: async (ctx, args) => {
-    await assertEscotistaInSameGroup(ctx, args.targetUserId);
+    await assertCanActOnEscoteiro(ctx, args.targetUserId);
 
     const target = await ctx.db.get(args.targetUserId);
 

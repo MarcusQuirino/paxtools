@@ -110,14 +110,71 @@ describe("prepareSuggestion authz", () => {
     expect(out.cachedAt).toBeNull();
   });
 
-  test("non-admin asking for a ramo outside escotistaRamos is rejected", async () => {
+  test("non-admin asking for a ramo outside escotistaRamos is rejected on both AI surfaces", async () => {
     const t = convexTest(schema, modules);
     await enableAiFlag(t);
     const { groupId } = await seedGroupWithAdmin(t);
     const escId = await seedEscotista(t, groupId, ["escoteiro"]);
+    // Same caller shape and same module-owned message as the stats surface —
+    // identical outcome everywhere resolveRamoAccess guards a ramo view.
     await expect(
-      as(t, escId).mutation(internal.aiHelpers.prepareSuggestion, { ramo: "lobinho" }),
-    ).rejects.toThrow();
+      as(t, escId).mutation(internal.aiHelpers.prepareSuggestion, { ramo: "senior" }),
+    ).rejects.toThrow("Você não acompanha esse ramo");
+    await expect(
+      as(t, escId).query(api.aiHelpers.getCachedSuggestion, { ramo: "senior" }),
+    ).rejects.toThrow("Você não acompanha esse ramo");
+  });
+
+  test("escotista with no ramos and omitted ramo gets 'Selecione um ramo'", async () => {
+    const t = convexTest(schema, modules);
+    await enableAiFlag(t);
+    const { groupId } = await seedGroupWithAdmin(t);
+    const escId = await seedEscotista(t, groupId, []);
+    await expect(
+      as(t, escId).mutation(internal.aiHelpers.prepareSuggestion, {}),
+    ).rejects.toThrow("Selecione um ramo");
+    await expect(
+      as(t, escId).query(api.aiHelpers.getCachedSuggestion, {}),
+    ).rejects.toThrow("Selecione um ramo");
+  });
+
+  test("legacy grupo-creator (isAdmin unset) gets admin scope on AI", async () => {
+    const t = convexTest(schema, modules);
+    await enableAiFlag(t);
+    // Creator predating the isAdmin flag: createdBy points at them, flag unset.
+    const creatorId = await t.run(async (ctx) =>
+      ctx.db.insert("users", {
+        name: "Legacy",
+        role: "escotista",
+        escotistaRamos: ["escoteiro"],
+        membershipStatus: "approved",
+        onboardingComplete: true,
+      }),
+    );
+    const groupId = await t.run(async (ctx) =>
+      ctx.db.insert("groups", {
+        name: "GL", number: "9", password: "ZZZZZZ",
+        createdBy: creatorId, createdAt: 1,
+      }),
+    );
+    await t.run(async (ctx) => ctx.db.patch(creatorId, { groupId }));
+    await t.mutation(internal.aiHelpers.saveSuggestion, {
+      groupId,
+      ramo: "pioneiro",
+      perEixoIdeas: [{ eixoId: "a", eixoName: "A", idea: "x", groundedOn: [] }],
+      overview: "for-admins",
+    });
+    // Query first: the read path must resolve the createdBy fallback itself
+    // (queries cannot backfill isAdmin). "pioneiro" is not in their ramos.
+    const cached = await as(t, creatorId).query(api.aiHelpers.getCachedSuggestion, {
+      ramo: "pioneiro",
+    });
+    expect(cached).not.toBeNull();
+    expect(cached!.overview).toBe("for-admins");
+    const out = await as(t, creatorId).mutation(internal.aiHelpers.prepareSuggestion, {
+      ramo: "lobinho",
+    });
+    expect(out.ramo).toBe("lobinho");
   });
 
   test("admin may request any ramo", async () => {

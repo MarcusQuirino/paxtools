@@ -9,6 +9,10 @@ import {
   maybeBackfillUser,
 } from "./lib/authHelpers";
 import { logGroupEvent } from "./lib/events";
+import {
+  filterVisibleEscoteiros,
+  tryResolveRamoViewer,
+} from "./lib/ramoVisibility";
 import { ramoValidator } from "./schema";
 
 /**
@@ -270,31 +274,15 @@ export const getMyGroup = query({
 export const getGroupMembers = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-    const user = await ctx.db.get(userId);
-    if (!user || user.role !== "escotista") return [];
-    if (!user.groupId) return [];
-    if (user.membershipStatus !== "approved") return [];
+    const viewer = await tryResolveRamoViewer(ctx);
+    if (!viewer) return [];
 
     const members = await ctx.db
       .query("users")
-      .withIndex("by_groupId", (q) => q.eq("groupId", user.groupId))
+      .withIndex("by_groupId", (q) => q.eq("groupId", viewer.groupId))
       .take(500);
 
-    const approved = members.filter(
-      (m) => (m.membershipStatus ?? "approved") === "approved" && !m.bannedAt,
-    );
-
-    const visible = user.isAdmin
-      ? approved
-      : approved.filter((m) => {
-          if (m.role !== "escoteiro") return true;
-          if (!m.ramo) return false;
-          return (user.escotistaRamos ?? []).includes(m.ramo);
-        });
-
-    return visible.map((m) => ({
+    return filterVisibleEscoteiros(viewer, members).map((m) => ({
       _id: m._id,
       name: m.name,
       image: m.image,
