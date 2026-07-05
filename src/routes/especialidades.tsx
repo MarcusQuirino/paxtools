@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -9,24 +9,37 @@ import { AuthButton } from "@/components/auth/auth-button";
 import { PlanNav } from "@/components/progression/plan-nav";
 import { Footer } from "@/components/footer";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronDown, Award, Trophy, BookOpen } from "lucide-react";
+import { ChevronDown, Award, Trophy, Lock, CheckCircle2 } from "lucide-react";
 import {
   YOUNGER_SPECIALTIES_BY_EIXO,
   type YoungSpecialty,
 } from "@/data/specialty-data/younger";
+import {
+  OLDER_SPECIALTIES_BY_EIXO,
+  PROJECT_STEPS,
+  PROJECT_STEP_LABELS,
+  type OlderSpecialty,
+  type ProjectStep as Step,
+} from "@/data/specialty-data/older";
 import { getSpecialtyLevel } from "@/lib/completion-logic";
 
 export const Route = createFileRoute("/especialidades")({
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(
-      convexQuery(api.specialties.getMySpecialtyItems, {}),
-    );
+    await Promise.all([
+      context.queryClient.ensureQueryData(
+        convexQuery(api.specialties.getMySpecialtyItems, {}),
+      ),
+      context.queryClient.ensureQueryData(
+        convexQuery(api.specialties.getMySpecialtyReports, {}),
+      ),
+    ]);
   },
   component: EspecialidadesPage,
 });
@@ -325,30 +338,9 @@ function EspecialidadesPage() {
 
   const ramo = user?.ramo;
 
-  // Only show younger specialties for lobinho/escoteiro
+  // Older group (sênior + pioneiro): project-step UI. Younger: item checklist.
   if (ramo === "senior" || ramo === "pioneiro") {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="mx-auto max-w-lg px-4 py-4 pb-20">
-          <header className="flex items-center justify-between mb-4">
-            <h1 className="text-lg font-black uppercase text-foreground">
-              Especialidades
-            </h1>
-            <AuthButton />
-          </header>
-          <div className="rounded-md border-2 border-black bg-card p-6 text-center shadow-[3px_3px_0px_0px_#000]">
-            <BookOpen className="size-10 mx-auto text-muted-foreground/40 mb-3" />
-            <p className="font-semibold">
-              Especialidades para Sênior e Pioneiro em breve
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Estamos trabalhando no sistema de projetos (Conhecer / Fazer / Compartilhar).
-            </p>
-          </div>
-          <Footer />
-        </div>
-      </div>
-    );
+    return <OlderEspecialidadesContent />;
   }
 
   return <YoungerEspecialidadesContent />;
@@ -408,6 +400,356 @@ function YoungerEspecialidadesContent() {
               />
             );
           })}
+        </div>
+
+        <Footer />
+      </div>
+    </div>
+  );
+}
+
+// ===========================================================================
+// Older group (sênior + pioneiro) — three-step project UI
+// ===========================================================================
+
+type ReportRow = Doc<"specialtyProjectReports">;
+
+const STEP_ORDER = PROJECT_STEPS;
+
+function stepLabel(step: Step): string {
+  return PROJECT_STEP_LABELS[step];
+}
+function stepOrdinal(step: Step): number {
+  return STEP_ORDER.indexOf(step) + 1;
+}
+
+function StepCard({
+  specialtyId,
+  step,
+  suggestions,
+  row,
+  locked,
+  onSubmit,
+  isSubmitting,
+}: {
+  specialtyId: string;
+  step: Step;
+  suggestions: string[];
+  row: ReportRow | undefined;
+  locked: boolean;
+  onSubmit: (specialtyId: string, step: Step, text: string) => void;
+  isSubmitting: boolean;
+}) {
+  const status = row?.status ?? null;
+  const isApproved = status === "approved";
+  const isPending = status === "pending";
+  const [text, setText] = useState(row?.text ?? "");
+
+  // Keep the local draft in sync when the stored row changes (e.g. approval).
+  useEffect(() => {
+    setText(row?.text ?? "");
+  }, [row?._id, row?.text]);
+
+  const canEdit = !locked && !isApproved;
+  const dirty = text.trim() !== (row?.text ?? "").trim();
+
+  return (
+    <div
+      className={`rounded-md border-2 border-black p-3 shadow-[2px_2px_0px_0px_#000] ${
+        isApproved
+          ? "bg-green-50/60"
+          : locked
+            ? "bg-muted/40"
+            : isPending
+              ? "bg-amber-50/60"
+              : "bg-card"
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-full border-2 border-black bg-primary text-[10px] font-black text-primary-foreground">
+          {stepOrdinal(step)}
+        </span>
+        <span className="font-bold text-sm text-foreground">{stepLabel(step)}</span>
+        {isApproved && (
+          <Badge className="gap-1 bg-green-600 text-white border-2 border-green-800 text-xs px-1.5 py-0.5">
+            <CheckCircle2 className="size-3" />
+            Aprovado
+          </Badge>
+        )}
+        {isPending && (
+          <Badge
+            variant="outline"
+            className="text-xs border-amber-400 text-amber-700 bg-amber-50"
+          >
+            Pendente
+          </Badge>
+        )}
+        {locked && !isApproved && (
+          <Badge
+            variant="outline"
+            className="gap-1 text-xs border-muted-foreground/40 text-muted-foreground"
+          >
+            <Lock className="size-3" />
+            Bloqueado
+          </Badge>
+        )}
+      </div>
+
+      {locked && !isApproved ? (
+        <p className="text-xs text-muted-foreground">
+          Conclua e tenha a etapa anterior aprovada para desbloquear.
+        </p>
+      ) : (
+        <>
+          {suggestions.length > 0 && (
+            <div className="mb-2">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1">
+                Sugestões
+              </p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                {suggestions.map((s, i) => (
+                  <li key={i} className="text-xs text-muted-foreground leading-snug">
+                    {s}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            disabled={!canEdit || isSubmitting}
+            rows={4}
+            placeholder="Escreva seu relato desta etapa..."
+            className="w-full rounded-md border-2 border-black bg-background p-2 text-sm resize-y disabled:opacity-70 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
+
+          {canEdit && (
+            <div className="flex items-center justify-between gap-2 mt-2">
+              <span className="text-xs text-muted-foreground">
+                {isPending ? "Enviado — aguardando aprovação" : ""}
+              </span>
+              <Button
+                size="sm"
+                className="border-black"
+                disabled={!text.trim() || isSubmitting || (isPending && !dirty)}
+                onClick={() => onSubmit(specialtyId, step, text)}
+              >
+                {isPending ? "Reenviar" : "Enviar"}
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function OlderSpecialtyCard({
+  specialty,
+  reports,
+  onSubmit,
+  isSubmitting,
+}: {
+  specialty: OlderSpecialty;
+  reports: Map<Step, ReportRow>;
+  onSubmit: (specialtyId: string, step: Step, text: string) => void;
+  isSubmitting: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const conhecer = reports.get("conhecer");
+  const fazer = reports.get("fazer");
+  const compartilhar = reports.get("compartilhar");
+  const earned = compartilhar?.status === "approved";
+
+  const isLocked = (step: Step): boolean => {
+    if (step === "conhecer") return false;
+    if (step === "fazer") return conhecer?.status !== "approved";
+    return fazer?.status !== "approved";
+  };
+
+  const approvedCount = STEP_ORDER.filter(
+    (s) => reports.get(s)?.status === "approved",
+  ).length;
+  const suggestionsFor = (step: Step): string[] =>
+    step === "conhecer"
+      ? specialty.conhecerSuggestions
+      : step === "fazer"
+        ? specialty.fazerSuggestions
+        : specialty.compartilharSuggestions;
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="w-full flex items-center gap-3 p-3 rounded-md border-2 border-black bg-card hover:bg-muted/50 transition-colors text-left shadow-[2px_2px_0px_0px_#000]"
+        >
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-sm text-foreground">
+                {specialty.name}
+              </span>
+              {earned && (
+                <Badge className="gap-1 bg-yellow-400 text-yellow-900 border-2 border-yellow-600 font-bold text-xs px-1.5 py-0.5">
+                  <Trophy className="size-3" />
+                  Conquistada
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {approvedCount}/3 etapas aprovadas
+            </p>
+          </div>
+          <ChevronDown
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+      </CollapsibleTrigger>
+
+      <CollapsibleContent>
+        <div className="mt-1 space-y-2 pl-3">
+          <p className="text-xs text-muted-foreground leading-relaxed px-1">
+            {specialty.description}
+          </p>
+          {STEP_ORDER.map((step) => (
+            <StepCard
+              key={step}
+              specialtyId={specialty.id}
+              step={step}
+              suggestions={suggestionsFor(step)}
+              row={reports.get(step)}
+              locked={isLocked(step)}
+              onSubmit={onSubmit}
+              isSubmitting={isSubmitting}
+            />
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function OlderEixoSection({
+  eixoId,
+  specialties,
+  reportsBySpecialty,
+  onSubmit,
+  isSubmitting,
+}: {
+  eixoId: string;
+  specialties: OlderSpecialty[];
+  reportsBySpecialty: Map<string, Map<Step, ReportRow>>;
+  onSubmit: (specialtyId: string, step: Step, text: string) => void;
+  isSubmitting: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const meta = EIXO_LABELS[eixoId] ?? { name: eixoId, color: "#666" };
+
+  const earnedCount = specialties.filter(
+    (s) => reportsBySpecialty.get(s.id)?.get("compartilhar")?.status === "approved",
+  ).length;
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="w-full flex items-center gap-3 p-3 rounded-md border-2 border-black bg-card hover:bg-muted/30 transition-colors text-left shadow-[3px_3px_0px_0px_#000]"
+        >
+          <span
+            className="size-3 rounded-full shrink-0"
+            style={{ backgroundColor: meta.color }}
+          />
+          <div className="flex-1">
+            <p className="font-bold text-sm text-foreground">{meta.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {specialties.length} especialidade{specialties.length !== 1 ? "s" : ""}
+              {earnedCount > 0 && ` · ${earnedCount} conquistada${earnedCount !== 1 ? "s" : ""}`}
+            </p>
+          </div>
+          <ChevronDown
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mt-1 space-y-2 pl-3">
+          {specialties.map((s) => (
+            <OlderSpecialtyCard
+              key={s.id}
+              specialty={s}
+              reports={reportsBySpecialty.get(s.id) ?? new Map()}
+              onSubmit={onSubmit}
+              isSubmitting={isSubmitting}
+            />
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function OlderEspecialidadesContent() {
+  const { data: myReports } = useSuspenseQuery(
+    convexQuery(api.specialties.getMySpecialtyReports, {}),
+  );
+
+  // Submitting a step never earns the specialty (that happens on escotista
+  // approval of the compartilhar step), so no level-up toast is expected here.
+  const submitStepFn = useConvexMutation(api.specialties.submitSpecialtyStep);
+  const { mutate: submitStep, isPending: isSubmitting } = useMutation({
+    mutationFn: submitStepFn,
+  });
+
+  // specialtyId → (step → row), older ramoGroup only.
+  const reportsBySpecialty = useMemo(() => {
+    const m = new Map<string, Map<Step, ReportRow>>();
+    for (const row of myReports) {
+      if (row.ramoGroup !== "older") continue;
+      const inner = m.get(row.specialtyId) ?? new Map<Step, ReportRow>();
+      inner.set(row.step as Step, row);
+      m.set(row.specialtyId, inner);
+    }
+    return m;
+  }, [myReports]);
+
+  const handleSubmit = (specialtyId: string, step: Step, text: string) => {
+    submitStep({ specialtyId, step, text });
+  };
+
+  const eixoIds = Object.keys(OLDER_SPECIALTIES_BY_EIXO);
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
+        <header className="flex items-center justify-between">
+          <h1 className="text-lg font-black uppercase text-foreground">
+            Especialidades
+          </h1>
+          <AuthButton />
+        </header>
+
+        <PlanNav />
+
+        <p className="text-xs text-muted-foreground px-1">
+          Cada especialidade é um projeto em três etapas: Conhecer → Fazer →
+          Compartilhar. Cada etapa é liberada após a anterior ser aprovada.
+        </p>
+
+        <div className="space-y-2">
+          {eixoIds.map((eixoId) => (
+            <OlderEixoSection
+              key={eixoId}
+              eixoId={eixoId}
+              specialties={OLDER_SPECIALTIES_BY_EIXO[eixoId] ?? []}
+              reportsBySpecialty={reportsBySpecialty}
+              onSubmit={handleSubmit}
+              isSubmitting={isSubmitting}
+            />
+          ))}
         </div>
 
         <Footer />

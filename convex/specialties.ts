@@ -5,6 +5,7 @@
  */
 
 import { query, mutation } from "./_generated/server";
+import type { QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
@@ -387,5 +388,256 @@ export const rejectSpecialtyItems = mutation({
       subject: target,
       summary: `Rejeitou itens pendentes de especialidade: ${args.specialtyId}`,
     });
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Older ramoGroup (sênior + pioneiro) — project-report steps (#43)
+//
+// Each especialidade is a three-step project: conhecer → fazer → compartilhar.
+// Steps are sequential: a step can only be submitted once the prior step is
+// approved. The specialty is earned when the compartilhar step is approved.
+// ---------------------------------------------------------------------------
+
+const STEP_ORDER = ["conhecer", "fazer", "compartilhar"] as const;
+type ProjectStep = (typeof STEP_ORDER)[number];
+
+const projectStep = v.union(
+  v.literal("conhecer"),
+  v.literal("fazer"),
+  v.literal("compartilhar"),
+);
+
+/** The step that must be approved before `step` can be submitted (null for conhecer). */
+function prerequisiteStep(step: ProjectStep): ProjectStep | null {
+  const idx = STEP_ORDER.indexOf(step);
+  return idx <= 0 ? null : STEP_ORDER[idx - 1]!;
+}
+
+/**
+ * Return all specialtyProjectReports for the current user.
+ * The older /especialidades UI uses this to render each step's status and
+ * to derive sequential locking (a step is locked until its predecessor is approved).
+ */
+export const getMySpecialtyReports = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const user = await ctx.db.get(userId);
+    if (!user || user.bannedAt) return [];
+
+    return ctx.db
+      .query("specialtyProjectReports")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .take(1000);
+  },
+});
+
+/**
+ * Return all specialtyProjectReports for a specific escoteiro.
+ * Used by the escotista to view an escoteiro's project progress.
+ */
+export const getSpecialtyReportsForEscoteiro = query({
+  args: { escoteiroId: v.id("users") },
+  handler: async (ctx, args) => {
+    const viewer = await tryResolveRamoViewer(ctx);
+    if (!viewer) return [];
+
+    const escoteiro = await ctx.db.get(args.escoteiroId);
+    if (!escoteiro) return [];
+    const visible = filterVisibleEscoteiros(viewer, [escoteiro]);
+    if (visible.length === 0) return [];
+
+    return ctx.db
+      .query("specialtyProjectReports")
+      .withIndex("by_userId", (q) => q.eq("userId", args.escoteiroId))
+      .take(1000);
+  },
+});
+
+/** Find a user's report row for a given (ramoGroup, specialtyId, step). */
+async function findReport(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  ramoGroup: "younger" | "older",
+  specialtyId: string,
+  step: ProjectStep,
+): Promise<Doc<"specialtyProjectReports"> | null> {
+  return ctx.db
+    .query("specialtyProjectReports")
+    .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
+      q
+        .eq("userId", userId)
+        .eq("ramoGroup", ramoGroup)
+        .eq("specialtyId", specialtyId),
+    )
+    .filter((q) => q.eq(q.field("step"), step))
+    .first();
+}
+
+/**
+ * Submit (create or replace) a project-step report for the current user.
+ *
+ * - Sequential lock: a step may only be submitted once its predecessor step is
+ *   `"approved"` (conhecer has no predecessor). Enforced server-side.
+ * - If a pending row already exists for this step → its text is replaced and it
+ *   stays pending (re-submit).
+ * - If the row is already approved → throws (escoteiro cannot overwrite an
+ *   approved step).
+ * - An escotista submitting on behalf of a target (targetUserId) writes the row
+ *   as approved.
+ */
+export const submitSpecialtyStep = mutation({
+  args: {
+    specialtyId: v.string(),
+    step: projectStep,
+    text: v.string(),
+    /** Optional: escotista submitting on behalf of a specific escoteiro. */
+    targetUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args): Promise<LevelUpToast[]> => {
+    const caller = await getAuthenticatedUser(ctx);
+
+    let effectiveUserId: Id<"users"> = caller._id;
+    let status: "pending" | "approved" = "pending";
+    let approvedBy: Id<"users"> | undefined = undefined;
+
+    if (args.targetUserId) {
+      await assertCanActOnEscoteiro(ctx, args.targetUserId);
+      effectiveUserId = args.targetUserId;
+      status = "approved";
+      approvedBy = caller._id;
+    }
+
+    const effectiveUser = args.targetUserId
+      ? await ctx.db.get(args.targetUserId)
+      : caller;
+    const ramoGroup = ramoToGroup(effectiveUser?.ramo);
+
+    const text = args.text.trim();
+    if (!text) throw new Error("O relato não pode estar vazio.");
+
+    // Sequential lock: predecessor step must be approved.
+    const prereq = prerequisiteStep(args.step);
+    if (prereq) {
+      const prev = await findReport(
+        ctx,
+        effectiveUserId,
+        ramoGroup,
+        args.specialtyId,
+        prereq,
+      );
+      if (!prev || prev.status !== "approved") {
+        throw new Error(
+          `A etapa "${prereq}" precisa ser aprovada antes de enviar "${args.step}".`,
+        );
+      }
+    }
+
+    const now = Date.now();
+    const existing = await findReport(
+      ctx,
+      effectiveUserId,
+      ramoGroup,
+      args.specialtyId,
+      args.step,
+    );
+
+    if (existing) {
+      // An approved step is locked to the escoteiro; only escotista-on-behalf overwrites.
+      if (existing.status === "approved" && !args.targetUserId) {
+        throw new Error(
+          "Esta etapa já foi aprovada e não pode ser reenviada.",
+        );
+      }
+      await ctx.db.patch(existing._id, {
+        text,
+        completedAt: now,
+        status,
+        ...(approvedBy
+          ? { approvedBy, approvedAt: now }
+          : { approvedBy: undefined, approvedAt: undefined }),
+      });
+    } else {
+      await ctx.db.insert("specialtyProjectReports", {
+        userId: effectiveUserId,
+        ramoGroup,
+        specialtyId: args.specialtyId,
+        step: args.step,
+        text,
+        completedAt: now,
+        status,
+        ...(approvedBy ? { approvedBy, approvedAt: now } : {}),
+      });
+    }
+
+    // The earned cascade (compartilhar → specialty earned → level-up toasts) runs
+    // in approveSpecialtyStep, where a pre-write snapshot is available to diff
+    // against. Direct escotista-on-behalf writes skip toasts (rare path).
+    return [];
+  },
+});
+
+/**
+ * Approve a pending project-step report.
+ * When the approved step is `"compartilhar"`, the specialty is earned and the
+ * level-up cascade runs (same mechanism as bloco/action approvals).
+ */
+export const approveSpecialtyStep = mutation({
+  args: { reportId: v.id("specialtyProjectReports") },
+  handler: async (ctx, args): Promise<LevelUpToast[]> => {
+    const user = await getAuthenticatedUser(ctx);
+    const doc = await ctx.db.get(args.reportId);
+    if (!doc) throw new Error("Não encontrado");
+    if (doc.status !== "pending") throw new Error("Etapa não está pendente");
+
+    const { target } = await assertCanActOnEscoteiro(ctx, doc.userId);
+
+    const isFinalStep = doc.step === "compartilhar";
+    const before = isFinalStep
+      ? await snapshotProgression(ctx, doc.userId)
+      : null;
+
+    await ctx.db.patch(args.reportId, {
+      status: "approved",
+      approvedBy: user._id,
+      approvedAt: Date.now(),
+    });
+
+    await logRamoEvent(ctx, {
+      type: "approval",
+      actor: user,
+      subject: target,
+      summary: `Aprovou etapa "${doc.step}" da especialidade: ${doc.specialtyId}`,
+    });
+
+    if (isFinalStep && before) {
+      return detectLevelUps(ctx, user, target, before);
+    }
+    return [];
+  },
+});
+
+/**
+ * Reject (delete) a pending project-step report.
+ * The escoteiro's text is cleared; they rewrite and resubmit.
+ */
+export const rejectSpecialtyStep = mutation({
+  args: { reportId: v.id("specialtyProjectReports") },
+  handler: async (ctx, args) => {
+    const doc = await ctx.db.get(args.reportId);
+    if (!doc) throw new Error("Não encontrado");
+    if (doc.status !== "pending") throw new Error("Etapa não está pendente");
+
+    const { caller, target } = await assertCanActOnEscoteiro(ctx, doc.userId);
+    await logRamoEvent(ctx, {
+      type: "rejection",
+      actor: caller,
+      subject: target,
+      summary: `Rejeitou etapa "${doc.step}" da especialidade: ${doc.specialtyId}`,
+    });
+    await ctx.db.delete(args.reportId);
   },
 });

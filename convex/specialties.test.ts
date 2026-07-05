@@ -381,3 +381,250 @@ describe("getMySpecialtyItems", () => {
     expect(items).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Older ramoGroup — project-report steps (#43)
+// ---------------------------------------------------------------------------
+
+async function seedOlderGroup(t: ReturnType<typeof convexTest>) {
+  const escotistaId = await insertUser(t, {
+    name: "Escotista",
+    role: "escotista",
+    escotistaRamos: ["senior"],
+    onboardingComplete: true,
+  });
+  const groupId = await t.run(async (ctx) =>
+    ctx.db.insert("groups", {
+      name: "Grupo",
+      number: "1",
+      password: "XYZ",
+      createdBy: escotistaId,
+      createdAt: 1,
+    }),
+  );
+  await t.run(async (ctx) =>
+    ctx.db.patch(escotistaId, {
+      groupId,
+      isAdmin: true,
+      membershipStatus: "approved",
+    }),
+  );
+  const escoteiroId = await insertUser(t, {
+    name: "Senior",
+    role: "escoteiro",
+    ramo: "senior",
+    groupId,
+    onboardingComplete: true,
+    membershipStatus: "approved",
+  });
+  return { escotistaId, escoteiroId, groupId };
+}
+
+async function reportsFor(
+  t: ReturnType<typeof convexTest>,
+  userId: Id<"users">,
+) {
+  const all = await t.run(async (ctx) =>
+    ctx.db.query("specialtyProjectReports").collect(),
+  );
+  return all.filter((r) => r.userId === userId);
+}
+
+describe("submitSpecialtyStep", () => {
+  test("submit conhecer → pending row with ramoGroup=older", async () => {
+    const t = convexTest(schema, modules);
+    const { escoteiroId } = await seedOlderGroup(t);
+
+    await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+      specialtyId: "comunicacoes",
+      step: "conhecer",
+      text: "Meu relato de conhecer.",
+    });
+
+    const rows = await reportsFor(t, escoteiroId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.step).toBe("conhecer");
+    expect(rows[0]!.status).toBe("pending");
+    expect(rows[0]!.ramoGroup).toBe("older");
+    expect(rows[0]!.text).toBe("Meu relato de conhecer.");
+  });
+
+  test("submit fazer before conhecer approved → throws (sequential lock)", async () => {
+    const t = convexTest(schema, modules);
+    const { escoteiroId } = await seedOlderGroup(t);
+
+    // conhecer submitted but only pending
+    await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+      specialtyId: "comunicacoes",
+      step: "conhecer",
+      text: "Relato conhecer.",
+    });
+
+    await expect(
+      as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+        specialtyId: "comunicacoes",
+        step: "fazer",
+        text: "Relato fazer.",
+      }),
+    ).rejects.toThrow();
+  });
+
+  test("empty text → throws", async () => {
+    const t = convexTest(schema, modules);
+    const { escoteiroId } = await seedOlderGroup(t);
+    await expect(
+      as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+        specialtyId: "comunicacoes",
+        step: "conhecer",
+        text: "   ",
+      }),
+    ).rejects.toThrow();
+  });
+
+  test("resubmit pending conhecer → replaces text, stays pending (one row)", async () => {
+    const t = convexTest(schema, modules);
+    const { escoteiroId } = await seedOlderGroup(t);
+
+    await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+      specialtyId: "comunicacoes",
+      step: "conhecer",
+      text: "Primeira versão.",
+    });
+    await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+      specialtyId: "comunicacoes",
+      step: "conhecer",
+      text: "Versão revisada.",
+    });
+
+    const rows = await reportsFor(t, escoteiroId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.text).toBe("Versão revisada.");
+    expect(rows[0]!.status).toBe("pending");
+  });
+
+  test("approve conhecer → unlocks fazer submission", async () => {
+    const t = convexTest(schema, modules);
+    const { escoteiroId, escotistaId } = await seedOlderGroup(t);
+
+    await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+      specialtyId: "comunicacoes",
+      step: "conhecer",
+      text: "Relato conhecer.",
+    });
+    const rows = await reportsFor(t, escoteiroId);
+    await as(t, escotistaId).mutation(api.specialties.approveSpecialtyStep, {
+      reportId: rows[0]!._id,
+    });
+
+    // Now fazer should be allowed
+    await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+      specialtyId: "comunicacoes",
+      step: "fazer",
+      text: "Relato fazer.",
+    });
+
+    const after = await reportsFor(t, escoteiroId);
+    expect(after).toHaveLength(2);
+    const fazer = after.find((r) => r.step === "fazer");
+    expect(fazer?.status).toBe("pending");
+  });
+
+  test("escoteiro cannot overwrite an approved step", async () => {
+    const t = convexTest(schema, modules);
+    const { escoteiroId, escotistaId } = await seedOlderGroup(t);
+
+    await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+      specialtyId: "comunicacoes",
+      step: "conhecer",
+      text: "Relato conhecer.",
+    });
+    const rows = await reportsFor(t, escoteiroId);
+    await as(t, escotistaId).mutation(api.specialties.approveSpecialtyStep, {
+      reportId: rows[0]!._id,
+    });
+
+    await expect(
+      as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+        specialtyId: "comunicacoes",
+        step: "conhecer",
+        text: "Tentando reescrever.",
+      }),
+    ).rejects.toThrow();
+  });
+});
+
+describe("approveSpecialtyStep + rejectSpecialtyStep", () => {
+  test("full cascade: approve all three steps → specialty earned", async () => {
+    const t = convexTest(schema, modules);
+    const { escoteiroId, escotistaId } = await seedOlderGroup(t);
+
+    const submitAndApprove = async (step: "conhecer" | "fazer" | "compartilhar") => {
+      await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+        specialtyId: "comunicacoes",
+        step,
+        text: `Relato ${step}.`,
+      });
+      const rows = await reportsFor(t, escoteiroId);
+      const row = rows.find((r) => r.step === step && r.status === "pending")!;
+      return as(t, escotistaId).mutation(api.specialties.approveSpecialtyStep, {
+        reportId: row._id,
+      });
+    };
+
+    await submitAndApprove("conhecer");
+    await submitAndApprove("fazer");
+    const toasts = await submitAndApprove("compartilhar");
+
+    const rows = await reportsFor(t, escoteiroId);
+    expect(rows).toHaveLength(3);
+    expect(rows.every((r) => r.status === "approved")).toBe(true);
+    // compartilhar approval returns the level-up toast array (may be empty until #44)
+    expect(Array.isArray(toasts)).toBe(true);
+  });
+
+  test("reject a step → row deleted, escoteiro can resubmit", async () => {
+    const t = convexTest(schema, modules);
+    const { escoteiroId, escotistaId } = await seedOlderGroup(t);
+
+    await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+      specialtyId: "comunicacoes",
+      step: "conhecer",
+      text: "Relato conhecer.",
+    });
+    let rows = await reportsFor(t, escoteiroId);
+    await as(t, escotistaId).mutation(api.specialties.rejectSpecialtyStep, {
+      reportId: rows[0]!._id,
+    });
+
+    rows = await reportsFor(t, escoteiroId);
+    expect(rows).toHaveLength(0);
+
+    // Resubmit works
+    await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+      specialtyId: "comunicacoes",
+      step: "conhecer",
+      text: "Nova tentativa.",
+    });
+    rows = await reportsFor(t, escoteiroId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.text).toBe("Nova tentativa.");
+  });
+
+  test("getMySpecialtyReports returns only own older reports", async () => {
+    const t = convexTest(schema, modules);
+    const { escoteiroId } = await seedOlderGroup(t);
+
+    await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+      specialtyId: "comunicacoes",
+      step: "conhecer",
+      text: "Relato.",
+    });
+
+    const reports = await as(t, escoteiroId).query(
+      api.specialties.getMySpecialtyReports,
+      {},
+    );
+    expect(reports).toHaveLength(1);
+    expect(reports[0]!.specialtyId).toBe("comunicacoes");
+  });
+});

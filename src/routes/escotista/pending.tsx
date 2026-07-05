@@ -22,6 +22,11 @@ import {
 import { getRamoRules } from "@/data/progression-rules";
 import { notifyLevelUps } from "@/lib/level-up-toast";
 import { YOUNGER_SPECIALTY_BY_ID } from "@/data/specialty-data/younger";
+import {
+  OLDER_SPECIALTY_BY_ID,
+  PROJECT_STEP_LABELS,
+  type ProjectStep,
+} from "@/data/specialty-data/older";
 
 export const Route = createFileRoute("/escotista/pending")({
   component: PendingApprovalsPage,
@@ -141,8 +146,74 @@ type PendingEntry = {
     itemIndex: number;
     ramoGroup: "younger" | "older";
   }[];
+  /** Older-group project-step submissions (#43). One row per pending step. */
+  pendingSpecialtyReports?: {
+    _id: Id<"specialtyProjectReports">;
+    specialtyId: string;
+    step: ProjectStep;
+    text: string;
+    ramoGroup: "younger" | "older";
+  }[];
   totalPending: number;
 };
+
+/** One card per pending project step showing the submitted report text + approve/reject. */
+function PendingSpecialtyReportCard({
+  reportId,
+  specialtyId,
+  step,
+  text,
+}: {
+  reportId: Id<"specialtyProjectReports">;
+  specialtyId: string;
+  step: ProjectStep;
+  text: string;
+}) {
+  const specialtyName = OLDER_SPECIALTY_BY_ID.get(specialtyId)?.name ?? specialtyId;
+
+  const approveFn = useConvexMutation(api.specialties.approveSpecialtyStep);
+  const rejectFn = useConvexMutation(api.specialties.rejectSpecialtyStep);
+  const { mutate: approve, isPending: isApproving } = useMutation({
+    mutationFn: approveFn,
+    onSuccess: notifyLevelUps,
+  });
+  const { mutate: reject, isPending: isRejecting } = useMutation({
+    mutationFn: rejectFn,
+  });
+  const isBusy = isApproving || isRejecting;
+
+  return (
+    <div className="rounded-md border-2 border-amber-300 bg-amber-50 p-3 space-y-2">
+      <p className="text-xs font-black uppercase tracking-widest text-amber-800">
+        {specialtyName} · {PROJECT_STEP_LABELS[step] ?? step}
+      </p>
+      <p className="text-sm text-foreground whitespace-pre-wrap px-1 border-l-2 border-amber-300">
+        {text}
+      </p>
+      <div className="flex gap-2 pt-1">
+        <Button
+          size="sm"
+          className="flex-1 bg-emerald-700 text-white border-black hover:bg-emerald-800"
+          disabled={isBusy}
+          onClick={() => approve({ reportId })}
+        >
+          <Check className="size-3 mr-1" />
+          Aprovar
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="flex-1 bg-destructive text-white border-black hover:bg-destructive/80"
+          disabled={isBusy}
+          onClick={() => reject({ reportId })}
+        >
+          <X className="size-3 mr-1" />
+          Rejeitar
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 /** One card per (escoteiro, specialty) showing pending items and approve/reject buttons. */
 function PendingSpecialtyCard({
@@ -501,6 +572,24 @@ function EscoteiroPendingCard({
                     specialtyId={specialtyId}
                     ramoGroup={ramoGroup}
                     pendingItems={items}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Older-group project-step submissions (#43) */}
+            {(entry.pendingSpecialtyReports ?? []).length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-black uppercase tracking-widest text-primary">
+                  Projetos de Especialidade
+                </p>
+                {(entry.pendingSpecialtyReports ?? []).map((report) => (
+                  <PendingSpecialtyReportCard
+                    key={report._id}
+                    reportId={report._id}
+                    specialtyId={report.specialtyId}
+                    step={report.step}
+                    text={report.text}
                   />
                 ))}
               </div>

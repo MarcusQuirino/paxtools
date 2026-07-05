@@ -176,12 +176,22 @@ export const getPendingForGroup = query({
         )
         .take(200);
 
+      // Older-group project-step submissions (#43). One card per pending step
+      // (at most one pending step per specialty due to sequential locking).
+      const pendingSpecialtyReports = await ctx.db
+        .query("specialtyProjectReports")
+        .withIndex("by_userId_and_status", (q) =>
+          q.eq("userId", escoteiro._id).eq("status", "pending"),
+        )
+        .take(200);
+
       const totalPending =
         pendingActions.length +
         pendingSpecialties.length +
         pendingIrrItems.length +
         pendingCustomActions.length +
-        pendingSpecialtyItems.length;
+        pendingSpecialtyItems.length +
+        pendingSpecialtyReports.length;
 
       if (totalPending > 0) {
         result.push({
@@ -196,6 +206,7 @@ export const getPendingForGroup = query({
           pendingIrrItems,
           pendingCustomActions,
           pendingSpecialtyItems,
+          pendingSpecialtyReports,
           totalPending,
         });
       }
