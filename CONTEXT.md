@@ -11,7 +11,7 @@ A scout group; the top-level community every member belongs to.
 _Avoid_: organization, team
 
 **Ramo**:
-An age-based section of the movement (lobinho, escoteiro, sênior, pioneiro). Every escoteiro belongs to exactly one ramo; an escotista accompanies one or more ramos.
+An age-based section of the movement (lobinho, escoteiro, sênior, pioneiro). An escoteiro belongs to exactly one ramo *at a time*, but moves up through the ramos over the years (lobinho → escoteiro → sênior → pioneiro); each ramo has its own separate progression, and a past ramo's record is retained — never lost or merged — when the escoteiro advances. An escotista accompanies one or more ramos.
 _Avoid_: section, unit
 
 **Escoteiro**:
@@ -57,11 +57,15 @@ An escoteiro's claim that an ação, especialidade, or lis-de-ouro item is done.
 _Avoid_: completion (in prose), check
 
 **Etapa**:
-A progression stage reached by completing blocos: pista → trilha → rumo → travessia.
+A progression stage reached by completing blocos. Each ramo has its own etapas — the count (three or four) and block thresholds differ, not only the names. Escoteiro & lobinho: four etapas at 0/4/8/13 blocos (escoteiro: pista → trilha → rumo → travessia; lobinho: Pata Tenra → Saltador → Rastreador → Caçador). Sênior & pioneiro: three etapas at 0/6/12 blocos (sênior: Escalada → Conquista → Azimute; pioneiro: Descoberta → Destino → Horizonte). Every ramo reaches its [[irr-insignia-de-reconhecimento-de-ramo]] at 18. Do not treat the escoteiro names or the four-stage shape as the generic ones.
 _Avoid_: trilha (as the generic term — trilha is one specific etapa), stage, level
 
+**IRR (Insígnia de Reconhecimento de Ramo)**:
+The top achievement of a ramo: earned by completing all 18 blocos plus that ramo's own final items. Each ramo has its own IRR with its own name, items, and colours — escoteiro: Lis de Ouro; lobinho: Cruzeiro do Sul; sênior: Escoteiro da Pátria; pioneiro: Insígnia de BP.
+_Avoid_: Lis de Ouro (as the generic term — it is only escoteiro's IRR)
+
 **Lis de Ouro**:
-The top achievement: all blocos plus its own final items.
+Escoteiro's [[irr-insignia-de-reconhecimento-de-ramo]]. Not a generic term for the concept.
 
 **Plano**:
 An escoteiro's prioritized list of ações, especialidades, and ações personalizadas they intend to do next.
