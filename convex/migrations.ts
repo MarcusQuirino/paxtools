@@ -1,6 +1,11 @@
 import { internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
+import { toSpecialtySlug } from "../src/lib/completion-logic";
+import {
+  YOUNGER_SPECIALTY_ITEM_COUNTS,
+  SPECIALTY_FALLBACK_ITEM_COUNT,
+} from "../src/data/specialty-catalog";
 
 const RAMO_PREFIXES = ["lobinho:", "escoteiro:", "senior:", "pioneiro:"];
 
@@ -397,77 +402,6 @@ export const backfillRamoOnCompletions = internalMutation({
 // ── Especialidades migration (#41) ───────────────────────────────────────────
 
 /**
- * Convert a specialtyName display string to a lowercase hyphen slug.
- * Removes diacritics, lowercases, replaces spaces/underscores with hyphens,
- * and strips non-alphanumeric characters except hyphens.
- */
-function toSpecialtySlug(name: string): string {
-  return name
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/[\s_]+/g, "-");
-}
-
-/**
- * Known item counts for younger-group (lobinho/escoteiro) specialties.
- * Sourced from the official guide (scout-notes reference repo).
- * Names here must match the `specialtyName` strings stored in
- * `specialtyCompletions` rows (set by the old toggleSpecialty mutation).
- *
- * Specialties not listed here fall back to FALLBACK_ITEM_COUNT.
- */
-const YOUNGER_SPECIALTY_ITEM_COUNTS: Record<string, number> = {
-  Acampamento: 8,
-  Administração: 6,
-  "Anatomia Humana": 7,
-  "Arte Digital": 8,
-  "Artes Visuais": 8,
-  Artesanato: 8,
-  Botânica: 6,
-  Brasilidades: 6,
-  "Ciências da Terra": 6, // maps to guide's Geologia (6 items)
-  Comunicações: 8,
-  Comédia: 8,
-  "Costura e Estilismo": 6,
-  "Defesa Civil": 6,
-  "Educação Financeira": 8,
-  Empreendedorismo: 8,
-  Encadernação: 8,
-  "Escotismo Mundial": 6,
-  Excursões: 6,
-  Genealogia: 6,
-  Grafite: 6,
-  HQ: 8,
-  Horticultura: 6,
-  Maquete: 6,
-  Meteorologia: 6,
-  Montanhismo: 6,
-  "Noções Desportivas": 6,
-  Nutrição: 6,
-  Oceanologia: 6,
-  Oratória: 6,
-  Pintura: 8,
-  Pioneiria: 8,
-  "Prevenção ao Bullying": 6,
-  "Prevenção aos Vícios": 6,
-  "Prevenção em Saúde": 6,
-  "Primeiros Socorros": 8,
-  "Propaganda e Marketing": 8,
-  "Reparos Domésticos": 8,
-  Robótica: 8,
-  Sobrevivência: 6,
-  Videomaker: 8,
-  Yoga: 8,
-  Zoologia: 6,
-};
-
-/** Fallback item count for specialty names not in the known map. */
-const FALLBACK_ITEM_COUNT = 6;
-
-/**
  * One-off migration: convert legacy `specialtyCompletions` rows into the new
  * `specialtyItemCompletions` (younger) and `specialtyProjectReports` (older)
  * tables introduced in #41.
@@ -520,7 +454,7 @@ export const migrateSpecialtyCompletions = internalMutation({
       if (ramoGroup === "younger") {
         const itemCount =
           YOUNGER_SPECIALTY_ITEM_COUNTS[row.specialtyName] ??
-          FALLBACK_ITEM_COUNT;
+          SPECIALTY_FALLBACK_ITEM_COUNT;
         if (!(row.specialtyName in YOUNGER_SPECIALTY_ITEM_COUNTS)) {
           unknownSpecialties.push(row.specialtyName);
         }

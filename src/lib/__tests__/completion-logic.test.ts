@@ -4,6 +4,7 @@ import {
   getBlocoProgress,
   getCompletedBlockIds,
   getSpecialtyLevel,
+  toSpecialtySlug,
   getCurrentStage,
   getNextStage,
   getBlocksToIrr,
@@ -534,5 +535,37 @@ describe("isIrrComplete", () => {
     // Shared 5-slot ids across ramos, so the same manual-item set completes it.
     expect(isIrrComplete(18, new Set(), "senior")).toBe(false);
     expect(isIrrComplete(18, allManualItems, "senior")).toBe(true);
+  });
+});
+
+// ── toSpecialtySlug ────────────────────────────────────────────
+
+describe("toSpecialtySlug", () => {
+  it("lowercases and trims", () => {
+    expect(toSpecialtySlug("Acampamento")).toBe("acampamento");
+  });
+
+  it("replaces spaces with hyphens", () => {
+    expect(toSpecialtySlug("Arte Digital")).toBe("arte-digital");
+  });
+
+  it("strips diacritics", () => {
+    expect(toSpecialtySlug("Anatomia Humana")).toBe("anatomia-humana");
+    expect(toSpecialtySlug("Administração")).toBe("administracao");
+    expect(toSpecialtySlug("Ciências da Terra")).toBe("ciencias-da-terra");
+  });
+
+  it("strips non-alphanumeric characters (e.g. & / .)", () => {
+    expect(toSpecialtySlug("A&B")).toBe("ab");
+    expect(toSpecialtySlug("X/Y")).toBe("xy");
+  });
+
+  it("collapses multiple spaces into one hyphen", () => {
+    expect(toSpecialtySlug("  Multiple   Spaces  ")).toBe("multiple-spaces");
+  });
+
+  it("is stable — same input always gives same slug", () => {
+    const name = "Prevenção ao Bullying";
+    expect(toSpecialtySlug(name)).toBe(toSpecialtySlug(name));
   });
 });

@@ -63,6 +63,25 @@ export function getBlocoProgress(
 }
 
 /**
+ * Convert a specialty display name to a lowercase hyphenated slug used as
+ * `specialtyId` in `specialtyItemCompletions` and `specialtyProjectReports`.
+ * Removes diacritics, lowercases, replaces spaces/underscores with hyphens,
+ * and strips non-alphanumeric characters except hyphens.
+ *
+ * Must agree with `migrations:migrateSpecialtyCompletions` and any future
+ * mutation that writes a `specialtyId` derived from user input.
+ */
+export function toSpecialtySlug(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/[\s_]+/g, "-");
+}
+
+/**
  * Compute the specialty level (0, 1, or 2) from approved item count.
  *
  * - Level 2: all items approved (approvedCount === totalItems)
