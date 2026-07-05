@@ -390,6 +390,7 @@ export const seedTestUsers = internalMutation({
     if (!existingPlanned) {
       await ctx.db.insert("plannedItems", {
         userId: progressionId,
+        ramo: "escoteiro",
         itemKey: plannedKey,
         position: 0,
       });

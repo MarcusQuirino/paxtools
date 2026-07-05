@@ -266,3 +266,131 @@ test("copyLisDeOuroToIrr dryRun inserts nothing", async () => {
   );
   expect(irr).toHaveLength(0);
 });
+
+// ---------------------------------------------------------------------------
+// backfillRamoOnCompletions (#37) — in-place ramo stamp on the three remaining
+// ramo-unscoped tables, collision-safe for the two with unique write-lookups.
+// ---------------------------------------------------------------------------
+
+test("backfillRamoOnCompletions stamps escoteiro across the three tables and is idempotent", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await makeUser(t);
+  await t.run(async (ctx) => {
+    await ctx.db.insert("specialtyCompletions", {
+      userId, blocoId: "b1", specialtyName: "S", completedAt: 1, status: "approved",
+    });
+    await ctx.db.insert("customActions", {
+      userId, blocoId: "b1", text: "C", completed: true, createdAt: 1, status: "pending",
+    });
+    await ctx.db.insert("plannedItems", { userId, itemKey: "custom:x", position: 0 });
+  });
+
+  const res = await t.mutation(internal.migrations.backfillRamoOnCompletions, {});
+  expect(res.stamped).toBe(3);
+  expect(res.merged).toBe(0);
+
+  const stampedAll = await t.run(async (ctx) => {
+    const sp = await ctx.db.query("specialtyCompletions").collect();
+    const ca = await ctx.db.query("customActions").collect();
+    const pl = await ctx.db.query("plannedItems").collect();
+    return [...sp, ...ca, ...pl].every((r) => r.ramo === "escoteiro");
+  });
+  expect(stampedAll).toBe(true);
+
+  // Idempotent: re-running stamps nothing.
+  const second = await t.mutation(internal.migrations.backfillRamoOnCompletions, {});
+  expect(second.stamped).toBe(0);
+  expect(second.skipped).toBe(3);
+});
+
+test("backfillRamoOnCompletions throws when a non-escoteiro action id exists, stamps nothing", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await makeUser(t);
+  await t.run(async (ctx) => {
+    await ctx.db.insert("actionCompletions", {
+      userId, actionId: "lobinho:b1:fixed:0", completedAt: 1, status: "approved",
+    });
+    await ctx.db.insert("specialtyCompletions", {
+      userId, blocoId: "b1", specialtyName: "S", completedAt: 1, status: "approved",
+    });
+  });
+
+  await expect(
+    t.mutation(internal.migrations.backfillRamoOnCompletions, {}),
+  ).rejects.toThrow("non-escoteiro action id");
+
+  const untouched = await t.run(async (ctx) =>
+    (await ctx.db.query("specialtyCompletions").collect())[0]!.ramo,
+  );
+  expect(untouched ?? null).toBeNull();
+});
+
+test("backfillRamoOnCompletions merges a specialty collision (approved wins) instead of duplicating", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await makeUser(t);
+  await t.run(async (ctx) => {
+    // Unstamped source (approved) + an already-stamped escoteiro row for the
+    // same (userId, ramo, blocoId, specialtyName) — the deploy-window dup.
+    await ctx.db.insert("specialtyCompletions", {
+      userId, blocoId: "b1", specialtyName: "S", completedAt: 5, status: "approved",
+    });
+    await ctx.db.insert("specialtyCompletions", {
+      userId, ramo: "escoteiro", blocoId: "b1", specialtyName: "S",
+      completedAt: 9, status: "pending",
+    });
+  });
+
+  const res = await t.mutation(internal.migrations.backfillRamoOnCompletions, {});
+  expect(res.merged).toBe(1);
+  expect(res.stamped).toBe(0);
+
+  const rows = await t.run(async (ctx) =>
+    ctx.db.query("specialtyCompletions").collect(),
+  );
+  // Exactly one row survives, escoteiro-stamped, approved merged in, earliest date.
+  expect(rows).toHaveLength(1);
+  expect(rows[0]!.ramo).toBe("escoteiro");
+  expect(rows[0]!.status).toBe("approved");
+  expect(rows[0]!.completedAt).toBe(5);
+});
+
+test("backfillRamoOnCompletions drops a colliding planned item instead of duplicating", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await makeUser(t);
+  await t.run(async (ctx) => {
+    await ctx.db.insert("plannedItems", { userId, itemKey: "custom:x", position: 0 });
+    await ctx.db.insert("plannedItems", {
+      userId, ramo: "escoteiro", itemKey: "custom:x", position: 3,
+    });
+  });
+
+  const res = await t.mutation(internal.migrations.backfillRamoOnCompletions, {});
+  expect(res.merged).toBe(1);
+
+  const rows = await t.run(async (ctx) =>
+    ctx.db.query("plannedItems").collect(),
+  );
+  expect(rows).toHaveLength(1);
+  expect(rows[0]!.ramo).toBe("escoteiro");
+  expect(rows[0]!.position).toBe(3); // the existing stamped row was kept
+});
+
+test("backfillRamoOnCompletions dryRun stamps nothing", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await makeUser(t);
+  await t.run(async (ctx) => {
+    await ctx.db.insert("customActions", {
+      userId, blocoId: "b1", text: "C", completed: false, createdAt: 1,
+    });
+  });
+
+  const res = await t.mutation(internal.migrations.backfillRamoOnCompletions, {
+    dryRun: true,
+  });
+  expect(res.stamped).toBe(1);
+
+  const ramo = await t.run(async (ctx) =>
+    (await ctx.db.query("customActions").collect())[0]!.ramo,
+  );
+  expect(ramo ?? null).toBeNull();
+});

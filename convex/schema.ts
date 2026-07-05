@@ -70,8 +70,14 @@ export default defineSchema({
     .index("by_userId_and_actionId", ["userId", "actionId"])
     .index("by_userId_and_status", ["userId", "status"]),
 
+  // Ramo-scoped (#37): a completion's identity is (userId, ramo, blocoId,
+  // specialtyName). `ramo` is optional (backfilled in place by
+  // `migrations:backfillRamoOnCompletions`); reads filter to the subject's
+  // current ramo so a past ramo's especialidades don't bleed into it. blocoIds
+  // are shared across ramos, so ramo MUST be in the write-uniqueness lookup.
   specialtyCompletions: defineTable({
     userId: v.id("users"),
+    ramo: v.optional(ramoValidator),
     blocoId: v.string(),
     specialtyName: v.string(),
     completedAt: v.number(),
@@ -80,16 +86,25 @@ export default defineSchema({
     approvedAt: v.optional(v.number()),
   })
     .index("by_userId", ["userId"])
-    .index("by_userId_and_blocoId", ["userId", "blocoId"])
-    .index("by_userId_and_blocoId_and_specialtyName", [
+    .index("by_userId_and_status", ["userId", "status"])
+    // Serves both the (userId, ramo) current-ramo reads (prefix) and the
+    // (userId, ramo, blocoId, specialtyName) .unique() toggle/backfill lookups.
+    // The pre-#37 non-ramo blocoId/specialtyName lookup indexes are gone —
+    // ramo is now part of a completion's identity.
+    .index("by_userId_and_ramo_and_blocoId_and_specialtyName", [
       "userId",
+      "ramo",
       "blocoId",
       "specialtyName",
-    ])
-    .index("by_userId_and_status", ["userId", "status"]),
+    ]),
 
+  // Ramo-scoped (#37): identity (userId, ramo, blocoId). `ramo` optional,
+  // backfilled in place. The per-bloco custom-action cap is counted within the
+  // current ramo so a past ramo's ações personalizadas neither bleed nor eat
+  // the quota.
   customActions: defineTable({
     userId: v.id("users"),
+    ramo: v.optional(ramoValidator),
     blocoId: v.string(),
     text: v.string(),
     completed: v.boolean(),
@@ -99,8 +114,10 @@ export default defineSchema({
     approvedAt: v.optional(v.number()),
   })
     .index("by_userId", ["userId"])
-    .index("by_userId_and_blocoId", ["userId", "blocoId"])
-    .index("by_userId_and_status", ["userId", "status"]),
+    .index("by_userId_and_status", ["userId", "status"])
+    // Serves (userId, ramo) current-ramo reads (prefix) and the per-bloco cap
+    // count (userId, ramo, blocoId). Supersedes the pre-#37 by_userId_and_blocoId.
+    .index("by_userId_and_ramo_and_blocoId", ["userId", "ramo", "blocoId"]),
 
   // DEPRECATED (Workstream B / #36): escoteiro-only recognition table, kept as
   // the untouched copy-forward SOURCE until `irrCompletions` is verified on prod.
@@ -140,14 +157,25 @@ export default defineSchema({
     // (userId, ramo, itemId) .unique() toggle/migration lookups.
     .index("by_userId_and_ramo_and_itemId", ["userId", "ramo", "itemId"]),
 
+  // Ramo-scoped (#37): identity (userId, ramo, itemKey). `ramo` optional,
+  // backfilled in place. `specialty:`/`custom:` plan keys aren't ramo-prefixed
+  // (blocoIds are shared), so ramo MUST be in the write-uniqueness lookup; the
+  // plan is read and ordered within the current ramo only.
   plannedItems: defineTable({
     userId: v.id("users"),
+    ramo: v.optional(ramoValidator),
     itemKey: v.string(),
     position: v.number(),
   })
     .index("by_userId", ["userId"])
+    // Kept: the legacy plan-key backfill (prefixLegacyPlannedItemKeys) still
+    // looks up by (userId, itemKey) across ramos.
     .index("by_userId_and_itemKey", ["userId", "itemKey"])
-    .index("by_userId_and_position", ["userId", "position"]),
+    // (userId, ramo) ordered reads + last-position lookup within the ramo.
+    // Supersedes the pre-#37 by_userId_and_position.
+    .index("by_userId_and_ramo_and_position", ["userId", "ramo", "position"])
+    // (userId, ramo, itemKey) .unique() toggle/reorder/backfill lookups.
+    .index("by_userId_and_ramo_and_itemKey", ["userId", "ramo", "itemKey"]),
 
   // Audit timeline. Every row is one thing that happened in a group. Two scopes:
   //   - "ramo": about an escoteiro's progression (approval/rejection/levelUp/

@@ -10,17 +10,25 @@ import { getRamoRules } from "../../src/data/progression-rules";
 import { logRamoEvent } from "./events";
 
 /**
- * A point-in-time view of an escoteiro's *approved* progression: which stage
- * (Pista/Trilha/Rumo/Travessia) they have reached and whether they hold the Lis
- * de Ouro. Derived exactly the way the client derives it (same shared logic),
- * so backend level-up detection agrees with what the escoteiro sees.
+ * The codebase-wide default ramo — and prod's only ramo. A user with no ramo
+ * yet (mid-onboarding) and every unstamped legacy row belong here. The single
+ * place this default is spelled, so reads and writes can't drift apart.
  */
+export const DEFAULT_RAMO: Ramo = "escoteiro";
+
+/** The ramo whose progression `user` is currently working through. */
+export function currentRamo(
+  user: { ramo?: Ramo | null } | null | undefined,
+): Ramo {
+  return user?.ramo ?? DEFAULT_RAMO;
+}
+
 /**
  * Read the recognition (IRR) rows for a user's CURRENT ramo. The one place the
- * "(userId, ramo) → irrCompletions" read and the null-ramo → "escoteiro" default
- * live, so the three consumers (self read, escotista-view read, progression
- * snapshot) can't drift. Not used by the escotista pending/approve-all path,
- * which reads by (userId, status) on purpose — see the note there.
+ * "(userId, ramo) → irrCompletions" read lives, so the consumers (self read,
+ * escotista-view read, progression snapshot) can't drift. Not used by the
+ * escotista pending/approve-all path, which reads by (userId, status) on
+ * purpose — see the note there.
  */
 export async function readCurrentRamoIrrItems(
   ctx: QueryCtx | MutationCtx,
@@ -30,9 +38,43 @@ export async function readCurrentRamoIrrItems(
   return ctx.db
     .query("irrCompletions")
     .withIndex("by_userId_and_ramo_and_itemId", (q) =>
-      q.eq("userId", userId).eq("ramo", ramo ?? "escoteiro"),
+      q.eq("userId", userId).eq("ramo", ramo ?? DEFAULT_RAMO),
     )
     .take(10);
+}
+
+/**
+ * Read a user's especialidade completions for their CURRENT ramo (#37). Same
+ * (userId, ramo) isolation as the IRR read, and the same null-ramo → "escoteiro"
+ * default, kept here so self read / escotista-view read / snapshot can't drift.
+ * blocoIds are shared across ramos, so this filter (not the blocoId) is what
+ * stops a past ramo's especialidades bleeding into the current one.
+ */
+export async function readCurrentRamoSpecialties(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+  ramo: Ramo | null | undefined,
+): Promise<Doc<"specialtyCompletions">[]> {
+  return ctx.db
+    .query("specialtyCompletions")
+    .withIndex("by_userId_and_ramo_and_blocoId_and_specialtyName", (q) =>
+      q.eq("userId", userId).eq("ramo", ramo ?? DEFAULT_RAMO),
+    )
+    .take(500);
+}
+
+/** Read a user's ações personalizadas for their CURRENT ramo (#37). */
+export async function readCurrentRamoCustomActions(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+  ramo: Ramo | null | undefined,
+): Promise<Doc<"customActions">[]> {
+  return ctx.db
+    .query("customActions")
+    .withIndex("by_userId_and_ramo_and_blocoId", (q) =>
+      q.eq("userId", userId).eq("ramo", ramo ?? DEFAULT_RAMO),
+    )
+    .take(1000);
 }
 
 export type ProgressionSnapshot = {
@@ -57,18 +99,16 @@ export async function snapshotProgression(
   const user = await ctx.db.get(userId);
   const ramo = user?.ramo ?? null;
 
+  // actionCompletions stay by_userId: their ids are ramo-prefixed, so
+  // getCompletedBlockIds (below) matches only the current ramo's catalog. The
+  // other three are keyed by shared blocoIds, so they must be ramo-scoped at the
+  // read or a past ramo's completions bleed into this ramo's block count.
   const actions = await ctx.db
     .query("actionCompletions")
     .withIndex("by_userId", (q) => q.eq("userId", userId))
     .take(500);
-  const specialties = await ctx.db
-    .query("specialtyCompletions")
-    .withIndex("by_userId", (q) => q.eq("userId", userId))
-    .take(500);
-  const customActions = await ctx.db
-    .query("customActions")
-    .withIndex("by_userId", (q) => q.eq("userId", userId))
-    .take(1000);
+  const specialties = await readCurrentRamoSpecialties(ctx, userId, ramo);
+  const customActions = await readCurrentRamoCustomActions(ctx, userId, ramo);
   // IRR items are ramo-scoped: only the current ramo's recognition rows feed
   // the IRR-complete check.
   const irrItems = await readCurrentRamoIrrItems(ctx, userId, ramo);

@@ -49,15 +49,20 @@ async function insertUser(
   return await t.run(async (ctx) => ctx.db.insert("users", { name: "U", ...fields }));
 }
 
-/** Directly insert a plannedItem row, bypassing validation/positioning logic. */
+/**
+ * Directly insert a plannedItem row, bypassing validation/positioning logic.
+ * Stamps `ramo: "escoteiro"` by default so the row is visible to the ramo-scoped
+ * reads (#37) for a default (ramo-less → escoteiro) test user.
+ */
 async function insertPlanned(
   t: ReturnType<typeof convexTest>,
   userId: Id<"users">,
   itemKey: string,
   position: number,
+  ramo: Ramo = "escoteiro",
 ) {
   return await t.run(async (ctx) =>
-    ctx.db.insert("plannedItems", { userId, itemKey, position }),
+    ctx.db.insert("plannedItems", { userId, ramo, itemKey, position }),
   );
 }
 
@@ -195,6 +200,7 @@ describe("togglePlanned: MAX_PLANNED_ITEMS limit", () => {
       for (let i = 0; i < 500; i++) {
         await ctx.db.insert("plannedItems", {
           userId,
+          ramo: "escoteiro",
           itemKey: `custom:limit${i}`,
           position: i,
         });
@@ -310,5 +316,60 @@ describe("reorderPlan", () => {
     // Midpoint (0+4)/2 = 2 collides with custom:mid which is also at 2.
     expect(target?.position).toBe(2);
     expect(mid?.position).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ramo-scoped plano (#37) — the plan is isolated to the current ramo, prior
+// ramos are retained, and toggles stamp the acting user's ramo.
+// ---------------------------------------------------------------------------
+
+describe("ramo-scoped plano (#37)", () => {
+  test("getMyPlan returns only the current ramo's planned items", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("plannedItems", {
+        userId, ramo: "escoteiro", itemKey: "custom:esc1", position: 0,
+      });
+      await ctx.db.insert("plannedItems", {
+        userId, ramo: "lobinho", itemKey: "custom:lob1", position: 0,
+      });
+    });
+
+    const plan = await as(t, userId).query(api.plan.getMyPlan, {});
+    expect(plan.map((p) => p.itemKey)).toEqual(["custom:esc1"]);
+
+    // Switching ramo surfaces the other ramo's plan; nothing was deleted.
+    await t.run(async (ctx) => ctx.db.patch(userId, { ramo: "lobinho" }));
+    const lobPlan = await as(t, userId).query(api.plan.getMyPlan, {});
+    expect(lobPlan.map((p) => p.itemKey)).toEqual(["custom:lob1"]);
+    const total = await t.run(async (ctx) =>
+      (await ctx.db.query("plannedItems").collect()).length,
+    );
+    expect(total).toBe(2);
+  });
+
+  test("togglePlanned stamps the acting user's ramo, and the same key in another ramo is independent", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, { role: "escoteiro", ramo: "lobinho" });
+    // A pre-existing escoteiro row with the SAME itemKey must not be toggled off.
+    await t.run(async (ctx) => {
+      await ctx.db.insert("plannedItems", {
+        userId, ramo: "escoteiro", itemKey: "custom:shared", position: 0,
+      });
+    });
+
+    await as(t, userId).mutation(api.plan.togglePlanned, {
+      itemKey: "custom:shared",
+    });
+
+    const rows = await t.run(async (ctx) =>
+      ctx.db.query("plannedItems").collect(),
+    );
+    // The lobinho toggle added a new lobinho row; the escoteiro row is untouched.
+    expect(rows).toHaveLength(2);
+    const byRamo = Object.fromEntries(rows.map((r) => [r.ramo, r.itemKey]));
+    expect(byRamo).toEqual({ escoteiro: "custom:shared", lobinho: "custom:shared" });
   });
 });

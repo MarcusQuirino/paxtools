@@ -7,6 +7,9 @@ import {
   snapshotProgression,
   detectLevelUps,
   readCurrentRamoIrrItems,
+  readCurrentRamoSpecialties,
+  readCurrentRamoCustomActions,
+  currentRamo,
   type LevelUpToast,
   type ProgressionSnapshot,
 } from "./lib/progression";
@@ -135,17 +138,15 @@ export const getMyCompletions = query({
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .take(500);
 
-    const specialties = await ctx.db
-      .query("specialtyCompletions")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(500);
-
-    const customActions = await ctx.db
-      .query("customActions")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(1000);
-
-    // IRR items are ramo-scoped: only the current ramo's recognition rows.
+    // Especialidades, ações personalizadas and IRR items are ramo-scoped:
+    // only the current ramo's rows (blocoIds are shared, so isolation is at
+    // the read). Actions self-isolate via their ramo-prefixed ids.
+    const specialties = await readCurrentRamoSpecialties(ctx, userId, user.ramo);
+    const customActions = await readCurrentRamoCustomActions(
+      ctx,
+      userId,
+      user.ramo,
+    );
     const irrItems = await readCurrentRamoIrrItems(ctx, userId, user.ramo);
 
     return {
@@ -170,16 +171,17 @@ export const getCompletionsForUser = query({
       .withIndex("by_userId", (q) => q.eq("userId", args.targetUserId))
       .take(500);
 
-    const specialties = await ctx.db
-      .query("specialtyCompletions")
-      .withIndex("by_userId", (q) => q.eq("userId", args.targetUserId))
-      .take(500);
-
-    const customActions = await ctx.db
-      .query("customActions")
-      .withIndex("by_userId", (q) => q.eq("userId", args.targetUserId))
-      .take(1000);
-
+    // Ramo-scoped to the target's current ramo (see getMyCompletions).
+    const specialties = await readCurrentRamoSpecialties(
+      ctx,
+      args.targetUserId,
+      target?.ramo,
+    );
+    const customActions = await readCurrentRamoCustomActions(
+      ctx,
+      args.targetUserId,
+      target?.ramo,
+    );
     const irrItems = await readCurrentRamoIrrItems(
       ctx,
       args.targetUserId,
@@ -272,11 +274,15 @@ export const toggleSpecialty = mutation({
     if (!args.specialtyName.trim() || args.specialtyName.length > 200)
       throw new Error("Nome de especialidade inválido");
 
+    // Stamp/scope by the acting escoteiro's current ramo.
+    const ramo = currentRamo(await ctx.db.get(effectiveUserId));
+
     const existing = await ctx.db
       .query("specialtyCompletions")
-      .withIndex("by_userId_and_blocoId_and_specialtyName", (q) =>
+      .withIndex("by_userId_and_ramo_and_blocoId_and_specialtyName", (q) =>
         q
           .eq("userId", effectiveUserId)
+          .eq("ramo", ramo)
           .eq("blocoId", args.blocoId)
           .eq("specialtyName", args.specialtyName),
       )
@@ -302,6 +308,7 @@ export const toggleSpecialty = mutation({
     } else {
       await ctx.db.insert("specialtyCompletions", {
         userId: effectiveUserId,
+        ramo,
         blocoId: args.blocoId,
         specialtyName: args.specialtyName,
         completedAt: Date.now(),
@@ -343,10 +350,14 @@ export const addCustomAction = mutation({
     if (!text) throw new Error("Texto vazio");
     if (text.length > 500) throw new Error("Texto muito longo");
 
+    // Stamp/scope by the acting escoteiro's current ramo.
+    const ramo = currentRamo(await ctx.db.get(effectiveUserId));
+
+    // Per-bloco cap counts only this ramo's rows.
     const existingCount = await ctx.db
       .query("customActions")
-      .withIndex("by_userId_and_blocoId", (q) =>
-        q.eq("userId", effectiveUserId).eq("blocoId", args.blocoId),
+      .withIndex("by_userId_and_ramo_and_blocoId", (q) =>
+        q.eq("userId", effectiveUserId).eq("ramo", ramo).eq("blocoId", args.blocoId),
       )
       .take(MAX_CUSTOM_ACTIONS_PER_BLOCO + 1);
     if (existingCount.length >= MAX_CUSTOM_ACTIONS_PER_BLOCO)
@@ -354,6 +365,7 @@ export const addCustomAction = mutation({
 
     return await ctx.db.insert("customActions", {
       userId: effectiveUserId,
+      ramo,
       blocoId: args.blocoId,
       text,
       completed: false,

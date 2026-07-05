@@ -320,6 +320,7 @@ describe("toggleSpecialty", () => {
     await t.run(async (ctx) =>
       ctx.db.insert("specialtyCompletions", {
         userId: escoteiro,
+        ramo: "escoteiro",
         blocoId: BLOCO,
         specialtyName: SPEC,
         completedAt: 1,
@@ -345,6 +346,7 @@ describe("toggleSpecialty", () => {
     await t.run(async (ctx) =>
       ctx.db.insert("specialtyCompletions", {
         userId: escoteiro,
+        ramo: "escoteiro",
         blocoId: BLOCO,
         specialtyName: SPEC,
         completedAt: 1,
@@ -371,6 +373,7 @@ describe("toggleSpecialty", () => {
     await t.run(async (ctx) =>
       ctx.db.insert("specialtyCompletions", {
         userId: escoteiro,
+        ramo: "escoteiro",
         blocoId: BLOCO,
         specialtyName: SPEC,
         completedAt: 1,
@@ -438,6 +441,7 @@ describe("addCustomAction", () => {
       for (let i = 0; i < 20; i++) {
         await ctx.db.insert("customActions", {
           userId: escoteiro,
+          ramo: "escoteiro",
           blocoId: BLOCO,
           text: `acao ${i}`,
           completed: false,
@@ -874,5 +878,145 @@ describe("getCompletionsForUser", () => {
         targetUserId: escoteiro,
       }),
     ).rejects.toThrow("banido");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ramo-scoped especialidades & ações personalizadas (#37) — isolation,
+// retention across a ramo change, and write-time ramo stamping.
+// ---------------------------------------------------------------------------
+
+describe("ramo-scoped completions (#37)", () => {
+  test("reads return only the current ramo's especialidades and ações personalizadas", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
+    // Same user, same blocoId (blocoIds are shared across ramos) under two ramos.
+    await t.run(async (ctx) => {
+      await ctx.db.insert("specialtyCompletions", {
+        userId, ramo: "escoteiro", blocoId: "meio-ambiente",
+        specialtyName: "Esc", completedAt: 1, status: "approved",
+      });
+      await ctx.db.insert("specialtyCompletions", {
+        userId, ramo: "lobinho", blocoId: "meio-ambiente",
+        specialtyName: "Lob", completedAt: 1, status: "approved",
+      });
+      await ctx.db.insert("customActions", {
+        userId, ramo: "escoteiro", blocoId: "meio-ambiente",
+        text: "esc custom", completed: true, createdAt: 1, status: "approved",
+      });
+      await ctx.db.insert("customActions", {
+        userId, ramo: "lobinho", blocoId: "meio-ambiente",
+        text: "lob custom", completed: true, createdAt: 1, status: "approved",
+      });
+    });
+
+    const res = await as(t, userId).query(api.progression.getMyCompletions, {});
+    expect(res.specialties.map((s) => s.specialtyName)).toEqual(["Esc"]);
+    expect(res.customActions.map((c) => c.text)).toEqual(["esc custom"]);
+  });
+
+  test("prior ramo's rows are retained and reappear after switching ramo back", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("specialtyCompletions", {
+        userId, ramo: "lobinho", blocoId: "meio-ambiente",
+        specialtyName: "Lob", completedAt: 1, status: "approved",
+      });
+    });
+
+    // As an escoteiro the lobinho row is hidden...
+    const asEsc = await as(t, userId).query(api.progression.getMyCompletions, {});
+    expect(asEsc.specialties).toEqual([]);
+
+    // ...but retained in the DB, and visible again once the ramo is switched back.
+    await t.run(async (ctx) => ctx.db.patch(userId, { ramo: "lobinho" }));
+    const asLob = await as(t, userId).query(api.progression.getMyCompletions, {});
+    expect(asLob.specialties.map((s) => s.specialtyName)).toEqual(["Lob"]);
+
+    const total = await t.run(async (ctx) =>
+      (await ctx.db.query("specialtyCompletions").collect()).length,
+    );
+    expect(total).toBe(1); // nothing was deleted on the ramo change
+  });
+
+  test("ações personalizadas are retained across a ramo change and reappear on switch back", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("customActions", {
+        userId, ramo: "lobinho", blocoId: "meio-ambiente",
+        text: "lob custom", completed: true, createdAt: 1, status: "approved",
+      });
+    });
+
+    const asEsc = await as(t, userId).query(api.progression.getMyCompletions, {});
+    expect(asEsc.customActions).toEqual([]);
+
+    await t.run(async (ctx) => ctx.db.patch(userId, { ramo: "lobinho" }));
+    const asLob = await as(t, userId).query(api.progression.getMyCompletions, {});
+    expect(asLob.customActions.map((c) => c.text)).toEqual(["lob custom"]);
+
+    const total = await t.run(async (ctx) =>
+      (await ctx.db.query("customActions").collect()).length,
+    );
+    expect(total).toBe(1); // retained across the ramo change
+  });
+
+  test("a self-toggle stamps the acting escoteiro's ramo on the new row", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, { role: "escoteiro", ramo: "lobinho" });
+    await as(t, userId).mutation(api.progression.toggleSpecialty, {
+      blocoId: "meio-ambiente",
+      specialtyName: "Jardinagem",
+    });
+    const rows = await t.run(async (ctx) =>
+      ctx.db.query("specialtyCompletions").collect(),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.ramo).toBe("lobinho");
+  });
+
+  test("an escotista marking a target stamps the target's ramo", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+    // Admin escotista sees all ramos; target is a lobinho.
+    const target = await insertUser(t, {
+      role: "escoteiro", ramo: "lobinho", groupId, membershipStatus: "approved",
+    });
+    await as(t, adminId).mutation(api.progression.addCustomAction, {
+      blocoId: "meio-ambiente",
+      text: "Plantar uma árvore",
+      targetUserId: target,
+    });
+    const rows = await t.run(async (ctx) =>
+      ctx.db.query("customActions").collect(),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.ramo).toBe("lobinho");
+  });
+
+  test("the per-bloco custom-action cap counts only the current ramo", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
+    // 20 lobinho rows in the same bloco must not block an escoteiro insert.
+    await t.run(async (ctx) => {
+      for (let i = 0; i < 20; i++) {
+        await ctx.db.insert("customActions", {
+          userId, ramo: "lobinho", blocoId: "meio-ambiente",
+          text: `lob ${i}`, completed: false, createdAt: 1,
+        });
+      }
+    });
+    await as(t, userId).mutation(api.progression.addCustomAction, {
+      blocoId: "meio-ambiente",
+      text: "escoteiro action",
+    });
+    const escRows = await t.run(async (ctx) =>
+      (await ctx.db.query("customActions").collect()).filter(
+        (r) => r.ramo === "escoteiro",
+      ),
+    );
+    expect(escRows).toHaveLength(1);
   });
 });
