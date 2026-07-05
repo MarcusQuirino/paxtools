@@ -5,6 +5,7 @@ import {
   parseActionId,
   type Ramo,
 } from "../../src/data/progression-data";
+import { getRamoRules } from "../../src/data/progression-rules";
 
 /** Completion kinds that produce an approval/rejection audit line. */
 export type CompletionKind = "action" | "specialty" | "custom" | "lis";
@@ -32,6 +33,9 @@ export function completionRef(
   }
 }
 
+// Short audit labels for escoteiro's IRR items, kept byte-identical to preserve
+// existing escoteiro timeline lines. Non-escoteiro ramos fall back to their
+// ramo-correct item text from getRamoRules (see describeCompletion).
 const LIS_ITEM_LABELS: Record<string, string> = {
   lis_promessa: "Promessa Escoteira",
   lis_blocos: "Todos os Blocos",
@@ -66,8 +70,19 @@ export function describeCompletion(
       return ref.specialtyName ?? "Especialidade";
     case "custom":
       return ref.text ?? "Ação personalizada";
-    case "lis":
-      return LIS_ITEM_LABELS[ref.itemId ?? ""] ?? ref.itemId ?? "Lis de Ouro";
+    case "lis": {
+      const itemId = ref.itemId ?? "";
+      // Audit-fidelity special case (NOT a display path): escoteiro keeps its
+      // established concise audit labels so existing timelines stay consistent;
+      // other ramos resolve their own IRR item text from getRamoRules. The
+      // display surfaces (banner, recognition section, toast, pending view) are
+      // all ramo-driven with no such branch.
+      if (!ramo || ramo === "escoteiro") {
+        return LIS_ITEM_LABELS[itemId] ?? itemId ?? "Lis de Ouro";
+      }
+      const rules = getRamoRules(ramo);
+      return rules.irr.items.find((i) => i.id === itemId)?.text ?? rules.irr.name;
+    }
   }
 }
 

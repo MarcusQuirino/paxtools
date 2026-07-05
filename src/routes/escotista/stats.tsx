@@ -135,7 +135,7 @@ function StatsBody({ ramo }: { ramo: Ramo }) {
   return (
     <div className="space-y-6" data-testid="stats-sections">
       <CoverageBars eixos={coverage.eixos} />
-      <StageDistribution distribution={coverage.stageDistribution} scoutCount={coverage.scoutCount} />
+      <StageDistribution ramo={ramo} distribution={coverage.stageDistribution} scoutCount={coverage.scoutCount} />
       <MostDone activities={coverage.mostDone} scoutCount={coverage.scoutCount} />
       <div className="space-y-2" data-testid="stats-filters">
         <div className="flex flex-wrap gap-1 rounded-md border-2 border-black bg-muted p-1">

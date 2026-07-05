@@ -5,9 +5,9 @@ import {
   getCompletedBlockIds,
   getCurrentStage,
   getNextStage,
-  getBlocksToLisDeOuro,
+  getBlocksToIrr,
   allBlocksCompleted,
-  isLisDeOuroComplete,
+  isIrrComplete,
 } from "@/lib/completion-logic";
 
 // ── Test Fixtures ──────────────────────────────────────────────
@@ -338,114 +338,113 @@ describe("getCompletedBlockIds", () => {
 // ── getCurrentStage ────────────────────────────────────────────
 
 describe("getCurrentStage", () => {
-  it("returns Pista at 0 blocks", () => {
-    expect(getCurrentStage(0).id).toBe("pista");
+  // Escoteiro — four etapas at 0/4/8/13
+  it("escoteiro: Pista at 0 and 3 blocks", () => {
+    expect(getCurrentStage(0, "escoteiro").id).toBe("pista");
+    expect(getCurrentStage(3, "escoteiro").id).toBe("pista");
   });
 
-  it("returns Pista at 3 blocks", () => {
-    expect(getCurrentStage(3).id).toBe("pista");
+  it("escoteiro: Trilha at 4 and 7 blocks", () => {
+    expect(getCurrentStage(4, "escoteiro").id).toBe("trilha");
+    expect(getCurrentStage(7, "escoteiro").id).toBe("trilha");
   });
 
-  it("returns Trilha at 4 blocks", () => {
-    expect(getCurrentStage(4).id).toBe("trilha");
+  it("escoteiro: Rumo at 8 and 12 blocks", () => {
+    expect(getCurrentStage(8, "escoteiro").id).toBe("rumo");
+    expect(getCurrentStage(12, "escoteiro").id).toBe("rumo");
   });
 
-  it("returns Trilha at 7 blocks", () => {
-    expect(getCurrentStage(7).id).toBe("trilha");
+  it("escoteiro: Travessia at 13, 18 and beyond", () => {
+    expect(getCurrentStage(13, "escoteiro").id).toBe("travessia");
+    expect(getCurrentStage(18, "escoteiro").id).toBe("travessia");
+    expect(getCurrentStage(100, "escoteiro").id).toBe("travessia");
   });
 
-  it("returns Rumo at 8 blocks", () => {
-    expect(getCurrentStage(8).id).toBe("rumo");
+  // Lobinho — same 0/4/8/13 shape, different names
+  it("lobinho: maps 0/4/8/13 to Pata Tenra/Saltador/Rastreador/Caçador", () => {
+    expect(getCurrentStage(0, "lobinho").id).toBe("pata-tenra");
+    expect(getCurrentStage(4, "lobinho").id).toBe("saltador");
+    expect(getCurrentStage(8, "lobinho").id).toBe("rastreador");
+    expect(getCurrentStage(13, "lobinho").id).toBe("cacador");
   });
 
-  it("returns Rumo at 12 blocks", () => {
-    expect(getCurrentStage(12).id).toBe("rumo");
+  // Sênior — three etapas at 0/6/12 (guards against 0/4/8/13 assumption)
+  it("senior: three etapas at 0/6/12, no phantom fourth stage", () => {
+    expect(getCurrentStage(0, "senior").id).toBe("escalada");
+    expect(getCurrentStage(5, "senior").id).toBe("escalada");
+    expect(getCurrentStage(6, "senior").id).toBe("conquista");
+    expect(getCurrentStage(11, "senior").id).toBe("conquista");
+    expect(getCurrentStage(12, "senior").id).toBe("azimute");
+    expect(getCurrentStage(18, "senior").id).toBe("azimute");
+    // A count that would be "Trilha" (4) for escoteiro is still the first etapa here.
+    expect(getCurrentStage(4, "senior").id).toBe("escalada");
   });
 
-  it("returns Travessia at 13 blocks", () => {
-    expect(getCurrentStage(13).id).toBe("travessia");
-  });
-
-  it("returns Travessia at 18 blocks", () => {
-    expect(getCurrentStage(18).id).toBe("travessia");
-  });
-
-  it("returns Travessia at very high number", () => {
-    expect(getCurrentStage(100).id).toBe("travessia");
+  // Pioneiro — three etapas at 0/6/12
+  it("pioneiro: three etapas at 0/6/12", () => {
+    expect(getCurrentStage(0, "pioneiro").id).toBe("descoberta");
+    expect(getCurrentStage(6, "pioneiro").id).toBe("destino");
+    expect(getCurrentStage(12, "pioneiro").id).toBe("horizonte");
   });
 });
 
 // ── getNextStage ───────────────────────────────────────────────
 
 describe("getNextStage", () => {
-  it("returns Trilha when at Pista", () => {
-    expect(getNextStage(0)?.id).toBe("trilha");
+  it("escoteiro: advances Pista→Trilha→Rumo→Travessia then null", () => {
+    expect(getNextStage(0, "escoteiro")?.id).toBe("trilha");
+    expect(getNextStage(4, "escoteiro")?.id).toBe("rumo");
+    expect(getNextStage(8, "escoteiro")?.id).toBe("travessia");
+    expect(getNextStage(13, "escoteiro")).toBeNull();
+    expect(getNextStage(18, "escoteiro")).toBeNull();
   });
 
-  it("returns Rumo when at Trilha", () => {
-    expect(getNextStage(4)?.id).toBe("rumo");
+  it("senior: next-etapa null at the last of three etapas (12+)", () => {
+    expect(getNextStage(0, "senior")?.id).toBe("conquista");
+    expect(getNextStage(6, "senior")?.id).toBe("azimute");
+    expect(getNextStage(12, "senior")).toBeNull();
+    expect(getNextStage(18, "senior")).toBeNull();
   });
 
-  it("returns Travessia when at Rumo", () => {
-    expect(getNextStage(8)?.id).toBe("travessia");
-  });
-
-  it("returns null when at Travessia", () => {
-    expect(getNextStage(13)).toBeNull();
-  });
-
-  it("returns null beyond max", () => {
-    expect(getNextStage(18)).toBeNull();
+  it("pioneiro: null at the last etapa", () => {
+    expect(getNextStage(12, "pioneiro")).toBeNull();
   });
 });
 
-// ── getBlocksToLisDeOuro ──────────────────────────────────────
+// ── getBlocksToIrr ──────────────────────────────────────────────
 
-describe("getBlocksToLisDeOuro", () => {
-  it("returns 18 at 0 blocks completed", () => {
-    expect(getBlocksToLisDeOuro(0)).toBe(18);
+describe("getBlocksToIrr", () => {
+  it("escoteiro: 18 → 5 → 1 → 0 across the block range", () => {
+    expect(getBlocksToIrr(0, "escoteiro")).toBe(18);
+    expect(getBlocksToIrr(13, "escoteiro")).toBe(5);
+    expect(getBlocksToIrr(17, "escoteiro")).toBe(1);
+    expect(getBlocksToIrr(18, "escoteiro")).toBe(0);
+    expect(getBlocksToIrr(20, "escoteiro")).toBe(0);
   });
 
-  it("returns 5 at 13 blocks (just entered Travessia)", () => {
-    expect(getBlocksToLisDeOuro(13)).toBe(5);
-  });
-
-  it("returns 1 at 17 blocks", () => {
-    expect(getBlocksToLisDeOuro(17)).toBe(1);
-  });
-
-  it("returns 0 at 18 blocks", () => {
-    expect(getBlocksToLisDeOuro(18)).toBe(0);
-  });
-
-  it("returns 0 beyond 18 blocks", () => {
-    expect(getBlocksToLisDeOuro(20)).toBe(0);
+  it("is out of 18 for every ramo (three-etapa ramos included)", () => {
+    expect(getBlocksToIrr(0, "senior")).toBe(18);
+    expect(getBlocksToIrr(0, "pioneiro")).toBe(18);
+    expect(getBlocksToIrr(12, "senior")).toBe(6);
   });
 });
 
 // ── allBlocksCompleted ────────────────────────────────────────
 
 describe("allBlocksCompleted", () => {
-  it("returns false at 0", () => {
-    expect(allBlocksCompleted(0)).toBe(false);
-  });
-
-  it("returns false at 17", () => {
-    expect(allBlocksCompleted(17)).toBe(false);
-  });
-
-  it("returns true at 18", () => {
-    expect(allBlocksCompleted(18)).toBe(true);
-  });
-
-  it("returns true at 19", () => {
-    expect(allBlocksCompleted(19)).toBe(true);
+  it("crosses at 18 regardless of ramo", () => {
+    expect(allBlocksCompleted(0, "escoteiro")).toBe(false);
+    expect(allBlocksCompleted(17, "escoteiro")).toBe(false);
+    expect(allBlocksCompleted(18, "escoteiro")).toBe(true);
+    expect(allBlocksCompleted(19, "escoteiro")).toBe(true);
+    expect(allBlocksCompleted(17, "senior")).toBe(false);
+    expect(allBlocksCompleted(18, "senior")).toBe(true);
   });
 });
 
-// ── isLisDeOuroComplete ──────────────────────────────────────
+// ── isIrrComplete ──────────────────────────────────────────────
 
-describe("isLisDeOuroComplete", () => {
+describe("isIrrComplete", () => {
   const allManualItems = new Set([
     "lis_promessa",
     "lis_jornada",
@@ -453,19 +452,25 @@ describe("isLisDeOuroComplete", () => {
     "lis_corte_honra",
   ]);
 
-  it("returns false when blocks incomplete even with all items done", () => {
-    expect(isLisDeOuroComplete(17, allManualItems)).toBe(false);
+  it("escoteiro: false when blocks incomplete even with all items done", () => {
+    expect(isIrrComplete(17, allManualItems, "escoteiro")).toBe(false);
   });
 
-  it("returns false when blocks complete but no checklist items done", () => {
-    expect(isLisDeOuroComplete(18, new Set())).toBe(false);
+  it("escoteiro: false when blocks complete but no checklist items done", () => {
+    expect(isIrrComplete(18, new Set(), "escoteiro")).toBe(false);
   });
 
-  it("returns false when blocks complete but only some items done", () => {
-    expect(isLisDeOuroComplete(18, new Set(["lis_promessa"]))).toBe(false);
+  it("escoteiro: false when blocks complete but only some items done", () => {
+    expect(isIrrComplete(18, new Set(["lis_promessa"]), "escoteiro")).toBe(false);
   });
 
-  it("returns true when blocks complete and all manual items done", () => {
-    expect(isLisDeOuroComplete(18, allManualItems)).toBe(true);
+  it("escoteiro: true when blocks complete and all manual items done", () => {
+    expect(isIrrComplete(18, allManualItems, "escoteiro")).toBe(true);
+  });
+
+  it("senior: uses the same shared lis_* manual items (18 + all manual)", () => {
+    // Shared 5-slot ids across ramos, so the same manual-item set completes it.
+    expect(isIrrComplete(18, new Set(), "senior")).toBe(false);
+    expect(isIrrComplete(18, allManualItems, "senior")).toBe(true);
   });
 });

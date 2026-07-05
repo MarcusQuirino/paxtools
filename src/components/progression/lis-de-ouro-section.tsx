@@ -1,36 +1,35 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import {
-  LIS_DE_OURO_ITEMS,
-  LIS_DE_OURO_COLOR,
-} from "@/data/progression-rules";
+import type { Irr } from "@/data/progression-rules";
 import { Check, Clock, Lock, Trophy } from "lucide-react";
 
 type LisDeOuroSectionProps = {
+  irr: Irr;
   blocksComplete: boolean;
   approvedLisItemIds: Set<string>;
   pendingLisItemIds: Set<string>;
-  lisDeOuro: boolean;
+  irrComplete: boolean;
   onToggleItem: (itemId: string) => void;
   lockApproved?: boolean;
 };
 
 export function LisDeOuroSection({
+  irr,
   blocksComplete,
   approvedLisItemIds,
   pendingLisItemIds,
-  lisDeOuro,
+  irrComplete,
   onToggleItem,
   lockApproved,
 }: LisDeOuroSectionProps) {
-  const approvedCount = LIS_DE_OURO_ITEMS.filter((item) =>
+  const approvedCount = irr.items.filter((item) =>
     item.auto ? blocksComplete : approvedLisItemIds.has(item.id),
   ).length;
-  const pendingCount = LIS_DE_OURO_ITEMS.filter(
+  const pendingCount = irr.items.filter(
     (item) => !item.auto && pendingLisItemIds.has(item.id),
   ).length;
-  const totalCount = LIS_DE_OURO_ITEMS.length;
+  const totalCount = irr.items.length;
   const approvedPercent = (approvedCount / totalCount) * 100;
   const pendingPercent = (pendingCount / totalCount) * 100;
 
@@ -38,14 +37,14 @@ export function LisDeOuroSection({
     <section className="rounded-md overflow-hidden border-2 border-black bg-card shadow-[4px_4px_0px_0px_#000]">
       <div
         className="px-4 py-3 text-white border-b-2 border-black"
-        style={{ backgroundColor: LIS_DE_OURO_COLOR }}
+        style={{ backgroundColor: irr.color }}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Trophy className="size-4" />
             <h2 className="font-black text-base uppercase tracking-tight">Reconhecimento de Ramo</h2>
           </div>
-          {lisDeOuro ? (
+          {irrComplete ? (
             <Badge className="bg-white/20 text-white text-[10px] px-1.5 py-0 border-white/60">
               <Check className="size-3 mr-0.5" />
               Completo
@@ -74,7 +73,7 @@ export function LisDeOuroSection({
           </div>
         )}
 
-        {LIS_DE_OURO_ITEMS.map((item) => {
+        {irr.items.map((item) => {
           const isAutoItem = item.auto;
           const isApproved = isAutoItem
             ? blocksComplete
@@ -105,7 +104,7 @@ export function LisDeOuroSection({
                 style={
                   isChecked
                     ? {
-                        backgroundColor: LIS_DE_OURO_COLOR,
+                        backgroundColor: irr.color,
                         borderColor: "#000",
                         opacity: isPending ? 0.4 : 1,
                       }

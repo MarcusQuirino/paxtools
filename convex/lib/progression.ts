@@ -3,10 +3,10 @@ import type { Doc, Id } from "../_generated/dataModel";
 import {
   getCompletedBlockIds,
   getCurrentStage,
-  isLisDeOuroComplete,
+  isIrrComplete,
 } from "../../src/lib/completion-logic";
-import { getEixosForRamo } from "../../src/data/progression-data";
-import { STAGES } from "../../src/data/progression-rules";
+import { getEixosForRamo, type Ramo } from "../../src/data/progression-data";
+import { getRamoRules } from "../../src/data/progression-rules";
 import { logRamoEvent } from "./events";
 
 /**
@@ -16,6 +16,7 @@ import { logRamoEvent } from "./events";
  * so backend level-up detection agrees with what the escoteiro sees.
  */
 export type ProgressionSnapshot = {
+  ramo: Ramo | null;
   stageIndex: number;
   stageId: string;
   stageName: string;
@@ -74,15 +75,22 @@ export async function snapshotProgression(
   );
 
   const completedBlockCount = approved.size;
-  const stage = getCurrentStage(completedBlockCount);
-  const stageIndex = STAGES.findIndex((s) => s.id === stage.id);
+  const stage = getCurrentStage(completedBlockCount, ramo);
+  const stageIndex = getRamoRules(ramo).etapas.findIndex(
+    (s) => s.id === stage.id,
+  );
 
   const approvedLisItemIds = new Set(
     lisItems.filter((i) => i.status !== "pending").map((i) => i.itemId),
   );
-  const lisDeOuro = isLisDeOuroComplete(completedBlockCount, approvedLisItemIds);
+  const lisDeOuro = isIrrComplete(
+    completedBlockCount,
+    approvedLisItemIds,
+    ramo,
+  );
 
   return {
+    ramo,
     stageIndex,
     stageId: stage.id,
     stageName: stage.name,
@@ -93,27 +101,29 @@ export async function snapshotProgression(
 
 export type LevelUp =
   | { kind: "levelUp"; stageId: string; stageName: string }
-  | { kind: "lisDeOuro" };
+  | { kind: "lisDeOuro"; irrName: string };
 
 /**
  * Diff two snapshots into the level-ups crossed. "Literal" rule (the user's
- * choice): one event per stage boundary crossed upward, plus a distinct Lis de
- * Ouro on a false→true transition. No high-water-mark — a reject→re-approve that
- * re-crosses a boundary fires again, by design.
+ * choice): one event per etapa boundary crossed upward, plus a distinct IRR on a
+ * false→true transition. No high-water-mark — a reject→re-approve that re-crosses
+ * a boundary fires again, by design. Both snapshots share the subject's ramo, so
+ * etapa names and the IRR name resolve from `after.ramo`.
  */
 export function diffProgression(
   before: ProgressionSnapshot,
   after: ProgressionSnapshot,
 ): LevelUp[] {
   const ups: LevelUp[] = [];
+  const rules = getRamoRules(after.ramo);
   if (after.stageIndex > before.stageIndex) {
     for (let i = before.stageIndex + 1; i <= after.stageIndex; i++) {
-      const s = STAGES[i];
+      const s = rules.etapas[i];
       if (s) ups.push({ kind: "levelUp", stageId: s.id, stageName: s.name });
     }
   }
   if (!before.lisDeOuro && after.lisDeOuro) {
-    ups.push({ kind: "lisDeOuro" });
+    ups.push({ kind: "lisDeOuro", irrName: rules.irr.name });
   }
   return ups;
 }
@@ -131,7 +141,10 @@ function toToasts(subject: Doc<"users">, ups: LevelUp[]): LevelUpToast[] {
     subjectUserId: subject._id,
     subjectName: subject.name ?? null,
     kind: u.kind,
-    stageName: u.kind === "levelUp" ? u.stageName : null,
+    // For a levelUp this is the etapa name; for an IRR it's the ramo's IRR name
+    // (e.g. "Lis de Ouro" for an escoteiro, "Cruzeiro do Sul" for a lobinho) so
+    // the toast congratulates the right recognition.
+    stageName: u.kind === "levelUp" ? u.stageName : u.irrName,
   }));
 }
 
@@ -157,7 +170,7 @@ async function logLevelUps(
         type: "lisDeOuro",
         actor,
         subject,
-        summary: "Conquistou a Lis de Ouro",
+        summary: `Conquistou a ${u.irrName}`,
       });
     }
   }

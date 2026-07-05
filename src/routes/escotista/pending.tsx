@@ -19,6 +19,7 @@ import {
   parseActionId,
   type Ramo,
 } from "@/data/progression-data";
+import { getRamoRules } from "@/data/progression-rules";
 import { notifyLevelUps } from "@/lib/level-up-toast";
 
 export const Route = createFileRoute("/escotista/pending")({
@@ -151,6 +152,7 @@ function EscoteiroPendingCard({
   isBulkPending: boolean;
 }) {
   const ramo = entry.escoteiro.ramo;
+  const irr = getRamoRules(ramo).irr;
   // Build a flat list of all pending items with unique keys
   const allItems = useMemo(() => {
     const items: PendingItem[] = [];
@@ -179,11 +181,14 @@ function EscoteiroPendingCard({
     }
 
     for (const l of entry.pendingLisItems) {
+      const label =
+        irr.items.find((i) => i.id === l.itemId)?.text ??
+        l.itemId.replace("lis_", "").replace(/_/g, " ");
       items.push({
         key: `lis:${l._id}`,
         type: "lis",
         id: l._id,
-        text: l.itemId.replace("lis_", "").replace(/_/g, " "),
+        text: label,
       });
     }
 
@@ -199,7 +204,7 @@ function EscoteiroPendingCard({
     }
 
     return items;
-  }, [entry, ramo]);
+  }, [entry, ramo, irr]);
 
   // All items selected by default
   const [deselected, setDeselected] = useState<Set<string>>(new Set());
@@ -357,11 +362,11 @@ function EscoteiroPendingCard({
               </div>
             )}
 
-            {/* Lis de Ouro items */}
+            {/* IRR (recognition) items — named for the escoteiro's ramo */}
             {lisItems.length > 0 && (
               <div className="space-y-0.5">
                 <p className="text-xs font-black uppercase tracking-widest text-primary">
-                  Lis de Ouro
+                  {irr.name}
                 </p>
                 {lisItems.map((item) => (
                   <SelectableItem

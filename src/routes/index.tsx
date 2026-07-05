@@ -66,6 +66,7 @@ function Home() {
 
 export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
   const {
+    ramoRules,
     eixos,
     approvedActionIds,
     pendingActionIds,
@@ -81,7 +82,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
     stage,
     nextStage,
     blocksComplete,
-    lisDeOuro,
+    irrComplete,
   } = useProgression(targetUserId);
 
   // Plan favorites only apply to the escoteiro viewing their own dashboard.
@@ -149,11 +150,13 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
   return (
     <div className="space-y-4">
       <StageBanner
+        etapas={ramoRules.etapas}
+        irr={ramoRules.irr}
         stage={stage}
         nextStage={nextStage}
         completedBlockCount={completedBlockCount}
         pendingBlockCount={pendingBlockCount}
-        lisDeOuro={lisDeOuro}
+        irrComplete={irrComplete}
       />
 
       <OverallProgress
@@ -202,10 +205,11 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
       )}
 
       <LisDeOuroSection
+        irr={ramoRules.irr}
         blocksComplete={blocksComplete}
         approvedLisItemIds={approvedLisItemIds}
         pendingLisItemIds={pendingLisItemIds}
-        lisDeOuro={lisDeOuro}
+        irrComplete={irrComplete}
         onToggleItem={handleToggleLisItem}
         lockApproved={lockApproved}
       />

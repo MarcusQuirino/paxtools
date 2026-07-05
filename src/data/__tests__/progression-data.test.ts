@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { EIXOS_BY_RAMO, type Ramo } from "@/data/progression-data";
-import { LIS_DE_OURO_BLOCKS } from "@/data/progression-rules";
+import { getRamoRules } from "@/data/progression-rules";
 
 const RAMOS: Ramo[] = ["lobinho", "escoteiro", "senior", "pioneiro"];
 
@@ -12,8 +12,8 @@ describe.each(RAMOS)("EIXOS data integrity (%s)", (ramo) => {
     ...b.variableActions,
   ]);
 
-  it("total bloco count matches LIS_DE_OURO_BLOCKS", () => {
-    expect(allBlocos).toHaveLength(LIS_DE_OURO_BLOCKS);
+  it("total bloco count matches the ramo's IRR block threshold (18)", () => {
+    expect(allBlocos).toHaveLength(getRamoRules(ramo).irr.blockThreshold);
   });
 
   it("all eixo IDs are unique", () => {
