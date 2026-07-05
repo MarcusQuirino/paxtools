@@ -30,7 +30,7 @@ export function useProgression(targetUserId?: Id<"users">) {
       completed: boolean;
       status?: string;
     }[];
-    lisDeOuroItems: { itemId: string; status?: string }[];
+    irrItems: { itemId: string; status?: string }[];
   }>(queryOptions);
 
   const eixos = useMemo(() => getEixosForRamo(data.ramo), [data.ramo]);
@@ -100,24 +100,24 @@ export function useProgression(targetUserId?: Id<"users">) {
     ],
   );
 
-  const approvedLisItemIds = useMemo(
+  const approvedIrrItemIds = useMemo(
     () =>
       new Set(
-        data.lisDeOuroItems
+        data.irrItems
           .filter((i) => i.status !== "pending")
           .map((i) => i.itemId),
       ),
-    [data.lisDeOuroItems],
+    [data.irrItems],
   );
 
-  const pendingLisItemIds = useMemo(
+  const pendingIrrItemIds = useMemo(
     () =>
       new Set(
-        data.lisDeOuroItems
+        data.irrItems
           .filter((i) => i.status === "pending")
           .map((i) => i.itemId),
       ),
-    [data.lisDeOuroItems],
+    [data.irrItems],
   );
 
   const completedBlockCount = completedBlockIds.size;
@@ -126,7 +126,7 @@ export function useProgression(targetUserId?: Id<"users">) {
   const blocksComplete = allBlocksCompleted(completedBlockCount, data.ramo);
   const irrComplete = isIrrComplete(
     completedBlockCount,
-    approvedLisItemIds,
+    approvedIrrItemIds,
     data.ramo,
   );
 
@@ -143,8 +143,8 @@ export function useProgression(targetUserId?: Id<"users">) {
     pendingBlockIds,
     completedBlockCount,
     pendingBlockCount: pendingBlockIds.size,
-    approvedLisItemIds,
-    pendingLisItemIds,
+    approvedIrrItemIds,
+    pendingIrrItemIds,
     stage,
     nextStage,
     blocksComplete,

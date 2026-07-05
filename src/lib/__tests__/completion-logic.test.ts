@@ -446,10 +446,10 @@ describe("allBlocksCompleted", () => {
 
 describe("isIrrComplete", () => {
   const allManualItems = new Set([
-    "lis_promessa",
-    "lis_jornada",
-    "lis_autoavaliacao",
-    "lis_corte_honra",
+    "irr_promessa",
+    "irr_jornada",
+    "irr_autoavaliacao",
+    "irr_corte_honra",
   ]);
 
   it("escoteiro: false when blocks incomplete even with all items done", () => {
@@ -461,14 +461,14 @@ describe("isIrrComplete", () => {
   });
 
   it("escoteiro: false when blocks complete but only some items done", () => {
-    expect(isIrrComplete(18, new Set(["lis_promessa"]), "escoteiro")).toBe(false);
+    expect(isIrrComplete(18, new Set(["irr_promessa"]), "escoteiro")).toBe(false);
   });
 
   it("escoteiro: true when blocks complete and all manual items done", () => {
     expect(isIrrComplete(18, allManualItems, "escoteiro")).toBe(true);
   });
 
-  it("senior: uses the same shared lis_* manual items (18 + all manual)", () => {
+  it("senior: uses the same shared irr_* manual items (18 + all manual)", () => {
     // Shared 5-slot ids across ramos, so the same manual-item set completes it.
     expect(isIrrComplete(18, new Set(), "senior")).toBe(false);
     expect(isIrrComplete(18, allManualItems, "senior")).toBe(true);

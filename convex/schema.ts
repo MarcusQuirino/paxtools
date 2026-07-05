@@ -102,6 +102,11 @@ export default defineSchema({
     .index("by_userId_and_blocoId", ["userId", "blocoId"])
     .index("by_userId_and_status", ["userId", "status"]),
 
+  // DEPRECATED (Workstream B / #36): escoteiro-only recognition table, kept as
+  // the untouched copy-forward SOURCE until `irrCompletions` is verified on prod.
+  // `migrations:copyLisDeOuroToIrr` copies each row here into `irrCompletions`
+  // with `ramo` stamped and its id rewritten `lis_* → irr_*`. Drop this table in
+  // a follow-up once the counts are verified. No code reads/writes it anymore.
   lisDeOuroCompletions: defineTable({
     userId: v.id("users"),
     itemId: v.string(),
@@ -113,6 +118,27 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_userId_and_itemId", ["userId", "itemId"])
     .index("by_userId_and_status", ["userId", "status"]),
+
+  // Ramo-scoped recognition (IRR — Insígnia de Reconhecimento de Ramo). A row's
+  // identity is (userId, ramo, itemId): the same escoteiro who was a lobinho
+  // keeps a separate IRR record per ramo, and reads only ever return the current
+  // ramo's rows. Item ids are `irr_*` (shared across ramos; the ramo column, not
+  // the id, distinguishes them). "Lis de Ouro" survives only as escoteiro's
+  // display name via getRamoRules("escoteiro").irr.name.
+  irrCompletions: defineTable({
+    userId: v.id("users"),
+    ramo: ramoValidator,
+    itemId: v.string(),
+    completedAt: v.number(),
+    status: completionStatus,
+    approvedBy: v.optional(v.id("users")),
+    approvedAt: v.optional(v.number()),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_and_status", ["userId", "status"])
+    // Serves both the (userId, ramo) current-ramo reads (prefix) and the
+    // (userId, ramo, itemId) .unique() toggle/migration lookups.
+    .index("by_userId_and_ramo_and_itemId", ["userId", "ramo", "itemId"]),
 
   plannedItems: defineTable({
     userId: v.id("users"),

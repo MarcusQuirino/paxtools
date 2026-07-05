@@ -4,30 +4,30 @@ import { Badge } from "@/components/ui/badge";
 import type { Irr } from "@/data/progression-rules";
 import { Check, Clock, Lock, Trophy } from "lucide-react";
 
-type LisDeOuroSectionProps = {
+type RecognitionSectionProps = {
   irr: Irr;
   blocksComplete: boolean;
-  approvedLisItemIds: Set<string>;
-  pendingLisItemIds: Set<string>;
+  approvedIrrItemIds: Set<string>;
+  pendingIrrItemIds: Set<string>;
   irrComplete: boolean;
   onToggleItem: (itemId: string) => void;
   lockApproved?: boolean;
 };
 
-export function LisDeOuroSection({
+export function RecognitionSection({
   irr,
   blocksComplete,
-  approvedLisItemIds,
-  pendingLisItemIds,
+  approvedIrrItemIds,
+  pendingIrrItemIds,
   irrComplete,
   onToggleItem,
   lockApproved,
-}: LisDeOuroSectionProps) {
+}: RecognitionSectionProps) {
   const approvedCount = irr.items.filter((item) =>
-    item.auto ? blocksComplete : approvedLisItemIds.has(item.id),
+    item.auto ? blocksComplete : approvedIrrItemIds.has(item.id),
   ).length;
   const pendingCount = irr.items.filter(
-    (item) => !item.auto && pendingLisItemIds.has(item.id),
+    (item) => !item.auto && pendingIrrItemIds.has(item.id),
   ).length;
   const totalCount = irr.items.length;
   const approvedPercent = (approvedCount / totalCount) * 100;
@@ -77,8 +77,8 @@ export function LisDeOuroSection({
           const isAutoItem = item.auto;
           const isApproved = isAutoItem
             ? blocksComplete
-            : approvedLisItemIds.has(item.id);
-          const isPending = !isAutoItem && pendingLisItemIds.has(item.id);
+            : approvedIrrItemIds.has(item.id);
+          const isPending = !isAutoItem && pendingIrrItemIds.has(item.id);
           const isChecked = isApproved || isPending;
           const isLocked = !!lockApproved && isApproved && !isAutoItem;
           const isDisabled = !blocksComplete || isLocked;

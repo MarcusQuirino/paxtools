@@ -30,16 +30,16 @@ describe("getRamoRules — shared invariants (all ramos)", () => {
         expect(rules.irr.items).toHaveLength(5);
         const autos = rules.irr.items.filter((i) => i.auto);
         expect(autos).toHaveLength(1);
-        expect(autos[0]!.id).toBe("lis_blocos");
+        expect(autos[0]!.id).toBe("irr_blocos");
       });
 
-      it("IRR item ids are the shared lis_* slots (unchanged in Workstream A)", () => {
+      it("IRR item ids are the shared irr_* slots (renamed in Workstream B / #36)", () => {
         expect(rules.irr.items.map((i) => i.id)).toEqual([
-          "lis_promessa",
-          "lis_blocos",
-          "lis_jornada",
-          "lis_autoavaliacao",
-          "lis_corte_honra",
+          "irr_promessa",
+          "irr_blocos",
+          "irr_jornada",
+          "irr_autoavaliacao",
+          "irr_corte_honra",
         ]);
       });
 
@@ -118,12 +118,12 @@ describe("getRamoRules — escoteiro regression lock", () => {
     expect(irr.colorLight).toBe("#E8F5E9");
     expect(irr.blockThreshold).toBe(18);
     expect(irr.items).toEqual([
-      { id: "lis_promessa", text: "Realizou ou Renovou sua Promessa Escoteira", auto: false },
-      { id: "lis_blocos", text: "Concluiu todos os 18 Blocos de Aprendizagem", auto: true },
-      { id: "lis_jornada", text: "Vivenciou a Jornada de Travessia", auto: false },
-      { id: "lis_autoavaliacao", text: "Realizou a autoavaliação", auto: false },
+      { id: "irr_promessa", text: "Realizou ou Renovou sua Promessa Escoteira", auto: false },
+      { id: "irr_blocos", text: "Concluiu todos os 18 Blocos de Aprendizagem", auto: true },
+      { id: "irr_jornada", text: "Vivenciou a Jornada de Travessia", auto: false },
+      { id: "irr_autoavaliacao", text: "Realizou a autoavaliação", auto: false },
       {
-        id: "lis_corte_honra",
+        id: "irr_corte_honra",
         text: "Ser avaliado positivamente pela Corte de Honra e pelos Escotistas",
         auto: false,
       },

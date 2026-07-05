@@ -147,3 +147,101 @@ export const prefixLegacyPlannedItemKeys = internalMutation({
     return { dryRun, total: all.length, migrated, merged, skipped, samples };
   },
 });
+
+/**
+ * One-off migration (#36): copy the escoteiro-only `lisDeOuroCompletions` rows
+ * forward into the ramo-scoped `irrCompletions`, renaming the recognition
+ * concept "Lis de Ouro" → IRR in stored data.
+ *
+ * Copy-forward (NOT in-place) was chosen for its safety property: the source
+ * table is never mutated, so counts can be compared and the change rolled back
+ * before the old table is dropped (dropping it is a separate follow-up, done
+ * only after prod verification). Each source row is copied with:
+ *   - `ramo = "escoteiro"` stamped (prod is all escoteiros — see the assertion),
+ *   - its id rewritten `lis_* → irr_*`.
+ *
+ * Safety: asserts EVERY `actionCompletions` id begins with `escoteiro:` before
+ * copying. A non-escoteiro / transitioned action id means the all-escoteiro
+ * assumption that makes the escoteiro stamp provably correct is violated, so we
+ * stop rather than mislabel a row.
+ *
+ * Idempotent / safe to re-run: a source row whose (userId, "escoteiro",
+ * irr_*id) already exists in `irrCompletions` is skipped, so a partial failure
+ * can be retried without duplicating rows.
+ *
+ * Run and verify on the DEV deploy (handsome-walrus-236) before prod:
+ *   bunx convex run migrations:copyLisDeOuroToIrr '{"dryRun": true}'
+ *   bunx convex run migrations:copyLisDeOuroToIrr '{}'
+ * Verify `sourceCount === destCount` (all copied) before touching prod.
+ */
+export const copyLisDeOuroToIrr = internalMutation({
+  args: { dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const dryRun = args.dryRun ?? false;
+
+    // 1. Assert all-escoteiro: every action id must be escoteiro-prefixed.
+    // (Ações already encode ramo in their id — this is the cheapest proof that
+    // no non-escoteiro/transitioned user exists before we stamp escoteiro.)
+    const actions = await ctx.db.query("actionCompletions").collect();
+    const offending = actions.find((a) => !a.actionId.startsWith("escoteiro:"));
+    if (offending) {
+      throw new Error(
+        `copyLisDeOuroToIrr: found non-escoteiro action id "${offending.actionId}" ` +
+          `— a transitioned/non-escoteiro user exists; migrate manually.`,
+      );
+    }
+
+    // 2. Copy each recognition row forward, stamping escoteiro + rewriting the id.
+    const source = await ctx.db.query("lisDeOuroCompletions").collect();
+    let copied = 0;
+    let skipped = 0;
+    const samples: { from: string; to: string }[] = [];
+
+    for (const row of source) {
+      const newItemId = row.itemId.replace(/^lis_/, "irr_");
+      if (samples.length < 5)
+        samples.push({ from: row.itemId, to: newItemId });
+
+      const existing = await ctx.db
+        .query("irrCompletions")
+        .withIndex("by_userId_and_ramo_and_itemId", (q) =>
+          q
+            .eq("userId", row.userId)
+            .eq("ramo", "escoteiro")
+            .eq("itemId", newItemId),
+        )
+        .unique();
+
+      if (existing) {
+        skipped++;
+        continue;
+      }
+
+      copied++;
+      if (!dryRun) {
+        await ctx.db.insert("irrCompletions", {
+          userId: row.userId,
+          ramo: "escoteiro",
+          itemId: newItemId,
+          completedAt: row.completedAt,
+          status: row.status,
+          approvedBy: row.approvedBy,
+          approvedAt: row.approvedAt,
+        });
+      }
+    }
+
+    // 3. Verify: destCount should equal sourceCount once fully copied. On a
+    // dryRun destCount reflects only pre-existing rows (nothing inserted).
+    const destCount = (await ctx.db.query("irrCompletions").collect()).length;
+
+    return {
+      dryRun,
+      sourceCount: source.length,
+      copied,
+      skipped,
+      destCount,
+      samples,
+    };
+  },
+});

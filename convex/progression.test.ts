@@ -613,39 +613,41 @@ describe("deleteCustomAction", () => {
 
 // ---------------------------------------------------------------------------
 
-describe("toggleLisDeOuroItem", () => {
+describe("toggleIrrItem", () => {
   test("invalid itemId throws", async () => {
     const t = convexTest(schema, modules);
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     await expect(
-      as(t, escoteiro).mutation(api.progression.toggleLisDeOuroItem, {
-        itemId: "lis_invalido",
+      as(t, escoteiro).mutation(api.progression.toggleIrrItem, {
+        itemId: "irr_invalido",
       }),
     ).rejects.toThrow("ID de item inválido");
   });
 
-  test("escoteiro (self) inserts status=pending; escotista approved; toggle deletes", async () => {
+  test("escoteiro (self) inserts status=pending stamped with ramo; escotista approved; toggle deletes", async () => {
     const t = convexTest(schema, modules);
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
-    await as(t, escoteiro).mutation(api.progression.toggleLisDeOuroItem, {
-      itemId: "lis_promessa",
+    await as(t, escoteiro).mutation(api.progression.toggleIrrItem, {
+      itemId: "irr_promessa",
     });
     let rows = await t.run(async (ctx) =>
       ctx.db
-        .query("lisDeOuroCompletions")
+        .query("irrCompletions")
         .withIndex("by_userId", (q) => q.eq("userId", escoteiro))
         .collect(),
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]!.status).toBe("pending");
+    // Writes stamp the acting escoteiro's ramo.
+    expect(rows[0]!.ramo).toBe("escoteiro");
 
     // Toggle again deletes (pending, self).
-    await as(t, escoteiro).mutation(api.progression.toggleLisDeOuroItem, {
-      itemId: "lis_promessa",
+    await as(t, escoteiro).mutation(api.progression.toggleIrrItem, {
+      itemId: "irr_promessa",
     });
     rows = await t.run(async (ctx) =>
       ctx.db
-        .query("lisDeOuroCompletions")
+        .query("irrCompletions")
         .withIndex("by_userId", (q) => q.eq("userId", escoteiro))
         .collect(),
     );
@@ -656,16 +658,61 @@ describe("toggleLisDeOuroItem", () => {
       role: "escotista",
       escotistaRamos: ["escoteiro"],
     });
-    await as(t, escotista).mutation(api.progression.toggleLisDeOuroItem, {
-      itemId: "lis_blocos",
+    await as(t, escotista).mutation(api.progression.toggleIrrItem, {
+      itemId: "irr_blocos",
     });
     const escRows = await t.run(async (ctx) =>
       ctx.db
-        .query("lisDeOuroCompletions")
+        .query("irrCompletions")
         .withIndex("by_userId", (q) => q.eq("userId", escotista))
         .collect(),
     );
     expect(escRows[0]!.status).toBe("approved");
+  });
+
+  test("reads are ramo-scoped: only the current ramo's items return; other ramo retained", async () => {
+    const t = convexTest(schema, modules);
+    const user = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
+    // Seed the same user with recognition rows under TWO ramos.
+    await t.run(async (ctx) => {
+      await ctx.db.insert("irrCompletions", {
+        userId: user,
+        ramo: "escoteiro",
+        itemId: "irr_promessa",
+        completedAt: 1,
+        status: "approved",
+      });
+      await ctx.db.insert("irrCompletions", {
+        userId: user,
+        ramo: "lobinho",
+        itemId: "irr_jornada",
+        completedAt: 1,
+        status: "approved",
+      });
+    });
+
+    // Current ramo escoteiro → only the escoteiro row.
+    let res = await as(t, user).query(api.progression.getMyCompletions, {});
+    expect(res.irrItems.map((i) => i.itemId)).toEqual(["irr_promessa"]);
+
+    // Switch to lobinho → only the lobinho row; the escoteiro row is retained
+    // in the DB and reappears when switching back.
+    await t.run(async (ctx) => ctx.db.patch(user, { ramo: "lobinho" }));
+    res = await as(t, user).query(api.progression.getMyCompletions, {});
+    expect(res.irrItems.map((i) => i.itemId)).toEqual(["irr_jornada"]);
+
+    await t.run(async (ctx) => ctx.db.patch(user, { ramo: "escoteiro" }));
+    res = await as(t, user).query(api.progression.getMyCompletions, {});
+    expect(res.irrItems.map((i) => i.itemId)).toEqual(["irr_promessa"]);
+
+    // Nothing was deleted across the switches — both rows still exist.
+    const all = await t.run(async (ctx) =>
+      ctx.db
+        .query("irrCompletions")
+        .withIndex("by_userId", (q) => q.eq("userId", user))
+        .collect(),
+    );
+    expect(all).toHaveLength(2);
   });
 });
 
@@ -680,7 +727,7 @@ describe("getMyCompletions", () => {
       actions: [],
       specialties: [],
       customActions: [],
-      lisDeOuroItems: [],
+      irrItems: [],
     });
   });
 
@@ -701,7 +748,7 @@ describe("getMyCompletions", () => {
     expect(res.actions[0]!.actionId).toBe(VALID_ACTION_ID);
     expect(res.specialties).toEqual([]);
     expect(res.customActions).toEqual([]);
-    expect(res.lisDeOuroItems).toEqual([]);
+    expect(res.irrItems).toEqual([]);
   });
 });
 

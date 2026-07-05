@@ -6,6 +6,7 @@ import { assertCanActOnEscoteiro } from "./lib/ramoVisibility";
 import {
   snapshotProgression,
   detectLevelUps,
+  readCurrentRamoIrrItems,
   type LevelUpToast,
   type ProgressionSnapshot,
 } from "./lib/progression";
@@ -19,12 +20,12 @@ import type { MutationCtx } from "./_generated/server";
 
 const ACTION_ID_PATTERN = /^(lobinho|escoteiro|senior|pioneiro):[a-z0-9-]+:(fixed|variable):\d+$/;
 const BLOCO_ID_PATTERN = /^[a-z0-9-]+$/;
-const VALID_LIS_ITEM_IDS = new Set([
-  "lis_promessa",
-  "lis_blocos",
-  "lis_jornada",
-  "lis_autoavaliacao",
-  "lis_corte_honra",
+const VALID_IRR_ITEM_IDS = new Set([
+  "irr_promessa",
+  "irr_blocos",
+  "irr_jornada",
+  "irr_autoavaliacao",
+  "irr_corte_honra",
 ]);
 const MAX_CUSTOM_ACTIONS_PER_BLOCO = 20;
 
@@ -119,7 +120,7 @@ export const getMyCompletions = query({
       actions: [],
       specialties: [],
       customActions: [],
-      lisDeOuroItems: [],
+      irrItems: [],
     };
 
     const userId = await getAuthUserId(ctx);
@@ -144,17 +145,15 @@ export const getMyCompletions = query({
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .take(1000);
 
-    const lisDeOuroItems = await ctx.db
-      .query("lisDeOuroCompletions")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(10);
+    // IRR items are ramo-scoped: only the current ramo's recognition rows.
+    const irrItems = await readCurrentRamoIrrItems(ctx, userId, user.ramo);
 
     return {
       ramo: user?.ramo ?? null,
       actions,
       specialties,
       customActions,
-      lisDeOuroItems,
+      irrItems,
     };
   },
 });
@@ -181,17 +180,18 @@ export const getCompletionsForUser = query({
       .withIndex("by_userId", (q) => q.eq("userId", args.targetUserId))
       .take(1000);
 
-    const lisDeOuroItems = await ctx.db
-      .query("lisDeOuroCompletions")
-      .withIndex("by_userId", (q) => q.eq("userId", args.targetUserId))
-      .take(10);
+    const irrItems = await readCurrentRamoIrrItems(
+      ctx,
+      args.targetUserId,
+      target?.ramo,
+    );
 
     return {
       ramo: target?.ramo ?? null,
       actions,
       specialties,
       customActions,
-      lisDeOuroItems,
+      irrItems,
     };
   },
 });
@@ -435,7 +435,7 @@ export const deleteCustomAction = mutation({
   },
 });
 
-export const toggleLisDeOuroItem = mutation({
+export const toggleIrrItem = mutation({
   args: {
     itemId: v.string(),
     targetUserId: v.optional(v.id("users")),
@@ -444,13 +444,18 @@ export const toggleLisDeOuroItem = mutation({
     const { effectiveUserId, status, approvedBy, callerIsEscotista, caller } =
       await resolveTargetAndStatus(ctx, args.targetUserId);
 
-    if (!VALID_LIS_ITEM_IDS.has(args.itemId))
+    if (!VALID_IRR_ITEM_IDS.has(args.itemId))
       throw new Error("ID de item inválido");
 
+    // Stamp the acting escoteiro's current ramo so the row lands in the right
+    // ramo's record. null ramo → "escoteiro" (codebase-wide default).
+    const subject = await ctx.db.get(effectiveUserId);
+    const ramo = subject?.ramo ?? "escoteiro";
+
     const existing = await ctx.db
-      .query("lisDeOuroCompletions")
-      .withIndex("by_userId_and_itemId", (q) =>
-        q.eq("userId", effectiveUserId).eq("itemId", args.itemId),
+      .query("irrCompletions")
+      .withIndex("by_userId_and_ramo_and_itemId", (q) =>
+        q.eq("userId", effectiveUserId).eq("ramo", ramo).eq("itemId", args.itemId),
       )
       .unique();
 
@@ -472,8 +477,9 @@ export const toggleLisDeOuroItem = mutation({
         await ctx.db.delete(existing._id);
       }
     } else {
-      await ctx.db.insert("lisDeOuroCompletions", {
+      await ctx.db.insert("irrCompletions", {
         userId: effectiveUserId,
+        ramo,
         itemId: args.itemId,
         completedAt: Date.now(),
         status,
@@ -489,7 +495,7 @@ export const toggleLisDeOuroItem = mutation({
       subjectId: effectiveUserId,
       before,
       approved,
-      kind: "lis",
+      kind: "irr",
       ref: { itemId: args.itemId },
     });
   },

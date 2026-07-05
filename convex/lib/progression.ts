@@ -15,6 +15,26 @@ import { logRamoEvent } from "./events";
  * de Ouro. Derived exactly the way the client derives it (same shared logic),
  * so backend level-up detection agrees with what the escoteiro sees.
  */
+/**
+ * Read the recognition (IRR) rows for a user's CURRENT ramo. The one place the
+ * "(userId, ramo) → irrCompletions" read and the null-ramo → "escoteiro" default
+ * live, so the three consumers (self read, escotista-view read, progression
+ * snapshot) can't drift. Not used by the escotista pending/approve-all path,
+ * which reads by (userId, status) on purpose — see the note there.
+ */
+export async function readCurrentRamoIrrItems(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+  ramo: Ramo | null | undefined,
+): Promise<Doc<"irrCompletions">[]> {
+  return ctx.db
+    .query("irrCompletions")
+    .withIndex("by_userId_and_ramo_and_itemId", (q) =>
+      q.eq("userId", userId).eq("ramo", ramo ?? "escoteiro"),
+    )
+    .take(10);
+}
+
 export type ProgressionSnapshot = {
   ramo: Ramo | null;
   stageIndex: number;
@@ -49,10 +69,9 @@ export async function snapshotProgression(
     .query("customActions")
     .withIndex("by_userId", (q) => q.eq("userId", userId))
     .take(1000);
-  const lisItems = await ctx.db
-    .query("lisDeOuroCompletions")
-    .withIndex("by_userId", (q) => q.eq("userId", userId))
-    .take(10);
+  // IRR items are ramo-scoped: only the current ramo's recognition rows feed
+  // the IRR-complete check.
+  const irrItems = await readCurrentRamoIrrItems(ctx, userId, ramo);
 
   const approvedActionIds = new Set(
     actions.filter((a) => a.status !== "pending").map((a) => a.actionId),
@@ -80,12 +99,12 @@ export async function snapshotProgression(
     (s) => s.id === stage.id,
   );
 
-  const approvedLisItemIds = new Set(
-    lisItems.filter((i) => i.status !== "pending").map((i) => i.itemId),
+  const approvedIrrItemIds = new Set(
+    irrItems.filter((i) => i.status !== "pending").map((i) => i.itemId),
   );
   const lisDeOuro = isIrrComplete(
     completedBlockCount,
-    approvedLisItemIds,
+    approvedIrrItemIds,
     ramo,
   );
 

@@ -155,6 +155,7 @@ export const wipeTestData = internalMutation({
       "specialtyCompletions",
       "customActions",
       "lisDeOuroCompletions",
+      "irrCompletions",
       "plannedItems",
     ] as const;
     let deletedRows = 0;

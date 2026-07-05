@@ -145,3 +145,124 @@ test("prefixLegacyPlannedItemKeys prefixes action keys, leaves specialty/custom,
     ].sort(),
   );
 });
+
+// ---------------------------------------------------------------------------
+// copyLisDeOuroToIrr (#36) — recognition table copy-forward + Lis→IRR rename.
+// ---------------------------------------------------------------------------
+
+test("copyLisDeOuroToIrr copies rows to irrCompletions with irr_* ids + ramo, source intact", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await makeUser(t);
+  await t.run(async (ctx) => {
+    await ctx.db.insert("lisDeOuroCompletions", {
+      userId,
+      itemId: "lis_promessa",
+      completedAt: 1,
+      status: "approved",
+    });
+    await ctx.db.insert("lisDeOuroCompletions", {
+      userId,
+      itemId: "lis_blocos",
+      completedAt: 2,
+      status: "pending",
+    });
+  });
+
+  const res = await t.mutation(internal.migrations.copyLisDeOuroToIrr, {});
+  expect(res.sourceCount).toBe(2);
+  expect(res.copied).toBe(2);
+  expect(res.destCount).toBe(2);
+
+  const irr = await t.run(async (ctx) =>
+    ctx.db.query("irrCompletions").collect(),
+  );
+  expect(irr.map((r) => r.itemId).sort()).toEqual(["irr_blocos", "irr_promessa"]);
+  // Every copied row is stamped escoteiro.
+  expect(irr.every((r) => r.ramo === "escoteiro")).toBe(true);
+  // Status carried across.
+  expect(irr.find((r) => r.itemId === "irr_promessa")?.status).toBe("approved");
+  expect(irr.find((r) => r.itemId === "irr_blocos")?.status).toBe("pending");
+
+  // Copy-forward: the source table is left intact (not moved).
+  const source = await t.run(async (ctx) =>
+    ctx.db.query("lisDeOuroCompletions").collect(),
+  );
+  expect(source).toHaveLength(2);
+});
+
+test("copyLisDeOuroToIrr throws when a non-escoteiro action id exists, copies nothing", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await makeUser(t);
+  await t.run(async (ctx) => {
+    await ctx.db.insert("actionCompletions", {
+      userId,
+      actionId: "lobinho:bloco:fixed:0",
+      completedAt: 1,
+      status: "approved",
+    });
+    await ctx.db.insert("lisDeOuroCompletions", {
+      userId,
+      itemId: "lis_promessa",
+      completedAt: 1,
+      status: "approved",
+    });
+  });
+
+  await expect(
+    t.mutation(internal.migrations.copyLisDeOuroToIrr, {}),
+  ).rejects.toThrow("non-escoteiro action id");
+
+  const irr = await t.run(async (ctx) =>
+    ctx.db.query("irrCompletions").collect(),
+  );
+  expect(irr).toHaveLength(0);
+});
+
+test("copyLisDeOuroToIrr is idempotent — re-running copies no duplicates", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await makeUser(t);
+  await t.run(async (ctx) => {
+    await ctx.db.insert("lisDeOuroCompletions", {
+      userId,
+      itemId: "lis_promessa",
+      completedAt: 1,
+      status: "approved",
+    });
+  });
+
+  const first = await t.mutation(internal.migrations.copyLisDeOuroToIrr, {});
+  expect(first.copied).toBe(1);
+
+  const second = await t.mutation(internal.migrations.copyLisDeOuroToIrr, {});
+  expect(second.copied).toBe(0);
+  expect(second.skipped).toBe(1);
+
+  const irr = await t.run(async (ctx) =>
+    ctx.db.query("irrCompletions").collect(),
+  );
+  expect(irr).toHaveLength(1);
+});
+
+test("copyLisDeOuroToIrr dryRun inserts nothing", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await makeUser(t);
+  await t.run(async (ctx) => {
+    await ctx.db.insert("lisDeOuroCompletions", {
+      userId,
+      itemId: "lis_promessa",
+      completedAt: 1,
+      status: "approved",
+    });
+  });
+
+  const res = await t.mutation(internal.migrations.copyLisDeOuroToIrr, {
+    dryRun: true,
+  });
+  expect(res.copied).toBe(1);
+  expect(res.destCount).toBe(0);
+
+  const irr = await t.run(async (ctx) =>
+    ctx.db.query("irrCompletions").collect(),
+  );
+  expect(irr).toHaveLength(0);
+});

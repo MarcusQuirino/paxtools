@@ -44,13 +44,14 @@ export type RamoRules = {
 };
 
 // Shared IRR item ids — the 5-slot shape is identical across ramos; only the
-// display text varies. Ids stay `lis_*` in Workstream A (the storage rename to
-// `irr_*` is Workstream B); "Lis de Ouro" survives only as escoteiro's name.
-const IRR_ITEM_PROMESSA = "lis_promessa";
-const IRR_ITEM_BLOCOS = "lis_blocos";
-const IRR_ITEM_JORNADA = "lis_jornada";
-const IRR_ITEM_AUTOAVALIACAO = "lis_autoavaliacao";
-const IRR_ITEM_AVALIACAO = "lis_corte_honra";
+// display text varies. Renamed `lis_* → irr_*` in Workstream B (#36); the ramo
+// column (not the id) distinguishes ramos. "Lis de Ouro" survives only as
+// escoteiro's display name.
+const IRR_ITEM_PROMESSA = "irr_promessa";
+const IRR_ITEM_BLOCOS = "irr_blocos";
+const IRR_ITEM_JORNADA = "irr_jornada";
+const IRR_ITEM_AUTOAVALIACAO = "irr_autoavaliacao";
+const IRR_ITEM_AVALIACAO = "irr_corte_honra";
 
 // The auto (blocos) item is identical for every ramo.
 const IRR_ITEM_BLOCOS_TEXT = "Concluiu todos os 18 Blocos de Aprendizagem";

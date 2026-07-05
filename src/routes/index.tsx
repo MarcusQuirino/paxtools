@@ -10,7 +10,7 @@ import { usePlan } from "@/hooks/use-plan";
 import { StageBanner } from "@/components/progression/stage-banner";
 import { OverallProgress } from "@/components/progression/overall-progress";
 import { EixoSection } from "@/components/progression/eixo-section";
-import { LisDeOuroSection } from "@/components/progression/lis-de-ouro-section";
+import { RecognitionSection } from "@/components/progression/recognition-section";
 import { PlanNav } from "@/components/progression/plan-nav";
 import { Footer } from "@/components/footer";
 import { notifyLevelUps } from "@/lib/level-up-toast";
@@ -77,8 +77,8 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
     pendingBlockIds,
     completedBlockCount,
     pendingBlockCount,
-    approvedLisItemIds,
-    pendingLisItemIds,
+    approvedIrrItemIds,
+    pendingIrrItemIds,
     stage,
     nextStage,
     blocksComplete,
@@ -115,11 +115,9 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
   const deleteCustomFn = useConvexMutation(api.progression.deleteCustomAction);
   const { mutate: deleteCustom } = useMutation({ mutationFn: deleteCustomFn });
 
-  const toggleLisItemFn = useConvexMutation(
-    api.progression.toggleLisDeOuroItem,
-  );
-  const { mutate: toggleLisItem } = useMutation({
-    mutationFn: toggleLisItemFn,
+  const toggleIrrItemFn = useConvexMutation(api.progression.toggleIrrItem);
+  const { mutate: toggleIrrItem } = useMutation({
+    mutationFn: toggleIrrItemFn,
     onSuccess: notifyLevelUps,
   });
 
@@ -143,8 +141,8 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
     deleteCustom({ customActionId: id, targetUserId });
   };
 
-  const handleToggleLisItem = (itemId: string) => {
-    toggleLisItem({ itemId, targetUserId });
+  const handleToggleIrrItem = (itemId: string) => {
+    toggleIrrItem({ itemId, targetUserId });
   };
 
   return (
@@ -204,13 +202,13 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
         ))
       )}
 
-      <LisDeOuroSection
+      <RecognitionSection
         irr={ramoRules.irr}
         blocksComplete={blocksComplete}
-        approvedLisItemIds={approvedLisItemIds}
-        pendingLisItemIds={pendingLisItemIds}
+        approvedIrrItemIds={approvedIrrItemIds}
+        pendingIrrItemIds={pendingIrrItemIds}
         irrComplete={irrComplete}
-        onToggleItem={handleToggleLisItem}
+        onToggleItem={handleToggleIrrItem}
         lockApproved={lockApproved}
       />
     </div>
