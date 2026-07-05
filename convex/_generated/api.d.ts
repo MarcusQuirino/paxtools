@@ -26,6 +26,7 @@ import type * as migrations from "../migrations.js";
 import type * as onboarding from "../onboarding.js";
 import type * as plan from "../plan.js";
 import type * as progression from "../progression.js";
+import type * as specialties from "../specialties.js";
 import type * as stats from "../stats.js";
 import type * as testing from "../testing.js";
 import type * as users from "../users.js";
@@ -55,6 +56,7 @@ declare const fullApi: ApiFromModules<{
   onboarding: typeof onboarding;
   plan: typeof plan;
   progression: typeof progression;
+  specialties: typeof specialties;
   stats: typeof stats;
   testing: typeof testing;
   users: typeof users;

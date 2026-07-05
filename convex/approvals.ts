@@ -166,11 +166,22 @@ export const getPendingForGroup = query({
           .take(100)
       ).filter((c) => c.completed);
 
+      // New specialty item completions (#42): grouped by (ramoGroup, specialtyId)
+      // for the escotista pending queue. The card-per-specialty grouping happens
+      // in the UI, not here (raw rows are cheaper to transfer).
+      const pendingSpecialtyItems = await ctx.db
+        .query("specialtyItemCompletions")
+        .withIndex("by_userId_and_status", (q) =>
+          q.eq("userId", escoteiro._id).eq("status", "pending"),
+        )
+        .take(200);
+
       const totalPending =
         pendingActions.length +
         pendingSpecialties.length +
         pendingIrrItems.length +
-        pendingCustomActions.length;
+        pendingCustomActions.length +
+        pendingSpecialtyItems.length;
 
       if (totalPending > 0) {
         result.push({
@@ -184,6 +195,7 @@ export const getPendingForGroup = query({
           pendingSpecialties,
           pendingIrrItems,
           pendingCustomActions,
+          pendingSpecialtyItems,
           totalPending,
         });
       }
