@@ -18,20 +18,12 @@ import {
 import {
   snapshotProgression,
   detectLevelUps,
+  ramoGroupForRamo,
   type LevelUpToast,
 } from "./lib/progression";
 import { logRamoEvent } from "./lib/events";
 
-// ---------------------------------------------------------------------------
-// ramoGroup derivation
-// ---------------------------------------------------------------------------
-
-/** The ramoGroup for a given ramo (or fallback). Lobinho and escoteiro share "younger". */
-function ramoToGroup(ramo: string | undefined | null): "younger" | "older" {
-  if (ramo === "lobinho" || ramo === "escoteiro") return "younger";
-  if (ramo === "senior" || ramo === "pioneiro") return "older";
-  return "younger"; // default for unset ramo (mid-onboarding)
-}
+// ramoGroup derivation lives in ./lib/progression (shared with snapshotProgression).
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -124,7 +116,10 @@ export const getPendingSpecialtyItemsForGroup = query({
       // Group by (ramoGroup, specialtyId)
       const bySpecialty = new Map<
         string,
-        { ramoGroup: "younger" | "older"; items: Doc<"specialtyItemCompletions">[] }
+        {
+          ramoGroup: "younger" | "older";
+          items: Doc<"specialtyItemCompletions">[];
+        }
       >();
       for (const item of pendingItems) {
         const key = `${item.ramoGroup}:${item.specialtyId}`;
@@ -190,9 +185,10 @@ export const toggleSpecialtyItem = mutation({
       approvedBy = caller._id;
     }
 
-    const effectiveUser =
-      args.targetUserId ? await ctx.db.get(args.targetUserId) : caller;
-    const ramoGroup = ramoToGroup(effectiveUser?.ramo);
+    const effectiveUser = args.targetUserId
+      ? await ctx.db.get(args.targetUserId)
+      : caller;
+    const ramoGroup = ramoGroupForRamo(effectiveUser?.ramo);
 
     // Look for existing row
     const existing = await ctx.db
@@ -219,7 +215,12 @@ export const toggleSpecialtyItem = mutation({
       await ctx.db.delete(existing._id);
       // Undoing an approval via escotista — may affect progression
       if (args.targetUserId && before && effectiveUser) {
-        return detectLevelUps(ctx, caller, effectiveUser as Doc<"users">, before);
+        return detectLevelUps(
+          ctx,
+          caller,
+          effectiveUser as Doc<"users">,
+          before,
+        );
       }
       return [];
     }
@@ -514,7 +515,7 @@ export const submitSpecialtyStep = mutation({
     const effectiveUser = args.targetUserId
       ? await ctx.db.get(args.targetUserId)
       : caller;
-    const ramoGroup = ramoToGroup(effectiveUser?.ramo);
+    const ramoGroup = ramoGroupForRamo(effectiveUser?.ramo);
 
     const text = args.text.trim();
     if (!text) throw new Error("O relato não pode estar vazio.");
@@ -548,9 +549,7 @@ export const submitSpecialtyStep = mutation({
     if (existing) {
       // An approved step is locked to the escoteiro; only escotista-on-behalf overwrites.
       if (existing.status === "approved" && !args.targetUserId) {
-        throw new Error(
-          "Esta etapa já foi aprovada e não pode ser reenviada.",
-        );
+        throw new Error("Esta etapa já foi aprovada e não pode ser reenviada.");
       }
       await ctx.db.patch(existing._id, {
         text,

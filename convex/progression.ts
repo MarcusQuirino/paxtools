@@ -9,6 +9,7 @@ import {
   readCurrentRamoIrrItems,
   readCurrentRamoSpecialties,
   readCurrentRamoCustomActions,
+  readEarnedSpecialtyBlocoIds,
   currentRamo,
   type LevelUpToast,
   type ProgressionSnapshot,
@@ -124,6 +125,7 @@ export const getMyCompletions = query({
       specialties: [],
       customActions: [],
       irrItems: [],
+      earnedSpecialtyBlocoIds: [] as string[],
     };
 
     const userId = await getAuthUserId(ctx);
@@ -148,6 +150,11 @@ export const getMyCompletions = query({
       user.ramo,
     );
     const irrItems = await readCurrentRamoIrrItems(ctx, userId, user.ramo);
+    const earnedSpecialtyBlocoIds = await readEarnedSpecialtyBlocoIds(
+      ctx,
+      userId,
+      user.ramo,
+    );
 
     return {
       ramo: user?.ramo ?? null,
@@ -155,6 +162,7 @@ export const getMyCompletions = query({
       specialties,
       customActions,
       irrItems,
+      earnedSpecialtyBlocoIds: [...earnedSpecialtyBlocoIds],
     };
   },
 });
@@ -187,6 +195,11 @@ export const getCompletionsForUser = query({
       args.targetUserId,
       target?.ramo,
     );
+    const earnedSpecialtyBlocoIds = await readEarnedSpecialtyBlocoIds(
+      ctx,
+      args.targetUserId,
+      target?.ramo,
+    );
 
     return {
       ramo: target?.ramo ?? null,
@@ -194,6 +207,7 @@ export const getCompletionsForUser = query({
       specialties,
       customActions,
       irrItems,
+      earnedSpecialtyBlocoIds: [...earnedSpecialtyBlocoIds],
     };
   },
 });

@@ -3,11 +3,27 @@ import type { Doc, Id } from "../_generated/dataModel";
 import {
   getCompletedBlockIds,
   getCurrentStage,
+  getEarnedSpecialtyIds,
+  getEarnedSpecialtyBlocoIds,
   isIrrComplete,
 } from "../../src/lib/completion-logic";
 import { getEixosForRamo, type Ramo } from "../../src/data/progression-data";
 import { getRamoRules } from "../../src/data/progression-rules";
+import { YOUNGER_SPECIALTY_BY_ID } from "../../src/data/specialty-data/younger";
 import { logRamoEvent } from "./events";
+
+/**
+ * The ramoGroup a ramo belongs to. Lobinho + escoteiro share "younger" (one
+ * item-based specialty catalog); sênior + pioneiro share "older" (project-based).
+ * An unset ramo (mid-onboarding) defaults to "younger". The single place this
+ * mapping lives, so specialties/progression reads can't drift.
+ */
+export function ramoGroupForRamo(
+  ramo: string | undefined | null,
+): "younger" | "older" {
+  if (ramo === "senior" || ramo === "pioneiro") return "older";
+  return "younger";
+}
 
 /**
  * The codebase-wide default ramo — and prod's only ramo. A user with no ramo
@@ -78,6 +94,40 @@ export async function readCurrentRamoCustomActions(
     .take(1000);
 }
 
+/**
+ * Compute the set of blocoIds a user has satisfied *via especialidade* (#44):
+ * for each younger-catalog specialty the user has earned at level ≥ 1 (from
+ * approved `specialtyItemCompletions` counts), the bloco(s) whose
+ * `alternativeCompletions` name that specialty are satisfied. Purely derived —
+ * no extra storage. Older ramoGroups have no item completions, so this is
+ * naturally empty for them (project-based auto-completion is out of #44 scope).
+ */
+export async function readEarnedSpecialtyBlocoIds(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+  ramo: Ramo | null | undefined,
+): Promise<Set<string>> {
+  if (ramoGroupForRamo(ramo) !== "younger") return new Set();
+
+  // Approved = anything not explicitly pending (matches the /especialidades read
+  // and migration, which write status "approved" but treat a missing status as
+  // approved too).
+  const items = await ctx.db
+    .query("specialtyItemCompletions")
+    .withIndex("by_userId", (q) => q.eq("userId", userId))
+    .take(2000);
+  const approvedItems = items.filter(
+    (i) => i.ramoGroup === "younger" && i.status !== "pending",
+  );
+
+  const earnedSpecialtyIds = getEarnedSpecialtyIds(
+    approvedItems,
+    (specialtyId) => YOUNGER_SPECIALTY_BY_ID.get(specialtyId)?.items.length ?? 0,
+  );
+
+  return getEarnedSpecialtyBlocoIds(getEixosForRamo(ramo), earnedSpecialtyIds);
+}
+
 export type ProgressionSnapshot = {
   ramo: Ramo | null;
   stageIndex: number;
@@ -121,10 +171,13 @@ export async function snapshotProgression(
   );
 
   const eixos = getEixosForRamo(ramo);
-  // TODO (#44): populate earnedSpecialtyBlocoIds from specialtyItemCompletions
-  // counts + catalog alternativeCompletions map. Empty set means bloco-via-specialty
-  // satisfaction is temporarily zero for all users until #44 ships.
-  const earnedSpecialtyBlocoIds = new Set<string>();
+  // Blocos satisfied via an earned especialidade (level ≥ 1), computed on read
+  // from approved specialtyItemCompletions counts + the catalog (#44).
+  const earnedSpecialtyBlocoIds = await readEarnedSpecialtyBlocoIds(
+    ctx,
+    userId,
+    ramo,
+  );
   const { approved } = getCompletedBlockIds(
     eixos,
     approvedActionIds,

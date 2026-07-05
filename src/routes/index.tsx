@@ -75,6 +75,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
     customActions,
     completedBlockIds,
     pendingBlockIds,
+    earnedSpecialtyBlocoIds,
     completedBlockCount,
     pendingBlockCount,
     approvedIrrItemIds,
@@ -171,6 +172,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
           actionStatusMap={actionStatusMap}
           completedBlockIds={completedBlockIds}
           pendingBlockIds={pendingBlockIds}
+          earnedSpecialtyBlocoIds={earnedSpecialtyBlocoIds}
           customActions={customActions}
           completedSpecialties={completedSpecialties}
           onToggleAction={handleToggleAction}
@@ -190,6 +192,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
             actionStatusMap={actionStatusMap}
             completedBlockIds={completedBlockIds}
             pendingBlockIds={pendingBlockIds}
+            earnedSpecialtyBlocoIds={earnedSpecialtyBlocoIds}
             customActions={customActions}
             completedSpecialties={completedSpecialties}
             onToggleAction={handleToggleAction}
@@ -222,6 +225,7 @@ type DashboardEixosWithPlanProps = {
   actionStatusMap: Map<string, "pending" | "approved">;
   completedBlockIds: Set<string>;
   pendingBlockIds: Set<string>;
+  earnedSpecialtyBlocoIds?: Set<string>;
   customActions: React.ComponentProps<typeof EixoSection>["customActions"];
   completedSpecialties: React.ComponentProps<
     typeof EixoSection

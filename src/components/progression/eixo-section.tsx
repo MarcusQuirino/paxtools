@@ -11,6 +11,8 @@ type EixoSectionProps = {
   actionStatusMap: Map<string, CompletionStatus>;
   completedBlockIds: Set<string>;
   pendingBlockIds: Set<string>;
+  /** Blocos satisfied via an earned especialidade (level ≥ 1), computed on read (#44). */
+  earnedSpecialtyBlocoIds?: Set<string>;
   customActions: CustomAction[];
   completedSpecialties: {
     blocoId: string;
@@ -36,6 +38,7 @@ export function EixoSection({
   actionStatusMap,
   completedBlockIds,
   pendingBlockIds,
+  earnedSpecialtyBlocoIds,
   customActions,
   completedSpecialties,
   onToggleAction,
@@ -94,6 +97,7 @@ export function EixoSection({
             actionStatusMap={actionStatusMap}
             customActions={customActions}
             completedSpecialties={completedSpecialties}
+            earnedViaSpecialty={earnedSpecialtyBlocoIds?.has(bloco.id)}
             color={eixo.color}
             colorLight={eixo.colorLight}
             onToggleAction={onToggleAction}

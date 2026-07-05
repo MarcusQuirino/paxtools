@@ -4,6 +4,9 @@ import { convexTest } from "convex-test";
 import schema from "./schema";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { getEixosForRamo } from "../src/data/progression-data";
+import { toSpecialtySlug } from "../src/lib/completion-logic";
+import { YOUNGER_SPECIALTY_BY_ID } from "../src/data/specialty-data/younger";
 
 // Enumerate modules explicitly (Bun has no import.meta.glob).
 const modules = {
@@ -626,5 +629,141 @@ describe("approveSpecialtyStep + rejectSpecialtyStep", () => {
     );
     expect(reports).toHaveLength(1);
     expect(reports[0]!.specialtyId).toBe("comunicacoes");
+  });
+});
+
+// ── #44: especialidade → bloco auto-completion ─────────────────────────────
+
+describe("especialidade → bloco auto-completion (#44)", () => {
+  const eixos = getEixosForRamo("escoteiro");
+  const allBlocos = eixos.flatMap((e) => e.blocos);
+
+  // The bloco whose alternativeCompletions name "Administração" (slug
+  // "administracao"), an existing younger-catalog specialty.
+  const targetBloco = allBlocos.find((b) =>
+    b.alternativeCompletions.some(
+      (alt) =>
+        alt.type === "especialidade" &&
+        alt.items.some((n) => toSpecialtySlug(n) === "administracao"),
+    ),
+  );
+
+  function fullActionIds(bloco: (typeof allBlocos)[number]): string[] {
+    return [
+      ...bloco.fixedActions.map((a) => a.id),
+      ...bloco.variableActions.slice(0, bloco.variableRequired).map((a) => a.id),
+    ];
+  }
+
+  async function seedApprovedActions(
+    t: ReturnType<typeof convexTest>,
+    userId: Id<"users">,
+    actionIds: string[],
+  ) {
+    await t.run(async (ctx) => {
+      for (const actionId of actionIds) {
+        await ctx.db.insert("actionCompletions", {
+          userId,
+          actionId,
+          completedAt: 1,
+          status: "approved",
+        });
+      }
+    });
+  }
+
+  test("linked bloco is satisfied once the specialty reaches level 1", async () => {
+    const t = convexTest(schema, modules);
+    const { escoteiroId } = await seedGroup(t);
+    expect(targetBloco).toBeDefined();
+    expect(targetBloco!.variableRequired).toBeGreaterThan(0);
+
+    // All of the target bloco's fixed actions approved — its variable section is
+    // still unsatisfied, so it does NOT count yet.
+    await seedApprovedActions(
+      t,
+      escoteiroId,
+      targetBloco!.fixedActions.map((a) => a.id),
+    );
+
+    let comp = await as(t, escoteiroId).query(
+      api.progression.getMyCompletions,
+      {},
+    );
+    expect(comp.earnedSpecialtyBlocoIds).not.toContain(targetBloco!.id);
+
+    // Approve half the "administracao" items (level-1 threshold) directly.
+    const spec = YOUNGER_SPECIALTY_BY_ID.get("administracao")!;
+    const half = spec.items.length / 2;
+    await t.run(async (ctx) => {
+      for (let i = 0; i < half; i++) {
+        await ctx.db.insert("specialtyItemCompletions", {
+          userId: escoteiroId,
+          ramoGroup: "younger",
+          specialtyId: "administracao",
+          itemIndex: i,
+          completedAt: 1,
+          status: "approved",
+        });
+      }
+    });
+
+    comp = await as(t, escoteiroId).query(api.progression.getMyCompletions, {});
+    expect(comp.earnedSpecialtyBlocoIds).toContain(targetBloco!.id);
+  });
+
+  test("approving the item that reaches level 1 fires an etapa level-up", async () => {
+    const t = convexTest(schema, modules);
+    const { escotistaId, escoteiroId } = await seedGroup(t);
+    expect(targetBloco).toBeDefined();
+
+    // Three fully-complete filler blocos put the escoteiro at 3 blocks — one shy
+    // of the escoteiro etapa-1 threshold (4 blocks).
+    const fillers = allBlocos
+      .filter((b) => b.id !== targetBloco!.id)
+      .slice(0, 3);
+    for (const b of fillers) {
+      await seedApprovedActions(t, escoteiroId, fullActionIds(b));
+    }
+    // Target bloco: fixed actions only — variable satisfied solely via specialty.
+    await seedApprovedActions(
+      t,
+      escoteiroId,
+      targetBloco!.fixedActions.map((a) => a.id),
+    );
+
+    // Escoteiro checks half the administracao items → pending rows.
+    const spec = YOUNGER_SPECIALTY_BY_ID.get("administracao")!;
+    const half = spec.items.length / 2;
+    for (let i = 0; i < half; i++) {
+      await as(t, escoteiroId).mutation(api.specialties.toggleSpecialtyItem, {
+        specialtyId: "administracao",
+        itemIndex: i,
+      });
+    }
+
+    // Escotista approves each pending item; the last one crosses level 1, which
+    // completes the target bloco (block #4) and advances the etapa.
+    const pending = await t.run((ctx) =>
+      ctx.db
+        .query("specialtyItemCompletions")
+        .withIndex("by_userId", (q) => q.eq("userId", escoteiroId))
+        .collect(),
+    );
+    let toasts: { kind: string }[] = [];
+    for (const row of pending) {
+      toasts = await as(t, escotistaId).mutation(
+        api.specialties.approveSpecialtyItem,
+        { completionId: row._id },
+      );
+    }
+
+    expect(toasts.some((tt) => tt.kind === "levelUp")).toBe(true);
+
+    const comp = await as(t, escoteiroId).query(
+      api.progression.getMyCompletions,
+      {},
+    );
+    expect(comp.earnedSpecialtyBlocoIds).toContain(targetBloco!.id);
   });
 });

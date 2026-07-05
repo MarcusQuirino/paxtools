@@ -3,6 +3,8 @@ import type { Action, Bloco, Eixo } from "@/data/types";
 import {
   getBlocoProgress,
   getCompletedBlockIds,
+  getEarnedSpecialtyIds,
+  getEarnedSpecialtyBlocoIds,
   getSpecialtyLevel,
   toSpecialtySlug,
   getCurrentStage,
@@ -395,6 +397,93 @@ describe("getCompletedBlockIds", () => {
     expect(result.approved.has("complete-bloco")).toBe(true);
     expect(result.approved.has("incomplete-bloco")).toBe(false);
     expect(result.approved.size).toBe(1);
+  });
+});
+
+// ── getEarnedSpecialtyIds ──────────────────────────────────────
+
+describe("getEarnedSpecialtyIds", () => {
+  const totals = new Map([
+    ["administracao", 6],
+    ["idiomas", 8],
+  ]);
+  const getTotal = (id: string) => totals.get(id) ?? 0;
+
+  it("includes a specialty at level 1 (half approved)", () => {
+    const items = Array.from({ length: 3 }, () => ({
+      specialtyId: "administracao",
+    }));
+    expect(getEarnedSpecialtyIds(items, getTotal)).toEqual(
+      new Set(["administracao"]),
+    );
+  });
+
+  it("includes a specialty at level 2 (all approved)", () => {
+    const items = Array.from({ length: 8 }, () => ({ specialtyId: "idiomas" }));
+    expect(getEarnedSpecialtyIds(items, getTotal)).toEqual(
+      new Set(["idiomas"]),
+    );
+  });
+
+  it("excludes a specialty below the level-1 threshold", () => {
+    const items = [{ specialtyId: "administracao" }, { specialtyId: "administracao" }];
+    expect(getEarnedSpecialtyIds(items, getTotal).size).toBe(0);
+  });
+
+  it("ignores items for unknown specialtyIds (0 total)", () => {
+    const items = Array.from({ length: 5 }, () => ({
+      specialtyId: "nao-existe",
+    }));
+    expect(getEarnedSpecialtyIds(items, getTotal).size).toBe(0);
+  });
+
+  it("counts each specialty independently", () => {
+    const items = [
+      { specialtyId: "administracao" },
+      { specialtyId: "administracao" },
+      { specialtyId: "administracao" },
+      { specialtyId: "idiomas" }, // only 1/8 → not earned
+    ];
+    expect(getEarnedSpecialtyIds(items, getTotal)).toEqual(
+      new Set(["administracao"]),
+    );
+  });
+});
+
+// ── getEarnedSpecialtyBlocoIds ─────────────────────────────────
+
+describe("getEarnedSpecialtyBlocoIds", () => {
+  const bloco = makeBloco({
+    id: "bloco-with-specialty",
+    alternativeCompletions: [
+      { type: "especialidade", items: ["Administração", "Idiomas"] },
+      { type: "insignia", items: ["Insígnia do Aprender"] },
+    ],
+  });
+  const plainBloco = makeBloco({ id: "plain-bloco" });
+  const eixos = [makeEixo([bloco, plainBloco])];
+
+  it("maps an earned specialty (by slug) to its bloco", () => {
+    // "Administração" slugifies to "administracao"
+    const result = getEarnedSpecialtyBlocoIds(eixos, new Set(["administracao"]));
+    expect(result).toEqual(new Set(["bloco-with-specialty"]));
+  });
+
+  it("returns empty when no specialties are earned", () => {
+    expect(getEarnedSpecialtyBlocoIds(eixos, new Set()).size).toBe(0);
+  });
+
+  it("ignores insignia-type alternatives", () => {
+    const result = getEarnedSpecialtyBlocoIds(
+      eixos,
+      new Set([toSpecialtySlug("Insígnia do Aprender")]),
+    );
+    expect(result.size).toBe(0);
+  });
+
+  it("does not touch blocos without alternativeCompletions", () => {
+    const result = getEarnedSpecialtyBlocoIds(eixos, new Set(["administracao"]));
+    expect(result.has("plain-bloco")).toBe(false);
   });
 });
 

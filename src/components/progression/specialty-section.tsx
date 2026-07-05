@@ -1,8 +1,10 @@
 import type { AlternativeCompletion, CompletionStatus } from "@/data/types";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Award, Clock } from "lucide-react";
+import { Award, Clock, ArrowRight } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { PlanStar } from "./plan-star";
 import { encodePlanKey } from "@/lib/plan-keys";
+import { toSpecialtySlug } from "@/lib/completion-logic";
 
 type SpecialtySectionProps = {
   blocoId: string;
@@ -86,9 +88,7 @@ export function SpecialtySection({
                   disabled={isLocked}
                   className="size-5"
                   style={
-                    isChecked
-                      ? { opacity: isPending ? 0.4 : 1 }
-                      : undefined
+                    isChecked ? { opacity: isPending ? 0.4 : 1 } : undefined
                   }
                 />
                 <span
@@ -102,6 +102,17 @@ export function SpecialtySection({
                 >
                   {item}
                 </span>
+                {alt.type === "especialidade" && (
+                  <Link
+                    to="/especialidades"
+                    search={{ specialty: toSpecialtySlug(item) }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-0.5 text-xs font-medium text-primary hover:underline shrink-0"
+                  >
+                    ver
+                    <ArrowRight className="size-3" />
+                  </Link>
+                )}
                 {isPending && (
                   <Clock className="size-3.5 text-slate-400 shrink-0" />
                 )}
