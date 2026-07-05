@@ -320,6 +320,7 @@ describe("toggleSpecialty", () => {
     await t.run(async (ctx) =>
       ctx.db.insert("specialtyCompletions", {
         userId: escoteiro,
+        ramo: "escoteiro",
         blocoId: BLOCO,
         specialtyName: SPEC,
         completedAt: 1,
@@ -345,6 +346,7 @@ describe("toggleSpecialty", () => {
     await t.run(async (ctx) =>
       ctx.db.insert("specialtyCompletions", {
         userId: escoteiro,
+        ramo: "escoteiro",
         blocoId: BLOCO,
         specialtyName: SPEC,
         completedAt: 1,
@@ -371,6 +373,7 @@ describe("toggleSpecialty", () => {
     await t.run(async (ctx) =>
       ctx.db.insert("specialtyCompletions", {
         userId: escoteiro,
+        ramo: "escoteiro",
         blocoId: BLOCO,
         specialtyName: SPEC,
         completedAt: 1,
@@ -438,6 +441,7 @@ describe("addCustomAction", () => {
       for (let i = 0; i < 20; i++) {
         await ctx.db.insert("customActions", {
           userId: escoteiro,
+          ramo: "escoteiro",
           blocoId: BLOCO,
           text: `acao ${i}`,
           completed: false,
@@ -613,39 +617,41 @@ describe("deleteCustomAction", () => {
 
 // ---------------------------------------------------------------------------
 
-describe("toggleLisDeOuroItem", () => {
+describe("toggleIrrItem", () => {
   test("invalid itemId throws", async () => {
     const t = convexTest(schema, modules);
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     await expect(
-      as(t, escoteiro).mutation(api.progression.toggleLisDeOuroItem, {
-        itemId: "lis_invalido",
+      as(t, escoteiro).mutation(api.progression.toggleIrrItem, {
+        itemId: "irr_invalido",
       }),
     ).rejects.toThrow("ID de item inválido");
   });
 
-  test("escoteiro (self) inserts status=pending; escotista approved; toggle deletes", async () => {
+  test("escoteiro (self) inserts status=pending stamped with ramo; escotista approved; toggle deletes", async () => {
     const t = convexTest(schema, modules);
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
-    await as(t, escoteiro).mutation(api.progression.toggleLisDeOuroItem, {
-      itemId: "lis_promessa",
+    await as(t, escoteiro).mutation(api.progression.toggleIrrItem, {
+      itemId: "irr_promessa",
     });
     let rows = await t.run(async (ctx) =>
       ctx.db
-        .query("lisDeOuroCompletions")
+        .query("irrCompletions")
         .withIndex("by_userId", (q) => q.eq("userId", escoteiro))
         .collect(),
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]!.status).toBe("pending");
+    // Writes stamp the acting escoteiro's ramo.
+    expect(rows[0]!.ramo).toBe("escoteiro");
 
     // Toggle again deletes (pending, self).
-    await as(t, escoteiro).mutation(api.progression.toggleLisDeOuroItem, {
-      itemId: "lis_promessa",
+    await as(t, escoteiro).mutation(api.progression.toggleIrrItem, {
+      itemId: "irr_promessa",
     });
     rows = await t.run(async (ctx) =>
       ctx.db
-        .query("lisDeOuroCompletions")
+        .query("irrCompletions")
         .withIndex("by_userId", (q) => q.eq("userId", escoteiro))
         .collect(),
     );
@@ -656,16 +662,61 @@ describe("toggleLisDeOuroItem", () => {
       role: "escotista",
       escotistaRamos: ["escoteiro"],
     });
-    await as(t, escotista).mutation(api.progression.toggleLisDeOuroItem, {
-      itemId: "lis_blocos",
+    await as(t, escotista).mutation(api.progression.toggleIrrItem, {
+      itemId: "irr_blocos",
     });
     const escRows = await t.run(async (ctx) =>
       ctx.db
-        .query("lisDeOuroCompletions")
+        .query("irrCompletions")
         .withIndex("by_userId", (q) => q.eq("userId", escotista))
         .collect(),
     );
     expect(escRows[0]!.status).toBe("approved");
+  });
+
+  test("reads are ramo-scoped: only the current ramo's items return; other ramo retained", async () => {
+    const t = convexTest(schema, modules);
+    const user = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
+    // Seed the same user with recognition rows under TWO ramos.
+    await t.run(async (ctx) => {
+      await ctx.db.insert("irrCompletions", {
+        userId: user,
+        ramo: "escoteiro",
+        itemId: "irr_promessa",
+        completedAt: 1,
+        status: "approved",
+      });
+      await ctx.db.insert("irrCompletions", {
+        userId: user,
+        ramo: "lobinho",
+        itemId: "irr_jornada",
+        completedAt: 1,
+        status: "approved",
+      });
+    });
+
+    // Current ramo escoteiro → only the escoteiro row.
+    let res = await as(t, user).query(api.progression.getMyCompletions, {});
+    expect(res.irrItems.map((i) => i.itemId)).toEqual(["irr_promessa"]);
+
+    // Switch to lobinho → only the lobinho row; the escoteiro row is retained
+    // in the DB and reappears when switching back.
+    await t.run(async (ctx) => ctx.db.patch(user, { ramo: "lobinho" }));
+    res = await as(t, user).query(api.progression.getMyCompletions, {});
+    expect(res.irrItems.map((i) => i.itemId)).toEqual(["irr_jornada"]);
+
+    await t.run(async (ctx) => ctx.db.patch(user, { ramo: "escoteiro" }));
+    res = await as(t, user).query(api.progression.getMyCompletions, {});
+    expect(res.irrItems.map((i) => i.itemId)).toEqual(["irr_promessa"]);
+
+    // Nothing was deleted across the switches — both rows still exist.
+    const all = await t.run(async (ctx) =>
+      ctx.db
+        .query("irrCompletions")
+        .withIndex("by_userId", (q) => q.eq("userId", user))
+        .collect(),
+    );
+    expect(all).toHaveLength(2);
   });
 });
 
@@ -680,7 +731,7 @@ describe("getMyCompletions", () => {
       actions: [],
       specialties: [],
       customActions: [],
-      lisDeOuroItems: [],
+      irrItems: [],
     });
   });
 
@@ -701,7 +752,7 @@ describe("getMyCompletions", () => {
     expect(res.actions[0]!.actionId).toBe(VALID_ACTION_ID);
     expect(res.specialties).toEqual([]);
     expect(res.customActions).toEqual([]);
-    expect(res.lisDeOuroItems).toEqual([]);
+    expect(res.irrItems).toEqual([]);
   });
 });
 
@@ -827,5 +878,145 @@ describe("getCompletionsForUser", () => {
         targetUserId: escoteiro,
       }),
     ).rejects.toThrow("banido");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ramo-scoped especialidades & ações personalizadas (#37) — isolation,
+// retention across a ramo change, and write-time ramo stamping.
+// ---------------------------------------------------------------------------
+
+describe("ramo-scoped completions (#37)", () => {
+  test("reads return only the current ramo's especialidades and ações personalizadas", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
+    // Same user, same blocoId (blocoIds are shared across ramos) under two ramos.
+    await t.run(async (ctx) => {
+      await ctx.db.insert("specialtyCompletions", {
+        userId, ramo: "escoteiro", blocoId: "meio-ambiente",
+        specialtyName: "Esc", completedAt: 1, status: "approved",
+      });
+      await ctx.db.insert("specialtyCompletions", {
+        userId, ramo: "lobinho", blocoId: "meio-ambiente",
+        specialtyName: "Lob", completedAt: 1, status: "approved",
+      });
+      await ctx.db.insert("customActions", {
+        userId, ramo: "escoteiro", blocoId: "meio-ambiente",
+        text: "esc custom", completed: true, createdAt: 1, status: "approved",
+      });
+      await ctx.db.insert("customActions", {
+        userId, ramo: "lobinho", blocoId: "meio-ambiente",
+        text: "lob custom", completed: true, createdAt: 1, status: "approved",
+      });
+    });
+
+    const res = await as(t, userId).query(api.progression.getMyCompletions, {});
+    expect(res.specialties.map((s) => s.specialtyName)).toEqual(["Esc"]);
+    expect(res.customActions.map((c) => c.text)).toEqual(["esc custom"]);
+  });
+
+  test("prior ramo's rows are retained and reappear after switching ramo back", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("specialtyCompletions", {
+        userId, ramo: "lobinho", blocoId: "meio-ambiente",
+        specialtyName: "Lob", completedAt: 1, status: "approved",
+      });
+    });
+
+    // As an escoteiro the lobinho row is hidden...
+    const asEsc = await as(t, userId).query(api.progression.getMyCompletions, {});
+    expect(asEsc.specialties).toEqual([]);
+
+    // ...but retained in the DB, and visible again once the ramo is switched back.
+    await t.run(async (ctx) => ctx.db.patch(userId, { ramo: "lobinho" }));
+    const asLob = await as(t, userId).query(api.progression.getMyCompletions, {});
+    expect(asLob.specialties.map((s) => s.specialtyName)).toEqual(["Lob"]);
+
+    const total = await t.run(async (ctx) =>
+      (await ctx.db.query("specialtyCompletions").collect()).length,
+    );
+    expect(total).toBe(1); // nothing was deleted on the ramo change
+  });
+
+  test("ações personalizadas are retained across a ramo change and reappear on switch back", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("customActions", {
+        userId, ramo: "lobinho", blocoId: "meio-ambiente",
+        text: "lob custom", completed: true, createdAt: 1, status: "approved",
+      });
+    });
+
+    const asEsc = await as(t, userId).query(api.progression.getMyCompletions, {});
+    expect(asEsc.customActions).toEqual([]);
+
+    await t.run(async (ctx) => ctx.db.patch(userId, { ramo: "lobinho" }));
+    const asLob = await as(t, userId).query(api.progression.getMyCompletions, {});
+    expect(asLob.customActions.map((c) => c.text)).toEqual(["lob custom"]);
+
+    const total = await t.run(async (ctx) =>
+      (await ctx.db.query("customActions").collect()).length,
+    );
+    expect(total).toBe(1); // retained across the ramo change
+  });
+
+  test("a self-toggle stamps the acting escoteiro's ramo on the new row", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, { role: "escoteiro", ramo: "lobinho" });
+    await as(t, userId).mutation(api.progression.toggleSpecialty, {
+      blocoId: "meio-ambiente",
+      specialtyName: "Jardinagem",
+    });
+    const rows = await t.run(async (ctx) =>
+      ctx.db.query("specialtyCompletions").collect(),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.ramo).toBe("lobinho");
+  });
+
+  test("an escotista marking a target stamps the target's ramo", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+    // Admin escotista sees all ramos; target is a lobinho.
+    const target = await insertUser(t, {
+      role: "escoteiro", ramo: "lobinho", groupId, membershipStatus: "approved",
+    });
+    await as(t, adminId).mutation(api.progression.addCustomAction, {
+      blocoId: "meio-ambiente",
+      text: "Plantar uma árvore",
+      targetUserId: target,
+    });
+    const rows = await t.run(async (ctx) =>
+      ctx.db.query("customActions").collect(),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.ramo).toBe("lobinho");
+  });
+
+  test("the per-bloco custom-action cap counts only the current ramo", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
+    // 20 lobinho rows in the same bloco must not block an escoteiro insert.
+    await t.run(async (ctx) => {
+      for (let i = 0; i < 20; i++) {
+        await ctx.db.insert("customActions", {
+          userId, ramo: "lobinho", blocoId: "meio-ambiente",
+          text: `lob ${i}`, completed: false, createdAt: 1,
+        });
+      }
+    });
+    await as(t, userId).mutation(api.progression.addCustomAction, {
+      blocoId: "meio-ambiente",
+      text: "escoteiro action",
+    });
+    const escRows = await t.run(async (ctx) =>
+      (await ctx.db.query("customActions").collect()).filter(
+        (r) => r.ramo === "escoteiro",
+      ),
+    );
+    expect(escRows).toHaveLength(1);
   });
 });

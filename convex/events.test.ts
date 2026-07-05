@@ -85,6 +85,7 @@ async function listEvents(t: ReturnType<typeof convexTest>) {
 // ---------------------------------------------------------------------------
 describe("diffProgression", () => {
   const snap = (stageIndex: number, lisDeOuro = false) => ({
+    ramo: "escoteiro" as const,
     stageIndex,
     stageId: "x",
     stageName: "x",
@@ -114,7 +115,7 @@ describe("diffProgression", () => {
 
   test("lis de ouro false→true → distinct lisDeOuro event", () => {
     const ups = diffProgression(snap(3, false), snap(3, true));
-    expect(ups).toEqual([{ kind: "lisDeOuro" }]);
+    expect(ups).toEqual([{ kind: "lisDeOuro", irrName: "Lis de Ouro" }]);
   });
 
   test("downward (reject) → nothing", () => {

@@ -19,6 +19,7 @@ import {
   parseActionId,
   type Ramo,
 } from "@/data/progression-data";
+import { getRamoRules } from "@/data/progression-rules";
 import { notifyLevelUps } from "@/lib/level-up-toast";
 
 export const Route = createFileRoute("/escotista/pending")({
@@ -63,7 +64,7 @@ function getEixoForBloco(blocoId: string, ramo: Ramo | null) {
 
 type PendingItem = {
   key: string;
-  type: "action" | "specialty" | "lis" | "custom";
+  type: "action" | "specialty" | "irr" | "custom";
   id: string;
   text: string;
   blocoId?: string;
@@ -123,8 +124,8 @@ type PendingEntry = {
     blocoId: string;
     specialtyName: string;
   }[];
-  pendingLisItems: {
-    _id: Id<"lisDeOuroCompletions">;
+  pendingIrrItems: {
+    _id: Id<"irrCompletions">;
     itemId: string;
   }[];
   pendingCustomActions: {
@@ -145,12 +146,13 @@ function EscoteiroPendingCard({
     action: "approve" | "reject";
     actionIds: Id<"actionCompletions">[];
     specialtyIds: Id<"specialtyCompletions">[];
-    lisIds: Id<"lisDeOuroCompletions">[];
+    irrIds: Id<"irrCompletions">[];
     customActionIds: Id<"customActions">[];
   }) => void;
   isBulkPending: boolean;
 }) {
   const ramo = entry.escoteiro.ramo;
+  const irr = getRamoRules(ramo).irr;
   // Build a flat list of all pending items with unique keys
   const allItems = useMemo(() => {
     const items: PendingItem[] = [];
@@ -178,12 +180,15 @@ function EscoteiroPendingCard({
       });
     }
 
-    for (const l of entry.pendingLisItems) {
+    for (const l of entry.pendingIrrItems) {
+      const label =
+        irr.items.find((i) => i.id === l.itemId)?.text ??
+        l.itemId.replace("irr_", "").replace(/_/g, " ");
       items.push({
-        key: `lis:${l._id}`,
-        type: "lis",
+        key: `irr:${l._id}`,
+        type: "irr",
         id: l._id,
-        text: l.itemId.replace("lis_", "").replace(/_/g, " "),
+        text: label,
       });
     }
 
@@ -199,7 +204,7 @@ function EscoteiroPendingCard({
     }
 
     return items;
-  }, [entry, ramo]);
+  }, [entry, ramo, irr]);
 
   // All items selected by default
   const [deselected, setDeselected] = useState<Set<string>>(new Set());
@@ -231,7 +236,7 @@ function EscoteiroPendingCard({
   const getSelectedIds = useCallback(() => {
     const actionIds: Id<"actionCompletions">[] = [];
     const specialtyIds: Id<"specialtyCompletions">[] = [];
-    const lisIds: Id<"lisDeOuroCompletions">[] = [];
+    const irrIds: Id<"irrCompletions">[] = [];
     const customActionIds: Id<"customActions">[] = [];
 
     for (const item of allItems) {
@@ -240,13 +245,13 @@ function EscoteiroPendingCard({
         actionIds.push(item.id as Id<"actionCompletions">);
       else if (item.type === "specialty")
         specialtyIds.push(item.id as Id<"specialtyCompletions">);
-      else if (item.type === "lis")
-        lisIds.push(item.id as Id<"lisDeOuroCompletions">);
+      else if (item.type === "irr")
+        irrIds.push(item.id as Id<"irrCompletions">);
       else if (item.type === "custom")
         customActionIds.push(item.id as Id<"customActions">);
     }
 
-    return { actionIds, specialtyIds, lisIds, customActionIds };
+    return { actionIds, specialtyIds, irrIds, customActionIds };
   }, [allItems, deselected]);
 
   const handleBulk = useCallback(
@@ -277,7 +282,7 @@ function EscoteiroPendingCard({
   }, [allItems]);
 
   const specialties = allItems.filter((i) => i.type === "specialty");
-  const lisItems = allItems.filter((i) => i.type === "lis");
+  const irrItems = allItems.filter((i) => i.type === "irr");
 
   return (
     <Collapsible>
@@ -357,13 +362,13 @@ function EscoteiroPendingCard({
               </div>
             )}
 
-            {/* Lis de Ouro items */}
-            {lisItems.length > 0 && (
+            {/* IRR (recognition) items — named for the escoteiro's ramo */}
+            {irrItems.length > 0 && (
               <div className="space-y-0.5">
                 <p className="text-xs font-black uppercase tracking-widest text-primary">
-                  Lis de Ouro
+                  {irr.name}
                 </p>
-                {lisItems.map((item) => (
+                {irrItems.map((item) => (
                   <SelectableItem
                     key={item.key}
                     text={item.text}

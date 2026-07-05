@@ -28,7 +28,7 @@ import {
 type CompletionId =
   | Id<"actionCompletions">
   | Id<"specialtyCompletions">
-  | Id<"lisDeOuroCompletions">;
+  | Id<"irrCompletions">;
 
 /**
  * Approve a single pending completion. Authenticates FIRST (before fetching the
@@ -145,8 +145,13 @@ export const getPendingForGroup = query({
         )
         .take(100);
 
-      const pendingLisItems = await ctx.db
-        .query("lisDeOuroCompletions")
+      // Pending reads stay by (userId, status), NOT ramo-scoped: pending IRR
+      // rows are always the escoteiro's current ramo (writes stamp it), and a
+      // stale other-ramo pending row is only reachable post-transition, which
+      // prod has none of. The isolation that closes the bleed is on the
+      // subject-facing reads (getMyCompletions/getCompletionsForUser) + snapshot.
+      const pendingIrrItems = await ctx.db
+        .query("irrCompletions")
         .withIndex("by_userId_and_status", (q) =>
           q.eq("userId", escoteiro._id).eq("status", "pending"),
         )
@@ -164,7 +169,7 @@ export const getPendingForGroup = query({
       const totalPending =
         pendingActions.length +
         pendingSpecialties.length +
-        pendingLisItems.length +
+        pendingIrrItems.length +
         pendingCustomActions.length;
 
       if (totalPending > 0) {
@@ -177,7 +182,7 @@ export const getPendingForGroup = query({
           },
           pendingActions,
           pendingSpecialties,
-          pendingLisItems,
+          pendingIrrItems,
           pendingCustomActions,
           totalPending,
         });
@@ -274,10 +279,10 @@ export const approveSpecialty = mutation({
     approvePendingCompletion(ctx, args.completionId, "specialty"),
 });
 
-export const approveLisDeOuroItem = mutation({
-  args: { completionId: v.id("lisDeOuroCompletions") },
+export const approveIrrItem = mutation({
+  args: { completionId: v.id("irrCompletions") },
   handler: async (ctx, args) =>
-    approvePendingCompletion(ctx, args.completionId, "lis"),
+    approvePendingCompletion(ctx, args.completionId, "irr"),
 });
 
 export const approveCustomAction = mutation({
@@ -346,10 +351,10 @@ export const rejectSpecialty = mutation({
   },
 });
 
-export const rejectLisDeOuroItem = mutation({
-  args: { completionId: v.id("lisDeOuroCompletions") },
+export const rejectIrrItem = mutation({
+  args: { completionId: v.id("irrCompletions") },
   handler: async (ctx, args) => {
-    await rejectPendingCompletion(ctx, args.completionId, "lis");
+    await rejectPendingCompletion(ctx, args.completionId, "irr");
   },
 });
 
@@ -358,7 +363,7 @@ export const bulkAction = mutation({
     action: v.union(v.literal("approve"), v.literal("reject")),
     actionIds: v.array(v.id("actionCompletions")),
     specialtyIds: v.array(v.id("specialtyCompletions")),
-    lisIds: v.array(v.id("lisDeOuroCompletions")),
+    irrIds: v.array(v.id("irrCompletions")),
     customActionIds: v.optional(v.array(v.id("customActions"))),
   },
   handler: async (ctx, args): Promise<LevelUpToast[]> => {
@@ -368,7 +373,7 @@ export const bulkAction = mutation({
     const hits = [
       ...(await collectPending(ctx, args.actionIds, "action", false)),
       ...(await collectPending(ctx, args.specialtyIds, "specialty", false)),
-      ...(await collectPending(ctx, args.lisIds, "lis", false)),
+      ...(await collectPending(ctx, args.irrIds, "irr", false)),
       ...(await collectPending(ctx, args.customActionIds ?? [], "custom", true)),
     ];
 
@@ -463,8 +468,8 @@ export const approveAllForEscoteiro = mutation({
         q.eq("userId", args.escoteiroId).eq("status", "pending"),
       )
       .take(100);
-    const pendingLis = await ctx.db
-      .query("lisDeOuroCompletions")
+    const pendingIrr = await ctx.db
+      .query("irrCompletions")
       .withIndex("by_userId_and_status", (q) =>
         q.eq("userId", args.escoteiroId).eq("status", "pending"),
       )
@@ -495,7 +500,7 @@ export const approveAllForEscoteiro = mutation({
     };
     await approveAndLog(pendingActions, "action");
     await approveAndLog(pendingSpecialties, "specialty");
-    await approveAndLog(pendingLis, "lis");
+    await approveAndLog(pendingIrr, "irr");
     await approveAndLog(pendingCustomActions, "custom");
 
     return detectLevelUps(ctx, user, target, before);

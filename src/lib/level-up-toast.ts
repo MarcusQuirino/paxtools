@@ -36,7 +36,10 @@ export function notifyLevelUps(result: unknown): void {
   for (const up of result) {
     const who = up.subjectName ?? "Escoteiro";
     if (up.kind === "lisDeOuro") {
-      toast.success(`🏅 ${who} conquistou a Lis de Ouro!`);
+      // stageName carries the ramo's IRR name (e.g. "Lis de Ouro", "Cruzeiro do Sul").
+      toast.success(
+        `🏅 ${who} conquistou a ${up.stageName ?? "Insígnia de Reconhecimento de Ramo"}!`,
+      );
     } else {
       toast.success(`🎉 ${who} alcançou ${up.stageName ?? "um novo nível"}!`);
     }

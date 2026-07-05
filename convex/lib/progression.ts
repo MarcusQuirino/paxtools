@@ -3,19 +3,82 @@ import type { Doc, Id } from "../_generated/dataModel";
 import {
   getCompletedBlockIds,
   getCurrentStage,
-  isLisDeOuroComplete,
+  isIrrComplete,
 } from "../../src/lib/completion-logic";
-import { getEixosForRamo } from "../../src/data/progression-data";
-import { STAGES } from "../../src/data/progression-rules";
+import { getEixosForRamo, type Ramo } from "../../src/data/progression-data";
+import { getRamoRules } from "../../src/data/progression-rules";
 import { logRamoEvent } from "./events";
 
 /**
- * A point-in-time view of an escoteiro's *approved* progression: which stage
- * (Pista/Trilha/Rumo/Travessia) they have reached and whether they hold the Lis
- * de Ouro. Derived exactly the way the client derives it (same shared logic),
- * so backend level-up detection agrees with what the escoteiro sees.
+ * The codebase-wide default ramo — and prod's only ramo. A user with no ramo
+ * yet (mid-onboarding) and every unstamped legacy row belong here. The single
+ * place this default is spelled, so reads and writes can't drift apart.
  */
+export const DEFAULT_RAMO: Ramo = "escoteiro";
+
+/** The ramo whose progression `user` is currently working through. */
+export function currentRamo(
+  user: { ramo?: Ramo | null } | null | undefined,
+): Ramo {
+  return user?.ramo ?? DEFAULT_RAMO;
+}
+
+/**
+ * Read the recognition (IRR) rows for a user's CURRENT ramo. The one place the
+ * "(userId, ramo) → irrCompletions" read lives, so the consumers (self read,
+ * escotista-view read, progression snapshot) can't drift. Not used by the
+ * escotista pending/approve-all path, which reads by (userId, status) on
+ * purpose — see the note there.
+ */
+export async function readCurrentRamoIrrItems(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+  ramo: Ramo | null | undefined,
+): Promise<Doc<"irrCompletions">[]> {
+  return ctx.db
+    .query("irrCompletions")
+    .withIndex("by_userId_and_ramo_and_itemId", (q) =>
+      q.eq("userId", userId).eq("ramo", ramo ?? DEFAULT_RAMO),
+    )
+    .take(10);
+}
+
+/**
+ * Read a user's especialidade completions for their CURRENT ramo (#37). Same
+ * (userId, ramo) isolation as the IRR read, and the same null-ramo → "escoteiro"
+ * default, kept here so self read / escotista-view read / snapshot can't drift.
+ * blocoIds are shared across ramos, so this filter (not the blocoId) is what
+ * stops a past ramo's especialidades bleeding into the current one.
+ */
+export async function readCurrentRamoSpecialties(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+  ramo: Ramo | null | undefined,
+): Promise<Doc<"specialtyCompletions">[]> {
+  return ctx.db
+    .query("specialtyCompletions")
+    .withIndex("by_userId_and_ramo_and_blocoId_and_specialtyName", (q) =>
+      q.eq("userId", userId).eq("ramo", ramo ?? DEFAULT_RAMO),
+    )
+    .take(500);
+}
+
+/** Read a user's ações personalizadas for their CURRENT ramo (#37). */
+export async function readCurrentRamoCustomActions(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+  ramo: Ramo | null | undefined,
+): Promise<Doc<"customActions">[]> {
+  return ctx.db
+    .query("customActions")
+    .withIndex("by_userId_and_ramo_and_blocoId", (q) =>
+      q.eq("userId", userId).eq("ramo", ramo ?? DEFAULT_RAMO),
+    )
+    .take(1000);
+}
+
 export type ProgressionSnapshot = {
+  ramo: Ramo | null;
   stageIndex: number;
   stageId: string;
   stageName: string;
@@ -36,22 +99,19 @@ export async function snapshotProgression(
   const user = await ctx.db.get(userId);
   const ramo = user?.ramo ?? null;
 
+  // actionCompletions stay by_userId: their ids are ramo-prefixed, so
+  // getCompletedBlockIds (below) matches only the current ramo's catalog. The
+  // other three are keyed by shared blocoIds, so they must be ramo-scoped at the
+  // read or a past ramo's completions bleed into this ramo's block count.
   const actions = await ctx.db
     .query("actionCompletions")
     .withIndex("by_userId", (q) => q.eq("userId", userId))
     .take(500);
-  const specialties = await ctx.db
-    .query("specialtyCompletions")
-    .withIndex("by_userId", (q) => q.eq("userId", userId))
-    .take(500);
-  const customActions = await ctx.db
-    .query("customActions")
-    .withIndex("by_userId", (q) => q.eq("userId", userId))
-    .take(1000);
-  const lisItems = await ctx.db
-    .query("lisDeOuroCompletions")
-    .withIndex("by_userId", (q) => q.eq("userId", userId))
-    .take(10);
+  const specialties = await readCurrentRamoSpecialties(ctx, userId, ramo);
+  const customActions = await readCurrentRamoCustomActions(ctx, userId, ramo);
+  // IRR items are ramo-scoped: only the current ramo's recognition rows feed
+  // the IRR-complete check.
+  const irrItems = await readCurrentRamoIrrItems(ctx, userId, ramo);
 
   const approvedActionIds = new Set(
     actions.filter((a) => a.status !== "pending").map((a) => a.actionId),
@@ -74,15 +134,22 @@ export async function snapshotProgression(
   );
 
   const completedBlockCount = approved.size;
-  const stage = getCurrentStage(completedBlockCount);
-  const stageIndex = STAGES.findIndex((s) => s.id === stage.id);
-
-  const approvedLisItemIds = new Set(
-    lisItems.filter((i) => i.status !== "pending").map((i) => i.itemId),
+  const stage = getCurrentStage(completedBlockCount, ramo);
+  const stageIndex = getRamoRules(ramo).etapas.findIndex(
+    (s) => s.id === stage.id,
   );
-  const lisDeOuro = isLisDeOuroComplete(completedBlockCount, approvedLisItemIds);
+
+  const approvedIrrItemIds = new Set(
+    irrItems.filter((i) => i.status !== "pending").map((i) => i.itemId),
+  );
+  const lisDeOuro = isIrrComplete(
+    completedBlockCount,
+    approvedIrrItemIds,
+    ramo,
+  );
 
   return {
+    ramo,
     stageIndex,
     stageId: stage.id,
     stageName: stage.name,
@@ -93,27 +160,29 @@ export async function snapshotProgression(
 
 export type LevelUp =
   | { kind: "levelUp"; stageId: string; stageName: string }
-  | { kind: "lisDeOuro" };
+  | { kind: "lisDeOuro"; irrName: string };
 
 /**
  * Diff two snapshots into the level-ups crossed. "Literal" rule (the user's
- * choice): one event per stage boundary crossed upward, plus a distinct Lis de
- * Ouro on a false→true transition. No high-water-mark — a reject→re-approve that
- * re-crosses a boundary fires again, by design.
+ * choice): one event per etapa boundary crossed upward, plus a distinct IRR on a
+ * false→true transition. No high-water-mark — a reject→re-approve that re-crosses
+ * a boundary fires again, by design. Both snapshots share the subject's ramo, so
+ * etapa names and the IRR name resolve from `after.ramo`.
  */
 export function diffProgression(
   before: ProgressionSnapshot,
   after: ProgressionSnapshot,
 ): LevelUp[] {
   const ups: LevelUp[] = [];
+  const rules = getRamoRules(after.ramo);
   if (after.stageIndex > before.stageIndex) {
     for (let i = before.stageIndex + 1; i <= after.stageIndex; i++) {
-      const s = STAGES[i];
+      const s = rules.etapas[i];
       if (s) ups.push({ kind: "levelUp", stageId: s.id, stageName: s.name });
     }
   }
   if (!before.lisDeOuro && after.lisDeOuro) {
-    ups.push({ kind: "lisDeOuro" });
+    ups.push({ kind: "lisDeOuro", irrName: rules.irr.name });
   }
   return ups;
 }
@@ -131,7 +200,10 @@ function toToasts(subject: Doc<"users">, ups: LevelUp[]): LevelUpToast[] {
     subjectUserId: subject._id,
     subjectName: subject.name ?? null,
     kind: u.kind,
-    stageName: u.kind === "levelUp" ? u.stageName : null,
+    // For a levelUp this is the etapa name; for an IRR it's the ramo's IRR name
+    // (e.g. "Lis de Ouro" for an escoteiro, "Cruzeiro do Sul" for a lobinho) so
+    // the toast congratulates the right recognition.
+    stageName: u.kind === "levelUp" ? u.stageName : u.irrName,
   }));
 }
 
@@ -157,7 +229,7 @@ async function logLevelUps(
         type: "lisDeOuro",
         actor,
         subject,
-        summary: "Conquistou a Lis de Ouro",
+        summary: `Conquistou a ${u.irrName}`,
       });
     }
   }

@@ -1,10 +1,6 @@
 import type { Bloco, Eixo } from "../data/types";
-import {
-  STAGES,
-  LIS_DE_OURO_BLOCKS,
-  LIS_DE_OURO_ITEMS,
-  type Stage,
-} from "../data/progression-rules";
+import type { Ramo } from "../data/progression-data";
+import { getRamoRules, type Etapa } from "../data/progression-rules";
 
 export type BlocoProgress = {
   fixedDone: number;
@@ -126,40 +122,55 @@ export function getCompletedBlockIds(
   return { approved, pending };
 }
 
-export function getCurrentStage(completedBlocks: number): Stage {
-  for (let i = STAGES.length - 1; i >= 0; i--) {
-    const stage = STAGES[i]!;
-    if (completedBlocks >= stage.blocksRequired) {
-      return stage;
+export function getCurrentStage(
+  completedBlocks: number,
+  ramo: Ramo | null | undefined,
+): Etapa {
+  const { etapas } = getRamoRules(ramo);
+  for (let i = etapas.length - 1; i >= 0; i--) {
+    const etapa = etapas[i]!;
+    if (completedBlocks >= etapa.blocksRequired) {
+      return etapa;
     }
   }
-  return STAGES[0]!;
+  return etapas[0]!;
 }
 
-export function getNextStage(completedBlocks: number): Stage | null {
-  const current = getCurrentStage(completedBlocks);
-  const idx = STAGES.findIndex((s) => s.id === current.id);
-  if (idx < STAGES.length - 1) {
-    return STAGES[idx + 1] ?? null;
+export function getNextStage(
+  completedBlocks: number,
+  ramo: Ramo | null | undefined,
+): Etapa | null {
+  const { etapas } = getRamoRules(ramo);
+  const current = getCurrentStage(completedBlocks, ramo);
+  const idx = etapas.findIndex((s) => s.id === current.id);
+  if (idx < etapas.length - 1) {
+    return etapas[idx + 1] ?? null;
   }
   return null;
 }
 
-export function getBlocksToLisDeOuro(completedBlocks: number): number {
-  return Math.max(0, LIS_DE_OURO_BLOCKS - completedBlocks);
-}
-
-export function allBlocksCompleted(completedBlocks: number): boolean {
-  return completedBlocks >= LIS_DE_OURO_BLOCKS;
-}
-
-export function isLisDeOuroComplete(
+export function getBlocksToIrr(
   completedBlocks: number,
-  completedLisItemIds: Set<string>,
-): boolean {
-  if (!allBlocksCompleted(completedBlocks)) return false;
+  ramo: Ramo | null | undefined,
+): number {
+  return Math.max(0, getRamoRules(ramo).irr.blockThreshold - completedBlocks);
+}
 
-  return LIS_DE_OURO_ITEMS.every((item) =>
-    item.auto ? true : completedLisItemIds.has(item.id),
+export function allBlocksCompleted(
+  completedBlocks: number,
+  ramo: Ramo | null | undefined,
+): boolean {
+  return completedBlocks >= getRamoRules(ramo).irr.blockThreshold;
+}
+
+export function isIrrComplete(
+  completedBlocks: number,
+  completedItemIds: Set<string>,
+  ramo: Ramo | null | undefined,
+): boolean {
+  if (!allBlocksCompleted(completedBlocks, ramo)) return false;
+
+  return getRamoRules(ramo).irr.items.every((item) =>
+    item.auto ? true : completedItemIds.has(item.id),
   );
 }

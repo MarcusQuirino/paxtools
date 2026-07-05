@@ -10,7 +10,7 @@ import { usePlan } from "@/hooks/use-plan";
 import { StageBanner } from "@/components/progression/stage-banner";
 import { OverallProgress } from "@/components/progression/overall-progress";
 import { EixoSection } from "@/components/progression/eixo-section";
-import { LisDeOuroSection } from "@/components/progression/lis-de-ouro-section";
+import { RecognitionSection } from "@/components/progression/recognition-section";
 import { PlanNav } from "@/components/progression/plan-nav";
 import { Footer } from "@/components/footer";
 import { notifyLevelUps } from "@/lib/level-up-toast";
@@ -66,6 +66,7 @@ function Home() {
 
 export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
   const {
+    ramoRules,
     eixos,
     approvedActionIds,
     pendingActionIds,
@@ -76,12 +77,12 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
     pendingBlockIds,
     completedBlockCount,
     pendingBlockCount,
-    approvedLisItemIds,
-    pendingLisItemIds,
+    approvedIrrItemIds,
+    pendingIrrItemIds,
     stage,
     nextStage,
     blocksComplete,
-    lisDeOuro,
+    irrComplete,
   } = useProgression(targetUserId);
 
   // Plan favorites only apply to the escoteiro viewing their own dashboard.
@@ -114,11 +115,9 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
   const deleteCustomFn = useConvexMutation(api.progression.deleteCustomAction);
   const { mutate: deleteCustom } = useMutation({ mutationFn: deleteCustomFn });
 
-  const toggleLisItemFn = useConvexMutation(
-    api.progression.toggleLisDeOuroItem,
-  );
-  const { mutate: toggleLisItem } = useMutation({
-    mutationFn: toggleLisItemFn,
+  const toggleIrrItemFn = useConvexMutation(api.progression.toggleIrrItem);
+  const { mutate: toggleIrrItem } = useMutation({
+    mutationFn: toggleIrrItemFn,
     onSuccess: notifyLevelUps,
   });
 
@@ -142,18 +141,20 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
     deleteCustom({ customActionId: id, targetUserId });
   };
 
-  const handleToggleLisItem = (itemId: string) => {
-    toggleLisItem({ itemId, targetUserId });
+  const handleToggleIrrItem = (itemId: string) => {
+    toggleIrrItem({ itemId, targetUserId });
   };
 
   return (
     <div className="space-y-4">
       <StageBanner
+        etapas={ramoRules.etapas}
+        irr={ramoRules.irr}
         stage={stage}
         nextStage={nextStage}
         completedBlockCount={completedBlockCount}
         pendingBlockCount={pendingBlockCount}
-        lisDeOuro={lisDeOuro}
+        irrComplete={irrComplete}
       />
 
       <OverallProgress
@@ -201,12 +202,13 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
         ))
       )}
 
-      <LisDeOuroSection
+      <RecognitionSection
+        irr={ramoRules.irr}
         blocksComplete={blocksComplete}
-        approvedLisItemIds={approvedLisItemIds}
-        pendingLisItemIds={pendingLisItemIds}
-        lisDeOuro={lisDeOuro}
-        onToggleItem={handleToggleLisItem}
+        approvedIrrItemIds={approvedIrrItemIds}
+        pendingIrrItemIds={pendingIrrItemIds}
+        irrComplete={irrComplete}
+        onToggleItem={handleToggleIrrItem}
         lockApproved={lockApproved}
       />
     </div>

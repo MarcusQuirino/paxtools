@@ -1,10 +1,28 @@
 import { internalMutation } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 
 const RAMO_PREFIXES = ["lobinho:", "escoteiro:", "senior:", "pioneiro:"];
 
 function hasRamoPrefix(actionId: string): boolean {
   return RAMO_PREFIXES.some((p) => actionId.startsWith(p));
+}
+
+/**
+ * Assert prod's all-escoteiro invariant: every `actionCompletions` id must be
+ * `escoteiro:`-prefixed. Ações encode ramo in their id, so a non-escoteiro id
+ * is the cheapest proof that a transitioned/non-escoteiro user exists — in which
+ * case stamping `escoteiro` everywhere would mislabel rows, so we stop instead.
+ */
+async function assertAllEscoteiro(ctx: MutationCtx, caller: string) {
+  const actions = await ctx.db.query("actionCompletions").collect();
+  const offending = actions.find((a) => !a.actionId.startsWith("escoteiro:"));
+  if (offending) {
+    throw new Error(
+      `${caller}: found non-escoteiro action id "${offending.actionId}" ` +
+        `— a transitioned/non-escoteiro user exists; migrate manually.`,
+    );
+  }
 }
 
 /**
@@ -145,5 +163,233 @@ export const prefixLegacyPlannedItemKeys = internalMutation({
     }
 
     return { dryRun, total: all.length, migrated, merged, skipped, samples };
+  },
+});
+
+/**
+ * One-off migration (#36): copy the escoteiro-only `lisDeOuroCompletions` rows
+ * forward into the ramo-scoped `irrCompletions`, renaming the recognition
+ * concept "Lis de Ouro" → IRR in stored data.
+ *
+ * Copy-forward (NOT in-place) was chosen for its safety property: the source
+ * table is never mutated, so counts can be compared and the change rolled back
+ * before the old table is dropped (dropping it is a separate follow-up, done
+ * only after prod verification). Each source row is copied with:
+ *   - `ramo = "escoteiro"` stamped (prod is all escoteiros — see the assertion),
+ *   - its id rewritten `lis_* → irr_*`.
+ *
+ * Safety: asserts EVERY `actionCompletions` id begins with `escoteiro:` before
+ * copying. A non-escoteiro / transitioned action id means the all-escoteiro
+ * assumption that makes the escoteiro stamp provably correct is violated, so we
+ * stop rather than mislabel a row.
+ *
+ * Idempotent / safe to re-run: a source row whose (userId, "escoteiro",
+ * irr_*id) already exists in `irrCompletions` is skipped, so a partial failure
+ * can be retried without duplicating rows.
+ *
+ * Run and verify on the DEV deploy (handsome-walrus-236) before prod:
+ *   bunx convex run migrations:copyLisDeOuroToIrr '{"dryRun": true}'
+ *   bunx convex run migrations:copyLisDeOuroToIrr '{}'
+ * Verify `sourceCount === destCount` (all copied) before touching prod.
+ */
+export const copyLisDeOuroToIrr = internalMutation({
+  args: { dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const dryRun = args.dryRun ?? false;
+
+    // 1. Assert all-escoteiro: every action id must be escoteiro-prefixed.
+    // (Ações already encode ramo in their id — this is the cheapest proof that
+    // no non-escoteiro/transitioned user exists before we stamp escoteiro.)
+    const actions = await ctx.db.query("actionCompletions").collect();
+    const offending = actions.find((a) => !a.actionId.startsWith("escoteiro:"));
+    if (offending) {
+      throw new Error(
+        `copyLisDeOuroToIrr: found non-escoteiro action id "${offending.actionId}" ` +
+          `— a transitioned/non-escoteiro user exists; migrate manually.`,
+      );
+    }
+
+    // 2. Copy each recognition row forward, stamping escoteiro + rewriting the id.
+    const source = await ctx.db.query("lisDeOuroCompletions").collect();
+    let copied = 0;
+    let skipped = 0;
+    const samples: { from: string; to: string }[] = [];
+
+    for (const row of source) {
+      const newItemId = row.itemId.replace(/^lis_/, "irr_");
+      if (samples.length < 5)
+        samples.push({ from: row.itemId, to: newItemId });
+
+      const existing = await ctx.db
+        .query("irrCompletions")
+        .withIndex("by_userId_and_ramo_and_itemId", (q) =>
+          q
+            .eq("userId", row.userId)
+            .eq("ramo", "escoteiro")
+            .eq("itemId", newItemId),
+        )
+        .unique();
+
+      if (existing) {
+        skipped++;
+        continue;
+      }
+
+      copied++;
+      if (!dryRun) {
+        await ctx.db.insert("irrCompletions", {
+          userId: row.userId,
+          ramo: "escoteiro",
+          itemId: newItemId,
+          completedAt: row.completedAt,
+          status: row.status,
+          approvedBy: row.approvedBy,
+          approvedAt: row.approvedAt,
+        });
+      }
+    }
+
+    // 3. Verify: destCount should equal sourceCount once fully copied. On a
+    // dryRun destCount reflects only pre-existing rows (nothing inserted).
+    const destCount = (await ctx.db.query("irrCompletions").collect()).length;
+
+    return {
+      dryRun,
+      sourceCount: source.length,
+      copied,
+      skipped,
+      destCount,
+      samples,
+    };
+  },
+});
+
+/**
+ * One-off migration (#37): backfill `ramo = "escoteiro"` in place on the three
+ * remaining ramo-unscoped completion tables — `specialtyCompletions`,
+ * `customActions`, and `plannedItems` — so their reads (now filtered by
+ * (userId, ramo)) return existing rows again.
+ *
+ * In-place stamp (NOT copy-forward) because these tables aren't renamed. Every
+ * row is stamped escoteiro, justified by the all-escoteiro assertion below — a
+ * row's identity is per-row, so a user whose `user.ramo` is unset but who has
+ * completions still gets their rows stamped, and a user with no completions
+ * simply has no rows to touch.
+ *
+ * DEPLOY ORDERING — schema deploy and this backfill MUST run back-to-back (dev,
+ * verify, then prod). Between the schema deploy and this run, ramo-filtered
+ * reads treat `ramo=undefined` rows as belonging to no ramo, so completions look
+ * unchecked; that window is exactly where a re-check would breed a duplicate, so
+ * keep it as short as possible.
+ *
+ * Collision-safe: `specialtyCompletions` and `plannedItems` have unique
+ * (userId, ramo, discriminator) write-lookups, so if a `ramo=escoteiro` row for
+ * the same identity already exists (a re-check during the deploy window), we
+ * merge into it (specialties prefer `approved`) and delete the unstamped source
+ * instead of patching — otherwise `.unique()` would later throw on the dup.
+ * `customActions` has no unique lookup, so it's a plain patch.
+ *
+ * Idempotent / safe to re-run: rows that already carry a `ramo` are skipped.
+ *
+ * Run and verify on the DEV deploy (handsome-walrus-236) before prod:
+ *   bunx convex run migrations:backfillRamoOnCompletions '{"dryRun": true}'
+ *   bunx convex run migrations:backfillRamoOnCompletions '{}'
+ */
+export const backfillRamoOnCompletions = internalMutation({
+  args: { dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const dryRun = args.dryRun ?? false;
+
+    // 1. Assert all-escoteiro before stamping escoteiro anywhere.
+    await assertAllEscoteiro(ctx, "backfillRamoOnCompletions");
+
+    let stamped = 0;
+    let merged = 0;
+    let skipped = 0;
+    const perTable: Record<string, { stamped: number; merged: number; skipped: number }> =
+      {};
+
+    const bump = (table: string, key: "stamped" | "merged" | "skipped") => {
+      perTable[table] ??= { stamped: 0, merged: 0, skipped: 0 };
+      perTable[table][key]++;
+      if (key === "stamped") stamped++;
+      else if (key === "merged") merged++;
+      else skipped++;
+    };
+
+    // 2a. specialtyCompletions — collision-safe (unique userId,ramo,blocoId,name).
+    for (const row of await ctx.db.query("specialtyCompletions").collect()) {
+      if (row.ramo !== undefined) {
+        bump("specialtyCompletions", "skipped");
+        continue;
+      }
+      const dup = await ctx.db
+        .query("specialtyCompletions")
+        .withIndex("by_userId_and_ramo_and_blocoId_and_specialtyName", (q) =>
+          q
+            .eq("userId", row.userId)
+            .eq("ramo", "escoteiro")
+            .eq("blocoId", row.blocoId)
+            .eq("specialtyName", row.specialtyName),
+        )
+        .unique();
+      if (dup) {
+        bump("specialtyCompletions", "merged");
+        if (!dryRun) {
+          const status =
+            dup.status === "approved" || row.status === "approved"
+              ? ("approved" as const)
+              : dup.status;
+          await ctx.db.patch(dup._id, {
+            status,
+            approvedBy: dup.approvedBy ?? row.approvedBy,
+            approvedAt: dup.approvedAt ?? row.approvedAt,
+            completedAt: Math.min(dup.completedAt, row.completedAt),
+          });
+          await ctx.db.delete(row._id);
+        }
+      } else {
+        bump("specialtyCompletions", "stamped");
+        if (!dryRun) await ctx.db.patch(row._id, { ramo: "escoteiro" });
+      }
+    }
+
+    // 2b. customActions — plain patch (no unique write-lookup; a window dup is
+    // benign and never breaks `.unique()`).
+    for (const row of await ctx.db.query("customActions").collect()) {
+      if (row.ramo !== undefined) {
+        bump("customActions", "skipped");
+        continue;
+      }
+      bump("customActions", "stamped");
+      if (!dryRun) await ctx.db.patch(row._id, { ramo: "escoteiro" });
+    }
+
+    // 2c. plannedItems — collision-safe (unique userId,ramo,itemKey). On a dup,
+    // keep the existing stamped row (its position) and drop the source.
+    for (const row of await ctx.db.query("plannedItems").collect()) {
+      if (row.ramo !== undefined) {
+        bump("plannedItems", "skipped");
+        continue;
+      }
+      const dup = await ctx.db
+        .query("plannedItems")
+        .withIndex("by_userId_and_ramo_and_itemKey", (q) =>
+          q
+            .eq("userId", row.userId)
+            .eq("ramo", "escoteiro")
+            .eq("itemKey", row.itemKey),
+        )
+        .unique();
+      if (dup) {
+        bump("plannedItems", "merged");
+        if (!dryRun) await ctx.db.delete(row._id);
+      } else {
+        bump("plannedItems", "stamped");
+        if (!dryRun) await ctx.db.patch(row._id, { ramo: "escoteiro" });
+      }
+    }
+
+    return { dryRun, stamped, merged, skipped, perTable };
   },
 });

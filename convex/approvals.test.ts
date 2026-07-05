@@ -137,15 +137,17 @@ async function insertSpecialty(
   );
 }
 
-async function insertLis(
+async function insertIrr(
   t: ReturnType<typeof convexTest>,
   userId: Id<"users">,
   status: "pending" | "approved" | undefined = "pending",
+  ramo: "lobinho" | "escoteiro" | "senior" | "pioneiro" = "escoteiro",
 ) {
   return t.run(async (ctx) =>
-    ctx.db.insert("lisDeOuroCompletions", {
+    ctx.db.insert("irrCompletions", {
       userId,
-      itemId: "item1",
+      ramo,
+      itemId: "irr_promessa",
       completedAt: 1,
       status,
     }),
@@ -176,7 +178,7 @@ async function insertCustom(
 // 1. approve* core behavior
 // ===========================================================================
 
-describe("approveAction / approveSpecialty / approveLisDeOuroItem", () => {
+describe("approveAction / approveSpecialty / approveIrrItem", () => {
   test("approveAction throws 'Não encontrado' for a dangling id", async () => {
     const t = convexTest(schema, modules);
     const { adminId, groupId } = await seedGroup(t);
@@ -234,24 +236,24 @@ describe("approveAction / approveSpecialty / approveLisDeOuroItem", () => {
     expect(typeof row?.approvedAt).toBe("number");
   });
 
-  test("approveLisDeOuroItem: dangling -> 'Não encontrado'; approved -> 'não está pendente'; success", async () => {
+  test("approveIrrItem: dangling -> 'Não encontrado'; approved -> 'não está pendente'; success", async () => {
     const t = convexTest(schema, modules);
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
 
-    const gone = await insertLis(t, esc);
+    const gone = await insertIrr(t, esc);
     await t.run(async (ctx) => ctx.db.delete(gone));
     await expect(
-      as(t, adminId).mutation(api.approvals.approveLisDeOuroItem, { completionId: gone }),
+      as(t, adminId).mutation(api.approvals.approveIrrItem, { completionId: gone }),
     ).rejects.toThrow("Não encontrado");
 
-    const already = await insertLis(t, esc, "approved");
+    const already = await insertIrr(t, esc, "approved");
     await expect(
-      as(t, adminId).mutation(api.approvals.approveLisDeOuroItem, { completionId: already }),
+      as(t, adminId).mutation(api.approvals.approveIrrItem, { completionId: already }),
     ).rejects.toThrow("não está pendente");
 
-    const ok = await insertLis(t, esc);
-    await as(t, adminId).mutation(api.approvals.approveLisDeOuroItem, { completionId: ok });
+    const ok = await insertIrr(t, esc);
+    await as(t, adminId).mutation(api.approvals.approveIrrItem, { completionId: ok });
     const row = await t.run(async (ctx) => ctx.db.get(ok));
     expect(row?.status).toBe("approved");
     expect(row?.approvedBy).toBe(adminId);
@@ -324,7 +326,7 @@ describe("approveCustomAction", () => {
 // 3. reject* delete-vs-patch behavior
 // ===========================================================================
 
-describe("rejectAction / rejectSpecialty / rejectLisDeOuroItem (delete)", () => {
+describe("rejectAction / rejectSpecialty / rejectIrrItem (delete)", () => {
   test("rejectAction deletes the row", async () => {
     const t = convexTest(schema, modules);
     const { adminId, groupId } = await seedGroup(t);
@@ -345,12 +347,12 @@ describe("rejectAction / rejectSpecialty / rejectLisDeOuroItem (delete)", () => 
     expect(row).toBeNull();
   });
 
-  test("rejectLisDeOuroItem deletes the row", async () => {
+  test("rejectIrrItem deletes the row", async () => {
     const t = convexTest(schema, modules);
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
-    const id = await insertLis(t, esc);
-    await as(t, adminId).mutation(api.approvals.rejectLisDeOuroItem, { completionId: id });
+    const id = await insertIrr(t, esc);
+    await as(t, adminId).mutation(api.approvals.rejectIrrItem, { completionId: id });
     const row = await t.run(async (ctx) => ctx.db.get(id));
     expect(row).toBeNull();
   });
@@ -558,14 +560,14 @@ describe("bulkAction", () => {
     const esc = await seedEscoteiro(t, groupId);
     const a = await insertAction(t, esc);
     const s = await insertSpecialty(t, esc);
-    const l = await insertLis(t, esc);
+    const l = await insertIrr(t, esc);
     const c = await insertCustom(t, esc, { completed: true, status: "pending" });
 
     await as(t, adminId).mutation(api.approvals.bulkAction, {
       action: "approve",
       actionIds: [a],
       specialtyIds: [s],
-      lisIds: [l],
+      irrIds: [l],
       customActionIds: [c],
     });
 
@@ -588,14 +590,14 @@ describe("bulkAction", () => {
     const esc = await seedEscoteiro(t, groupId);
     const a = await insertAction(t, esc);
     const s = await insertSpecialty(t, esc);
-    const l = await insertLis(t, esc);
+    const l = await insertIrr(t, esc);
     const c = await insertCustom(t, esc, { completed: true, status: "pending" });
 
     await as(t, adminId).mutation(api.approvals.bulkAction, {
       action: "reject",
       actionIds: [a],
       specialtyIds: [s],
-      lisIds: [l],
+      irrIds: [l],
       customActionIds: [c],
     });
 
@@ -626,7 +628,7 @@ describe("bulkAction", () => {
       action: "approve",
       actionIds: [approvedAction, pendingAction],
       specialtyIds: [],
-      lisIds: [],
+      irrIds: [],
       customActionIds: [notCompletedCustom],
     });
 
@@ -653,7 +655,7 @@ describe("bulkAction", () => {
       action: "approve",
       actionIds: [a],
       specialtyIds: [],
-      lisIds: [],
+      irrIds: [],
       // customActionIds omitted entirely
     });
     const row = await t.run(async (ctx) => ctx.db.get(a));
@@ -672,7 +674,7 @@ describe("approveAllForEscoteiro", () => {
     const esc = await seedEscoteiro(t, groupId);
     const a = await insertAction(t, esc);
     const s = await insertSpecialty(t, esc);
-    const l = await insertLis(t, esc);
+    const l = await insertIrr(t, esc);
     const c = await insertCustom(t, esc, { completed: true, status: "pending" });
     // A not-completed custom: should NOT be approved (filtered out).
     const cIncomplete = await insertCustom(t, esc, { completed: false, status: "pending" });
@@ -753,7 +755,7 @@ describe("getPendingForGroup", () => {
     const esc = await seedEscoteiro(t, groupId);
     await insertAction(t, esc);
     await insertSpecialty(t, esc);
-    await insertLis(t, esc);
+    await insertIrr(t, esc);
     await insertCustom(t, esc, { completed: true, status: "pending" });
 
     // An escoteiro with no pending items -> absent.
@@ -918,7 +920,7 @@ describe("getGroupStats", () => {
     await insertAction(t, esc, "approved");
     // Pending specialty/lis/custom should NOT count toward totalPending.
     await insertSpecialty(t, esc, "pending");
-    await insertLis(t, esc, "pending");
+    await insertIrr(t, esc, "pending");
     await insertCustom(t, esc, { completed: true, status: "pending" });
 
     const res = await as(t, adminId).query(api.approvals.getGroupStats, {});

@@ -4,12 +4,13 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { getEixosForRamo, type Ramo } from "@/data/progression-data";
+import { getRamoRules } from "@/data/progression-rules";
 import {
   getCompletedBlockIds,
   getCurrentStage,
   getNextStage,
   allBlocksCompleted,
-  isLisDeOuroComplete,
+  isIrrComplete,
 } from "@/lib/completion-logic";
 
 export function useProgression(targetUserId?: Id<"users">) {
@@ -29,10 +30,11 @@ export function useProgression(targetUserId?: Id<"users">) {
       completed: boolean;
       status?: string;
     }[];
-    lisDeOuroItems: { itemId: string; status?: string }[];
+    irrItems: { itemId: string; status?: string }[];
   }>(queryOptions);
 
   const eixos = useMemo(() => getEixosForRamo(data.ramo), [data.ramo]);
+  const ramoRules = useMemo(() => getRamoRules(data.ramo), [data.ramo]);
 
   const approvedActionIds = useMemo(
     () =>
@@ -98,34 +100,39 @@ export function useProgression(targetUserId?: Id<"users">) {
     ],
   );
 
-  const approvedLisItemIds = useMemo(
+  const approvedIrrItemIds = useMemo(
     () =>
       new Set(
-        data.lisDeOuroItems
+        data.irrItems
           .filter((i) => i.status !== "pending")
           .map((i) => i.itemId),
       ),
-    [data.lisDeOuroItems],
+    [data.irrItems],
   );
 
-  const pendingLisItemIds = useMemo(
+  const pendingIrrItemIds = useMemo(
     () =>
       new Set(
-        data.lisDeOuroItems
+        data.irrItems
           .filter((i) => i.status === "pending")
           .map((i) => i.itemId),
       ),
-    [data.lisDeOuroItems],
+    [data.irrItems],
   );
 
   const completedBlockCount = completedBlockIds.size;
-  const stage = getCurrentStage(completedBlockCount);
-  const nextStage = getNextStage(completedBlockCount);
-  const blocksComplete = allBlocksCompleted(completedBlockCount);
-  const lisDeOuro = isLisDeOuroComplete(completedBlockCount, approvedLisItemIds);
+  const stage = getCurrentStage(completedBlockCount, data.ramo);
+  const nextStage = getNextStage(completedBlockCount, data.ramo);
+  const blocksComplete = allBlocksCompleted(completedBlockCount, data.ramo);
+  const irrComplete = isIrrComplete(
+    completedBlockCount,
+    approvedIrrItemIds,
+    data.ramo,
+  );
 
   return {
     ramo: data.ramo,
+    ramoRules,
     eixos,
     approvedActionIds,
     pendingActionIds,
@@ -136,11 +143,11 @@ export function useProgression(targetUserId?: Id<"users">) {
     pendingBlockIds,
     completedBlockCount,
     pendingBlockCount: pendingBlockIds.size,
-    approvedLisItemIds,
-    pendingLisItemIds,
+    approvedIrrItemIds,
+    pendingIrrItemIds,
     stage,
     nextStage,
     blocksComplete,
-    lisDeOuro,
+    irrComplete,
   };
 }

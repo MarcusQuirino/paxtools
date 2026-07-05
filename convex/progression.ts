@@ -6,6 +6,10 @@ import { assertCanActOnEscoteiro } from "./lib/ramoVisibility";
 import {
   snapshotProgression,
   detectLevelUps,
+  readCurrentRamoIrrItems,
+  readCurrentRamoSpecialties,
+  readCurrentRamoCustomActions,
+  currentRamo,
   type LevelUpToast,
   type ProgressionSnapshot,
 } from "./lib/progression";
@@ -19,12 +23,12 @@ import type { MutationCtx } from "./_generated/server";
 
 const ACTION_ID_PATTERN = /^(lobinho|escoteiro|senior|pioneiro):[a-z0-9-]+:(fixed|variable):\d+$/;
 const BLOCO_ID_PATTERN = /^[a-z0-9-]+$/;
-const VALID_LIS_ITEM_IDS = new Set([
-  "lis_promessa",
-  "lis_blocos",
-  "lis_jornada",
-  "lis_autoavaliacao",
-  "lis_corte_honra",
+const VALID_IRR_ITEM_IDS = new Set([
+  "irr_promessa",
+  "irr_blocos",
+  "irr_jornada",
+  "irr_autoavaliacao",
+  "irr_corte_honra",
 ]);
 const MAX_CUSTOM_ACTIONS_PER_BLOCO = 20;
 
@@ -119,7 +123,7 @@ export const getMyCompletions = query({
       actions: [],
       specialties: [],
       customActions: [],
-      lisDeOuroItems: [],
+      irrItems: [],
     };
 
     const userId = await getAuthUserId(ctx);
@@ -134,27 +138,23 @@ export const getMyCompletions = query({
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .take(500);
 
-    const specialties = await ctx.db
-      .query("specialtyCompletions")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(500);
-
-    const customActions = await ctx.db
-      .query("customActions")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(1000);
-
-    const lisDeOuroItems = await ctx.db
-      .query("lisDeOuroCompletions")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(10);
+    // Especialidades, ações personalizadas and IRR items are ramo-scoped:
+    // only the current ramo's rows (blocoIds are shared, so isolation is at
+    // the read). Actions self-isolate via their ramo-prefixed ids.
+    const specialties = await readCurrentRamoSpecialties(ctx, userId, user.ramo);
+    const customActions = await readCurrentRamoCustomActions(
+      ctx,
+      userId,
+      user.ramo,
+    );
+    const irrItems = await readCurrentRamoIrrItems(ctx, userId, user.ramo);
 
     return {
       ramo: user?.ramo ?? null,
       actions,
       specialties,
       customActions,
-      lisDeOuroItems,
+      irrItems,
     };
   },
 });
@@ -171,27 +171,29 @@ export const getCompletionsForUser = query({
       .withIndex("by_userId", (q) => q.eq("userId", args.targetUserId))
       .take(500);
 
-    const specialties = await ctx.db
-      .query("specialtyCompletions")
-      .withIndex("by_userId", (q) => q.eq("userId", args.targetUserId))
-      .take(500);
-
-    const customActions = await ctx.db
-      .query("customActions")
-      .withIndex("by_userId", (q) => q.eq("userId", args.targetUserId))
-      .take(1000);
-
-    const lisDeOuroItems = await ctx.db
-      .query("lisDeOuroCompletions")
-      .withIndex("by_userId", (q) => q.eq("userId", args.targetUserId))
-      .take(10);
+    // Ramo-scoped to the target's current ramo (see getMyCompletions).
+    const specialties = await readCurrentRamoSpecialties(
+      ctx,
+      args.targetUserId,
+      target?.ramo,
+    );
+    const customActions = await readCurrentRamoCustomActions(
+      ctx,
+      args.targetUserId,
+      target?.ramo,
+    );
+    const irrItems = await readCurrentRamoIrrItems(
+      ctx,
+      args.targetUserId,
+      target?.ramo,
+    );
 
     return {
       ramo: target?.ramo ?? null,
       actions,
       specialties,
       customActions,
-      lisDeOuroItems,
+      irrItems,
     };
   },
 });
@@ -272,11 +274,15 @@ export const toggleSpecialty = mutation({
     if (!args.specialtyName.trim() || args.specialtyName.length > 200)
       throw new Error("Nome de especialidade inválido");
 
+    // Stamp/scope by the acting escoteiro's current ramo.
+    const ramo = currentRamo(await ctx.db.get(effectiveUserId));
+
     const existing = await ctx.db
       .query("specialtyCompletions")
-      .withIndex("by_userId_and_blocoId_and_specialtyName", (q) =>
+      .withIndex("by_userId_and_ramo_and_blocoId_and_specialtyName", (q) =>
         q
           .eq("userId", effectiveUserId)
+          .eq("ramo", ramo)
           .eq("blocoId", args.blocoId)
           .eq("specialtyName", args.specialtyName),
       )
@@ -302,6 +308,7 @@ export const toggleSpecialty = mutation({
     } else {
       await ctx.db.insert("specialtyCompletions", {
         userId: effectiveUserId,
+        ramo,
         blocoId: args.blocoId,
         specialtyName: args.specialtyName,
         completedAt: Date.now(),
@@ -343,10 +350,14 @@ export const addCustomAction = mutation({
     if (!text) throw new Error("Texto vazio");
     if (text.length > 500) throw new Error("Texto muito longo");
 
+    // Stamp/scope by the acting escoteiro's current ramo.
+    const ramo = currentRamo(await ctx.db.get(effectiveUserId));
+
+    // Per-bloco cap counts only this ramo's rows.
     const existingCount = await ctx.db
       .query("customActions")
-      .withIndex("by_userId_and_blocoId", (q) =>
-        q.eq("userId", effectiveUserId).eq("blocoId", args.blocoId),
+      .withIndex("by_userId_and_ramo_and_blocoId", (q) =>
+        q.eq("userId", effectiveUserId).eq("ramo", ramo).eq("blocoId", args.blocoId),
       )
       .take(MAX_CUSTOM_ACTIONS_PER_BLOCO + 1);
     if (existingCount.length >= MAX_CUSTOM_ACTIONS_PER_BLOCO)
@@ -354,6 +365,7 @@ export const addCustomAction = mutation({
 
     return await ctx.db.insert("customActions", {
       userId: effectiveUserId,
+      ramo,
       blocoId: args.blocoId,
       text,
       completed: false,
@@ -435,7 +447,7 @@ export const deleteCustomAction = mutation({
   },
 });
 
-export const toggleLisDeOuroItem = mutation({
+export const toggleIrrItem = mutation({
   args: {
     itemId: v.string(),
     targetUserId: v.optional(v.id("users")),
@@ -444,13 +456,18 @@ export const toggleLisDeOuroItem = mutation({
     const { effectiveUserId, status, approvedBy, callerIsEscotista, caller } =
       await resolveTargetAndStatus(ctx, args.targetUserId);
 
-    if (!VALID_LIS_ITEM_IDS.has(args.itemId))
+    if (!VALID_IRR_ITEM_IDS.has(args.itemId))
       throw new Error("ID de item inválido");
 
+    // Stamp the acting escoteiro's current ramo so the row lands in the right
+    // ramo's record. null ramo → "escoteiro" (codebase-wide default).
+    const subject = await ctx.db.get(effectiveUserId);
+    const ramo = subject?.ramo ?? "escoteiro";
+
     const existing = await ctx.db
-      .query("lisDeOuroCompletions")
-      .withIndex("by_userId_and_itemId", (q) =>
-        q.eq("userId", effectiveUserId).eq("itemId", args.itemId),
+      .query("irrCompletions")
+      .withIndex("by_userId_and_ramo_and_itemId", (q) =>
+        q.eq("userId", effectiveUserId).eq("ramo", ramo).eq("itemId", args.itemId),
       )
       .unique();
 
@@ -472,8 +489,9 @@ export const toggleLisDeOuroItem = mutation({
         await ctx.db.delete(existing._id);
       }
     } else {
-      await ctx.db.insert("lisDeOuroCompletions", {
+      await ctx.db.insert("irrCompletions", {
         userId: effectiveUserId,
+        ramo,
         itemId: args.itemId,
         completedAt: Date.now(),
         status,
@@ -489,7 +507,7 @@ export const toggleLisDeOuroItem = mutation({
       subjectId: effectiveUserId,
       before,
       approved,
-      kind: "lis",
+      kind: "irr",
       ref: { itemId: args.itemId },
     });
   },

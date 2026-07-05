@@ -5,14 +5,15 @@ import {
   parseActionId,
   type Ramo,
 } from "../../src/data/progression-data";
+import { getRamoRules } from "../../src/data/progression-rules";
 
 /** Completion kinds that produce an approval/rejection audit line. */
-export type CompletionKind = "action" | "specialty" | "custom" | "lis";
+export type CompletionKind = "action" | "specialty" | "custom" | "irr";
 
 export type CompletionDoc =
   | Doc<"actionCompletions">
   | Doc<"specialtyCompletions">
-  | Doc<"lisDeOuroCompletions">
+  | Doc<"irrCompletions">
   | Doc<"customActions">;
 
 /** Pull the label-relevant field off a completion row by its kind. */
@@ -27,17 +28,20 @@ export function completionRef(
       return { specialtyName: (doc as Doc<"specialtyCompletions">).specialtyName };
     case "custom":
       return { text: (doc as Doc<"customActions">).text };
-    case "lis":
-      return { itemId: (doc as Doc<"lisDeOuroCompletions">).itemId };
+    case "irr":
+      return { itemId: (doc as Doc<"irrCompletions">).itemId };
   }
 }
 
-const LIS_ITEM_LABELS: Record<string, string> = {
-  lis_promessa: "Promessa Escoteira",
-  lis_blocos: "Todos os Blocos",
-  lis_jornada: "Jornada de Travessia",
-  lis_autoavaliacao: "Autoavaliação",
-  lis_corte_honra: "Corte de Honra",
+// Short audit labels for escoteiro's IRR items, kept byte-identical to preserve
+// existing escoteiro timeline lines. Non-escoteiro ramos fall back to their
+// ramo-correct item text from getRamoRules (see describeCompletion).
+const IRR_ITEM_LABELS: Record<string, string> = {
+  irr_promessa: "Promessa Escoteira",
+  irr_blocos: "Todos os Blocos",
+  irr_jornada: "Jornada de Travessia",
+  irr_autoavaliacao: "Autoavaliação",
+  irr_corte_honra: "Corte de Honra",
 };
 
 /** Resolve a human label for the thing approved/rejected (audit-accurate). */
@@ -66,8 +70,19 @@ export function describeCompletion(
       return ref.specialtyName ?? "Especialidade";
     case "custom":
       return ref.text ?? "Ação personalizada";
-    case "lis":
-      return LIS_ITEM_LABELS[ref.itemId ?? ""] ?? ref.itemId ?? "Lis de Ouro";
+    case "irr": {
+      const itemId = ref.itemId ?? "";
+      // Audit-fidelity special case (NOT a display path): escoteiro keeps its
+      // established concise audit labels so existing timelines stay consistent;
+      // other ramos resolve their own IRR item text from getRamoRules. The
+      // display surfaces (banner, recognition section, toast, pending view) are
+      // all ramo-driven with no such branch.
+      if (!ramo || ramo === "escoteiro") {
+        return IRR_ITEM_LABELS[itemId] ?? itemId ?? "Lis de Ouro";
+      }
+      const rules = getRamoRules(ramo);
+      return rules.irr.items.find((i) => i.id === itemId)?.text ?? rules.irr.name;
+    }
   }
 }
 

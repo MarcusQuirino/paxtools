@@ -2,6 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { getAuthenticatedUser } from "./lib/authHelpers";
+import { currentRamo } from "./lib/progression";
 
 // Action keys carry the ramo prefix since the multi-ramo refactor
 // (`action:ramo:blocoId:type:index`). We accept 1 or 2 segments before
@@ -20,9 +21,13 @@ export const getMyPlan = query({
     const user = await ctx.db.get(userId);
     if (!user || user.bannedAt) return [];
 
+    // Ramo-scoped (#37): only the current ramo's plan, ordered by position, so a
+    // past ramo's planned items don't clutter it.
     return await ctx.db
       .query("plannedItems")
-      .withIndex("by_userId_and_position", (q) => q.eq("userId", userId))
+      .withIndex("by_userId_and_ramo_and_position", (q) =>
+        q.eq("userId", userId).eq("ramo", currentRamo(user)),
+      )
       .take(MAX_PLANNED_ITEMS);
   },
 });
@@ -38,10 +43,13 @@ export const togglePlanned = mutation({
       throw new Error("Chave de item inválida");
     }
 
+    // All lookups/writes are scoped to the acting user's current ramo (#37).
+    const ramo = currentRamo(user);
+
     const existing = await ctx.db
       .query("plannedItems")
-      .withIndex("by_userId_and_itemKey", (q) =>
-        q.eq("userId", user._id).eq("itemKey", args.itemKey),
+      .withIndex("by_userId_and_ramo_and_itemKey", (q) =>
+        q.eq("userId", user._id).eq("ramo", ramo).eq("itemKey", args.itemKey),
       )
       .unique();
 
@@ -52,7 +60,9 @@ export const togglePlanned = mutation({
 
     const last = await ctx.db
       .query("plannedItems")
-      .withIndex("by_userId_and_position", (q) => q.eq("userId", user._id))
+      .withIndex("by_userId_and_ramo_and_position", (q) =>
+        q.eq("userId", user._id).eq("ramo", ramo),
+      )
       .order("desc")
       .first();
 
@@ -60,7 +70,9 @@ export const togglePlanned = mutation({
 
     const totalCount = await ctx.db
       .query("plannedItems")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .withIndex("by_userId_and_ramo_and_position", (q) =>
+        q.eq("userId", user._id).eq("ramo", ramo),
+      )
       .take(MAX_PLANNED_ITEMS + 1);
     if (totalCount.length >= MAX_PLANNED_ITEMS) {
       throw new Error("Limite de itens no plano atingido");
@@ -68,6 +80,7 @@ export const togglePlanned = mutation({
 
     await ctx.db.insert("plannedItems", {
       userId: user._id,
+      ramo,
       itemKey: args.itemKey,
       position: nextPosition,
     });
@@ -82,11 +95,12 @@ export const reorderPlan = mutation({
   },
   handler: async (ctx, args) => {
     const user = await getAuthenticatedUser(ctx);
+    const ramo = currentRamo(user);
 
     const target = await ctx.db
       .query("plannedItems")
-      .withIndex("by_userId_and_itemKey", (q) =>
-        q.eq("userId", user._id).eq("itemKey", args.itemKey),
+      .withIndex("by_userId_and_ramo_and_itemKey", (q) =>
+        q.eq("userId", user._id).eq("ramo", ramo).eq("itemKey", args.itemKey),
       )
       .unique();
     if (!target) throw new Error("Item não está no plano");
@@ -94,8 +108,11 @@ export const reorderPlan = mutation({
     const before = args.beforeItemKey
       ? await ctx.db
           .query("plannedItems")
-          .withIndex("by_userId_and_itemKey", (q) =>
-            q.eq("userId", user._id).eq("itemKey", args.beforeItemKey!),
+          .withIndex("by_userId_and_ramo_and_itemKey", (q) =>
+            q
+              .eq("userId", user._id)
+              .eq("ramo", ramo)
+              .eq("itemKey", args.beforeItemKey!),
           )
           .unique()
       : null;
@@ -103,8 +120,11 @@ export const reorderPlan = mutation({
     const after = args.afterItemKey
       ? await ctx.db
           .query("plannedItems")
-          .withIndex("by_userId_and_itemKey", (q) =>
-            q.eq("userId", user._id).eq("itemKey", args.afterItemKey!),
+          .withIndex("by_userId_and_ramo_and_itemKey", (q) =>
+            q
+              .eq("userId", user._id)
+              .eq("ramo", ramo)
+              .eq("itemKey", args.afterItemKey!),
           )
           .unique()
       : null;

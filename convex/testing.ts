@@ -155,6 +155,7 @@ export const wipeTestData = internalMutation({
       "specialtyCompletions",
       "customActions",
       "lisDeOuroCompletions",
+      "irrCompletions",
       "plannedItems",
     ] as const;
     let deletedRows = 0;
@@ -389,6 +390,7 @@ export const seedTestUsers = internalMutation({
     if (!existingPlanned) {
       await ctx.db.insert("plannedItems", {
         userId: progressionId,
+        ramo: "escoteiro",
         itemKey: plannedKey,
         position: 0,
       });

@@ -3,7 +3,7 @@ import type { Id } from "../_generated/dataModel";
 // NOTE: this src/ import chain (plan-view → plan-keys → data/*) must stay browser-free AND path-alias-free — convex dev typechecks it under convex/tsconfig.json, which has neither DOM libs nor the "@/" alias.
 import { getEixosForRamo } from "../../src/data/progression-data";
 import { buildCatalogIndex } from "../../src/lib/plan-view";
-import { STAGES } from "../../src/data/progression-rules";
+import { getRamoRules } from "../../src/data/progression-rules";
 import { snapshotProgression } from "./progression";
 import { filterActiveGrupoMembers } from "./ramoVisibility";
 
@@ -70,7 +70,7 @@ export async function computeRamoCoverage(
   // N+1 by_userId .collect() over <=28 scouts/ramo is acceptable at this scale.
   const approvedByAction = new Map<string, number>();
   const stageDistribution: Record<string, number> = {};
-  for (const s of STAGES) stageDistribution[s.id] = 0;
+  for (const s of getRamoRules(ramo).etapas) stageDistribution[s.id] = 0;
 
   for (const scout of scouts) {
     const rows = await ctx.db
