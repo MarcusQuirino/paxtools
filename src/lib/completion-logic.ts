@@ -62,26 +62,38 @@ export function getBlocoProgress(
   };
 }
 
+/**
+ * Compute the specialty level (0, 1, or 2) from approved item count.
+ *
+ * - Level 2: all items approved (approvedCount === totalItems)
+ * - Level 1: at least half approved (approvedCount >= totalItems / 2)
+ * - Level 0: otherwise
+ *
+ * When totalItems is 0 returns 0 (no items means no level).
+ */
+export function getSpecialtyLevel(
+  approvedCount: number,
+  totalItems: number,
+): 0 | 1 | 2 {
+  if (totalItems === 0) return 0;
+  if (approvedCount >= totalItems) return 2;
+  if (approvedCount >= totalItems / 2) return 1;
+  return 0;
+}
+
 export function getCompletedBlockIds(
   eixos: Eixo[],
   approvedActionIds: Set<string>,
   pendingActionIds: Set<string>,
   customActions: { blocoId: string; completed: boolean; status?: string }[],
-  completedSpecialties: { blocoId: string; status?: string }[],
+  // Pre-computed set of blocoIds whose linked specialty is earned at level ≥ 1.
+  // Callers compute this from specialtyItemCompletions counts + the catalog's
+  // alternativeCompletions map. Previously accepted raw specialtyCompletions
+  // rows; migrated to this shape in feat/especialidades-schema-logic (#41).
+  earnedSpecialtyBlocoIds: Set<string>,
 ): { approved: Set<string>; pending: Set<string> } {
   const approved = new Set<string>();
   const pending = new Set<string>();
-
-  const approvedSpecialtyBlocos = new Set(
-    completedSpecialties
-      .filter((s) => s.status === "approved" || !s.status)
-      .map((s) => s.blocoId),
-  );
-  const pendingSpecialtyBlocos = new Set(
-    completedSpecialties
-      .filter((s) => s.status === "pending")
-      .map((s) => s.blocoId),
-  );
 
   const approvedCustomByBloco = new Map<string, number>();
   const pendingCustomByBloco = new Map<string, number>();
@@ -103,14 +115,17 @@ export function getCompletedBlockIds(
 
   for (const eixo of eixos) {
     for (const bloco of eixo.blocos) {
+      const hasEarnedSpecialty = earnedSpecialtyBlocoIds.has(bloco.id);
       const progress = getBlocoProgress(
         bloco,
         approvedActionIds,
         pendingActionIds,
         approvedCustomByBloco.get(bloco.id) ?? 0,
         pendingCustomByBloco.get(bloco.id) ?? 0,
-        approvedSpecialtyBlocos.has(bloco.id),
-        pendingSpecialtyBlocos.has(bloco.id),
+        hasEarnedSpecialty,
+        // Pending specialty satisfaction removed: specialty level is computed on
+        // read from approved item counts only — there is no "pending level".
+        false,
       );
       if (progress.isComplete) {
         approved.add(bloco.id);

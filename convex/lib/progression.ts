@@ -44,11 +44,10 @@ export async function readCurrentRamoIrrItems(
 }
 
 /**
- * Read a user's especialidade completions for their CURRENT ramo (#37). Same
- * (userId, ramo) isolation as the IRR read, and the same null-ramo → "escoteiro"
- * default, kept here so self read / escotista-view read / snapshot can't drift.
- * blocoIds are shared across ramos, so this filter (not the blocoId) is what
- * stops a past ramo's especialidades bleeding into the current one.
+ * @deprecated Use specialtyItemCompletions / specialtyProjectReports instead.
+ * Kept for the migration (`migrations:migrateSpecialtyCompletions`) to read
+ * existing rows and produce item records. Will be dropped once prod data is
+ * verified. Application code no longer reads this table.
  */
 export async function readCurrentRamoSpecialties(
   ctx: QueryCtx | MutationCtx,
@@ -107,7 +106,6 @@ export async function snapshotProgression(
     .query("actionCompletions")
     .withIndex("by_userId", (q) => q.eq("userId", userId))
     .take(500);
-  const specialties = await readCurrentRamoSpecialties(ctx, userId, ramo);
   const customActions = await readCurrentRamoCustomActions(ctx, userId, ramo);
   // IRR items are ramo-scoped: only the current ramo's recognition rows feed
   // the IRR-complete check.
@@ -121,6 +119,10 @@ export async function snapshotProgression(
   );
 
   const eixos = getEixosForRamo(ramo);
+  // TODO (#44): populate earnedSpecialtyBlocoIds from specialtyItemCompletions
+  // counts + catalog alternativeCompletions map. Empty set means bloco-via-specialty
+  // satisfaction is temporarily zero for all users until #44 ships.
+  const earnedSpecialtyBlocoIds = new Set<string>();
   const { approved } = getCompletedBlockIds(
     eixos,
     approvedActionIds,
@@ -130,7 +132,7 @@ export async function snapshotProgression(
       completed: c.completed,
       status: c.status,
     })),
-    specialties.map((s) => ({ blocoId: s.blocoId, status: s.status })),
+    earnedSpecialtyBlocoIds,
   );
 
   const completedBlockCount = approved.size;

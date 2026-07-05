@@ -393,3 +393,219 @@ export const backfillRamoOnCompletions = internalMutation({
     return { dryRun, stamped, merged, skipped, perTable };
   },
 });
+
+// ── Especialidades migration (#41) ───────────────────────────────────────────
+
+/**
+ * Convert a specialtyName display string to a lowercase hyphen slug.
+ * Removes diacritics, lowercases, replaces spaces/underscores with hyphens,
+ * and strips non-alphanumeric characters except hyphens.
+ */
+function toSpecialtySlug(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/[\s_]+/g, "-");
+}
+
+/**
+ * Known item counts for younger-group (lobinho/escoteiro) specialties.
+ * Sourced from the official guide (scout-notes reference repo).
+ * Names here must match the `specialtyName` strings stored in
+ * `specialtyCompletions` rows (set by the old toggleSpecialty mutation).
+ *
+ * Specialties not listed here fall back to FALLBACK_ITEM_COUNT.
+ */
+const YOUNGER_SPECIALTY_ITEM_COUNTS: Record<string, number> = {
+  Acampamento: 8,
+  Administração: 6,
+  "Anatomia Humana": 7,
+  "Arte Digital": 8,
+  "Artes Visuais": 8,
+  Artesanato: 8,
+  Botânica: 6,
+  Brasilidades: 6,
+  "Ciências da Terra": 6, // maps to guide's Geologia (6 items)
+  Comunicações: 8,
+  Comédia: 8,
+  "Costura e Estilismo": 6,
+  "Defesa Civil": 6,
+  "Educação Financeira": 8,
+  Empreendedorismo: 8,
+  Encadernação: 8,
+  "Escotismo Mundial": 6,
+  Excursões: 6,
+  Genealogia: 6,
+  Grafite: 6,
+  HQ: 8,
+  Horticultura: 6,
+  Maquete: 6,
+  Meteorologia: 6,
+  Montanhismo: 6,
+  "Noções Desportivas": 6,
+  Nutrição: 6,
+  Oceanologia: 6,
+  Oratória: 6,
+  Pintura: 8,
+  Pioneiria: 8,
+  "Prevenção ao Bullying": 6,
+  "Prevenção aos Vícios": 6,
+  "Prevenção em Saúde": 6,
+  "Primeiros Socorros": 8,
+  "Propaganda e Marketing": 8,
+  "Reparos Domésticos": 8,
+  Robótica: 8,
+  Sobrevivência: 6,
+  Videomaker: 8,
+  Yoga: 8,
+  Zoologia: 6,
+};
+
+/** Fallback item count for specialty names not in the known map. */
+const FALLBACK_ITEM_COUNT = 6;
+
+/**
+ * One-off migration: convert legacy `specialtyCompletions` rows into the new
+ * `specialtyItemCompletions` (younger) and `specialtyProjectReports` (older)
+ * tables introduced in #41.
+ *
+ * Strategy:
+ *   - Pending rows: dropped without conversion (escoteiros resubmit under the
+ *     new item/step UI).
+ *   - Approved rows (or null-status rows, which prod treats as approved):
+ *       - Younger (lobinho/escoteiro): insert one `specialtyItemCompletions`
+ *         row per item index, all approved, carrying approvedBy/approvedAt.
+ *       - Older (senior/pioneiro): insert all three `specialtyProjectReports`
+ *         steps (conhecer/fazer/compartilhar) approved, representing earned.
+ *   - Source rows are deleted after conversion (when dryRun=false).
+ *   - Idempotent: existing target rows for the same (userId, ramoGroup,
+ *     specialtyId, itemIndex/step) are skipped (not duplicated).
+ *
+ * Run:
+ *   bunx convex run migrations:migrateSpecialtyCompletions '{"dryRun": true}'
+ *   bunx convex run migrations:migrateSpecialtyCompletions '{}'
+ */
+export const migrateSpecialtyCompletions = internalMutation({
+  args: { dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const dryRun = args.dryRun ?? false;
+
+    const all = await ctx.db.query("specialtyCompletions").collect();
+
+    let skippedPending = 0;
+    let convertedYounger = 0;
+    let convertedOlder = 0;
+    let skippedDuplicate = 0;
+    const unknownSpecialties: string[] = [];
+
+    for (const row of all) {
+      // Pending rows: drop (no conversion).
+      if (row.status === "pending") {
+        skippedPending++;
+        if (!dryRun) await ctx.db.delete(row._id);
+        continue;
+      }
+
+      const ramo = row.ramo ?? "escoteiro";
+      const ramoGroup: "younger" | "older" =
+        ramo === "lobinho" || ramo === "escoteiro" ? "younger" : "older";
+      const specialtyId = toSpecialtySlug(row.specialtyName);
+      const approvedBy = row.approvedBy;
+      const approvedAt = row.approvedAt;
+      const completedAt = row.completedAt;
+
+      if (ramoGroup === "younger") {
+        const itemCount =
+          YOUNGER_SPECIALTY_ITEM_COUNTS[row.specialtyName] ??
+          FALLBACK_ITEM_COUNT;
+        if (!(row.specialtyName in YOUNGER_SPECIALTY_ITEM_COUNTS)) {
+          unknownSpecialties.push(row.specialtyName);
+        }
+
+        for (let i = 0; i < itemCount; i++) {
+          // Check for existing row (idempotency).
+          const existing = await ctx.db
+            .query("specialtyItemCompletions")
+            .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
+              q
+                .eq("userId", row.userId)
+                .eq("ramoGroup", ramoGroup)
+                .eq("specialtyId", specialtyId),
+            )
+            .filter((q) => q.eq(q.field("itemIndex"), i))
+            .first();
+
+          if (existing) {
+            skippedDuplicate++;
+            continue;
+          }
+
+          if (!dryRun) {
+            await ctx.db.insert("specialtyItemCompletions", {
+              userId: row.userId,
+              ramoGroup,
+              specialtyId,
+              itemIndex: i,
+              completedAt,
+              status: "approved",
+              approvedBy,
+              approvedAt,
+            });
+          }
+        }
+        convertedYounger++;
+      } else {
+        // Older group: create all three steps as approved.
+        const steps = ["conhecer", "fazer", "compartilhar"] as const;
+        for (const step of steps) {
+          const existing = await ctx.db
+            .query("specialtyProjectReports")
+            .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
+              q
+                .eq("userId", row.userId)
+                .eq("ramoGroup", ramoGroup)
+                .eq("specialtyId", specialtyId),
+            )
+            .filter((q) => q.eq(q.field("step"), step))
+            .first();
+
+          if (existing) {
+            skippedDuplicate++;
+            continue;
+          }
+
+          if (!dryRun) {
+            await ctx.db.insert("specialtyProjectReports", {
+              userId: row.userId,
+              ramoGroup,
+              specialtyId,
+              step,
+              text: `Migrado do sistema legado (${row.specialtyName})`,
+              completedAt,
+              status: "approved",
+              approvedBy,
+              approvedAt,
+            });
+          }
+        }
+        convertedOlder++;
+      }
+
+      // Delete source row.
+      if (!dryRun) await ctx.db.delete(row._id);
+    }
+
+    return {
+      dryRun,
+      total: all.length,
+      skippedPending,
+      convertedYounger,
+      convertedOlder,
+      skippedDuplicate,
+      unknownSpecialties: [...new Set(unknownSpecialties)],
+    };
+  },
+});

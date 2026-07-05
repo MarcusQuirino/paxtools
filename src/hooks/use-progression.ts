@@ -82,6 +82,11 @@ export function useProgression(targetUserId?: Id<"users">) {
     [data.customActions],
   );
 
+  // TODO (#44): populate earnedSpecialtyBlocoIds from specialtyItemCompletions
+  // counts + catalog alternativeCompletions map. Empty set = bloco-via-specialty
+  // satisfaction temporarily zero for all users until #44 ships.
+  const earnedSpecialtyBlocoIds = useMemo(() => new Set<string>(), []);
+
   const { approved: completedBlockIds, pending: pendingBlockIds } = useMemo(
     () =>
       getCompletedBlockIds(
@@ -89,14 +94,14 @@ export function useProgression(targetUserId?: Id<"users">) {
         approvedActionIds,
         pendingActionIds,
         customActionsWithStatus,
-        specialtiesWithStatus,
+        earnedSpecialtyBlocoIds,
       ),
     [
       eixos,
       approvedActionIds,
       pendingActionIds,
       customActionsWithStatus,
-      specialtiesWithStatus,
+      earnedSpecialtyBlocoIds,
     ],
   );
 

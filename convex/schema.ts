@@ -70,6 +70,66 @@ export default defineSchema({
     .index("by_userId_and_actionId", ["userId", "actionId"])
     .index("by_userId_and_status", ["userId", "status"]),
 
+  // ── Especialidades (new system, #41) ────────────────────────────────────────
+
+  // Item-level specialty tracking for the younger ramoGroup (lobinho + escoteiro).
+  // Identity: (userId, ramoGroup, specialtyId, itemIndex).
+  // Level is computed on read via getSpecialtyLevel(approvedCount, totalItems).
+  // `fileIds` reserved for a future upload UI; not exposed in any current UI.
+  specialtyItemCompletions: defineTable({
+    userId: v.id("users"),
+    ramoGroup: v.union(v.literal("younger"), v.literal("older")),
+    specialtyId: v.string(),
+    itemIndex: v.number(),
+    completedAt: v.number(),
+    status: completionStatus,
+    approvedBy: v.optional(v.id("users")),
+    approvedAt: v.optional(v.number()),
+    fileIds: v.optional(v.array(v.id("_storage"))),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_and_ramoGroup_and_specialtyId", [
+      "userId",
+      "ramoGroup",
+      "specialtyId",
+    ])
+    .index("by_userId_and_status", ["userId", "status"]),
+
+  // Project-step specialty tracking for the older ramoGroup (sênior + pioneiro).
+  // Identity: (userId, ramoGroup, specialtyId, step).
+  // Steps: conhecer → fazer → compartilhar (sequential; UI enforces locking).
+  // Specialty is earned when the compartilhar step is approved.
+  // `fileIds` reserved for a future upload UI.
+  specialtyProjectReports: defineTable({
+    userId: v.id("users"),
+    ramoGroup: v.union(v.literal("younger"), v.literal("older")),
+    specialtyId: v.string(),
+    step: v.union(
+      v.literal("conhecer"),
+      v.literal("fazer"),
+      v.literal("compartilhar"),
+    ),
+    text: v.string(),
+    completedAt: v.number(),
+    status: completionStatus,
+    approvedBy: v.optional(v.id("users")),
+    approvedAt: v.optional(v.number()),
+    fileIds: v.optional(v.array(v.id("_storage"))),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_and_ramoGroup_and_specialtyId", [
+      "userId",
+      "ramoGroup",
+      "specialtyId",
+    ])
+    .index("by_userId_and_status", ["userId", "status"]),
+
+  // ── Legacy specialty system (deprecated, kept for migration) ─────────────
+  // DEPRECATED (#41): replaced by specialtyItemCompletions / specialtyProjectReports.
+  // Kept as the copy-forward SOURCE until `migrations:migrateSpecialtyCompletions`
+  // is verified on prod. Application code no longer writes or reads this table.
+  // Drop the table definition in a follow-up PR once migration is confirmed.
+  //
   // Ramo-scoped (#37): a completion's identity is (userId, ramo, blocoId,
   // specialtyName). `ramo` is optional (backfilled in place by
   // `migrations:backfillRamoOnCompletions`); reads filter to the subject's

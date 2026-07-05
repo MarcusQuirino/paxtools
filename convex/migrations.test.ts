@@ -394,3 +394,184 @@ test("backfillRamoOnCompletions dryRun stamps nothing", async () => {
   );
   expect(ramo ?? null).toBeNull();
 });
+
+// ── migrateSpecialtyCompletions ────────────────────────────────
+
+test("migrateSpecialtyCompletions: approved younger row → specialtyItemCompletions (8 items)", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await makeUser(t);
+
+  await t.run(async (ctx) => {
+    await ctx.db.insert("specialtyCompletions", {
+      userId,
+      ramo: "escoteiro",
+      blocoId: "empreendedorismo-digital",
+      specialtyName: "Empreendedorismo",
+      completedAt: 100,
+      status: "approved",
+    });
+  });
+
+  const res = await t.mutation(internal.migrations.migrateSpecialtyCompletions, {});
+  expect(res.convertedYounger).toBe(1);
+  expect(res.convertedOlder).toBe(0);
+  expect(res.skippedPending).toBe(0);
+
+  const items = await t.run(async (ctx) =>
+    ctx.db.query("specialtyItemCompletions").collect(),
+  );
+  // Empreendedorismo has 8 items in the known map
+  expect(items.length).toBe(8);
+  for (const item of items) {
+    expect(item.userId).toBe(userId);
+    expect(item.ramoGroup).toBe("younger");
+    expect(item.specialtyId).toBe("empreendedorismo");
+    expect(item.status).toBe("approved");
+  }
+  const indices = new Set(items.map((i) => i.itemIndex));
+  expect(indices.size).toBe(8);
+
+  // Source row deleted
+  const remaining = await t.run(async (ctx) =>
+    ctx.db.query("specialtyCompletions").collect(),
+  );
+  expect(remaining.length).toBe(0);
+});
+
+test("migrateSpecialtyCompletions: approved older row → specialtyProjectReports (3 steps)", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await makeUser(t);
+
+  await t.run(async (ctx) => {
+    await ctx.db.insert("specialtyCompletions", {
+      userId,
+      ramo: "senior",
+      blocoId: "ciencias-humanas",
+      specialtyName: "Ciências Humanas",
+      completedAt: 200,
+      status: "approved",
+    });
+  });
+
+  const res = await t.mutation(internal.migrations.migrateSpecialtyCompletions, {});
+  expect(res.convertedOlder).toBe(1);
+  expect(res.convertedYounger).toBe(0);
+
+  const reports = await t.run(async (ctx) =>
+    ctx.db.query("specialtyProjectReports").collect(),
+  );
+  expect(reports.length).toBe(3);
+  const steps = new Set(reports.map((r) => r.step));
+  expect(steps.has("conhecer")).toBe(true);
+  expect(steps.has("fazer")).toBe(true);
+  expect(steps.has("compartilhar")).toBe(true);
+  for (const r of reports) {
+    expect(r.userId).toBe(userId);
+    expect(r.ramoGroup).toBe("older");
+    expect(r.specialtyId).toBe("ciencias-humanas");
+    expect(r.status).toBe("approved");
+  }
+});
+
+test("migrateSpecialtyCompletions: pending rows are dropped without conversion", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await makeUser(t);
+
+  await t.run(async (ctx) => {
+    await ctx.db.insert("specialtyCompletions", {
+      userId,
+      ramo: "escoteiro",
+      blocoId: "some-bloco",
+      specialtyName: "Yoga",
+      completedAt: 50,
+      status: "pending",
+    });
+  });
+
+  const res = await t.mutation(internal.migrations.migrateSpecialtyCompletions, {});
+  expect(res.skippedPending).toBe(1);
+  expect(res.convertedYounger).toBe(0);
+
+  const items = await t.run(async (ctx) =>
+    ctx.db.query("specialtyItemCompletions").collect(),
+  );
+  expect(items.length).toBe(0);
+
+  // Source row deleted even for pending
+  const remaining = await t.run(async (ctx) =>
+    ctx.db.query("specialtyCompletions").collect(),
+  );
+  expect(remaining.length).toBe(0);
+});
+
+test("migrateSpecialtyCompletions: idempotent (second run skips duplicates)", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await makeUser(t);
+
+  await t.run(async (ctx) => {
+    await ctx.db.insert("specialtyCompletions", {
+      userId,
+      ramo: "lobinho",
+      blocoId: "some-bloco",
+      specialtyName: "Horticultura",
+      completedAt: 100,
+      status: "approved",
+    });
+  });
+
+  // First run
+  await t.mutation(internal.migrations.migrateSpecialtyCompletions, {});
+  const afterFirst = await t.run(async (ctx) =>
+    ctx.db.query("specialtyItemCompletions").collect(),
+  );
+  expect(afterFirst.length).toBe(6); // Horticultura = 6 items
+
+  // Seed a second specialtyCompletions row to test idempotency
+  await t.run(async (ctx) => {
+    await ctx.db.insert("specialtyCompletions", {
+      userId,
+      ramo: "lobinho",
+      blocoId: "other-bloco",
+      specialtyName: "Horticultura",
+      completedAt: 200,
+      status: "approved",
+    });
+  });
+
+  // Second run — existing items skipped
+  const res2 = await t.mutation(internal.migrations.migrateSpecialtyCompletions, {});
+  expect(res2.skippedDuplicate).toBe(6); // all 6 items were already present
+  const afterSecond = await t.run(async (ctx) =>
+    ctx.db.query("specialtyItemCompletions").collect(),
+  );
+  expect(afterSecond.length).toBe(6); // unchanged
+});
+
+test("migrateSpecialtyCompletions: dryRun writes nothing", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await makeUser(t);
+
+  await t.run(async (ctx) => {
+    await ctx.db.insert("specialtyCompletions", {
+      userId,
+      ramo: "escoteiro",
+      blocoId: "b1",
+      specialtyName: "Acampamento",
+      completedAt: 1,
+      status: "approved",
+    });
+  });
+
+  const res = await t.mutation(internal.migrations.migrateSpecialtyCompletions, { dryRun: true });
+  expect(res.convertedYounger).toBe(1);
+
+  const items = await t.run(async (ctx) =>
+    ctx.db.query("specialtyItemCompletions").collect(),
+  );
+  expect(items.length).toBe(0); // dryRun — nothing written
+
+  const remaining = await t.run(async (ctx) =>
+    ctx.db.query("specialtyCompletions").collect(),
+  );
+  expect(remaining.length).toBe(1); // source not deleted in dryRun
+});
