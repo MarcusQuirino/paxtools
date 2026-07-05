@@ -124,11 +124,14 @@ export default defineSchema({
     ])
     .index("by_userId_and_status", ["userId", "status"]),
 
-  // ── Legacy specialty system (deprecated, kept for migration) ─────────────
+  // ── Legacy specialty system (deprecated, still live until #42–44 ship) ──────
   // DEPRECATED (#41): replaced by specialtyItemCompletions / specialtyProjectReports.
-  // Kept as the copy-forward SOURCE until `migrations:migrateSpecialtyCompletions`
-  // is verified on prod. Application code no longer writes or reads this table.
-  // Drop the table definition in a follow-up PR once migration is confirmed.
+  // Still written by `toggleSpecialty` and read by `getMyCompletions` /
+  // `getCompletionsForUser` — kept live so the existing specialty UI keeps working
+  // during the migration window. The earned-set contribution to bloco completion is
+  // already disabled (earnedSpecialtyBlocoIds=∅ in #41; wired in #44).
+  // Full purge (toggleSpecialty + reads + UI) deferred to #42–44.
+  // Drop the table definition once #42–44 land and migration is confirmed on prod.
   //
   // Ramo-scoped (#37): a completion's identity is (userId, ramo, blocoId,
   // specialtyName). `ramo` is optional (backfilled in place by

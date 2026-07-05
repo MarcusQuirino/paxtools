@@ -45,9 +45,11 @@ export async function readCurrentRamoIrrItems(
 
 /**
  * @deprecated Use specialtyItemCompletions / specialtyProjectReports instead.
- * Kept for the migration (`migrations:migrateSpecialtyCompletions`) to read
- * existing rows and produce item records. Will be dropped once prod data is
- * verified. Application code no longer reads this table.
+ * Still called by `getMyCompletions` / `getCompletionsForUser` to serve the
+ * legacy specialty display until #42–44 replace it. Also used by
+ * `migrations:migrateSpecialtyCompletions` to read rows for conversion.
+ * Will be removed once the new specialty UI (#42–44) ships and migration
+ * is confirmed on prod.
  */
 export async function readCurrentRamoSpecialties(
   ctx: QueryCtx | MutationCtx,
