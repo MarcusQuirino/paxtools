@@ -4,7 +4,7 @@ import { Award, Clock, ArrowRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { PlanStar } from "./plan-star";
 import { encodePlanKey } from "@/lib/plan-keys";
-import { toSpecialtySlug } from "@/lib/completion-logic";
+import { toCanonicalSpecialtyId } from "@/lib/completion-logic";
 
 type SpecialtySectionProps = {
   blocoId: string;
@@ -105,7 +105,7 @@ export function SpecialtySection({
                 {alt.type === "especialidade" && (
                   <Link
                     to="/especialidades"
-                    search={{ specialty: toSpecialtySlug(item) }}
+                    search={{ specialty: toCanonicalSpecialtyId(item) }}
                     onClick={(e) => e.stopPropagation()}
                     className="flex items-center gap-0.5 text-xs font-medium text-primary hover:underline shrink-0"
                   >

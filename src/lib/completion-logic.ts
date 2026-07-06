@@ -82,6 +82,37 @@ export function toSpecialtySlug(name: string): string {
 }
 
 /**
+ * Legacy specialty names (stored in old `specialtyCompletions` rows and still
+ * present in the progression catalog's `alternativeCompletions`) whose slug
+ * does not match the 2025 guide's catalog id. Maps legacy slug → canonical
+ * catalog id so old data and old names resolve to the current catalog entry.
+ *
+ * Known legacy names with NO canonical counterpart (left unmapped on purpose;
+ * the migration reports them instead of guessing):
+ *   - "Noções Desportivas" — dropped from the 2025 guide
+ *   - "Informações Turísticas" — in the 2025 guide but missing from our catalog
+ */
+export const LEGACY_SPECIALTY_SLUG_ALIASES: Record<string, string> = {
+  // Younger: renamed to "Geologia" in the 2025 guide.
+  "ciencias-da-terra": "geologia",
+  // Younger: renamed to "Tradições dos Povos Originários" in the 2025 guide.
+  "tradicoes-dos-povos-indigenas": "tradicoes-dos-povos-originarios",
+  // Older: the guide's name is "Natureza e Ciências Naturais".
+  "natureza-e-ciencias-ambientais": "natureza-e-ciencias-naturais",
+};
+
+/**
+ * Convert a specialty display name to its canonical catalog id: slugify, then
+ * resolve legacy renames via LEGACY_SPECIALTY_SLUG_ALIASES. Use this (not
+ * `toSpecialtySlug`) whenever a name must resolve to a catalog entry — the
+ * migration, earned-specialty matching, and deep-links all go through here.
+ */
+export function toCanonicalSpecialtyId(name: string): string {
+  const slug = toSpecialtySlug(name);
+  return LEGACY_SPECIALTY_SLUG_ALIASES[slug] ?? slug;
+}
+
+/**
  * Compute the specialty level (0, 1, or 2) from approved item count.
  *
  * - Level 2: all items approved (approvedCount === totalItems)
@@ -138,9 +169,9 @@ export function getEarnedSpecialtyIds(
  * specialties is earned.
  *
  * The catalog stores alternative-completion entries as specialty *display
- * names*; earned specialties are keyed by *slug*. Names are slugified via
- * `toSpecialtySlug` to bridge the two — the same slug function the catalog and
- * migration use, so a name that has a catalog entry resolves to its id.
+ * names*; earned specialties are keyed by *catalog id*. Names resolve via
+ * `toCanonicalSpecialtyId` — the same resolver the migration and deep-links
+ * use, so legacy renames (e.g. "Ciências da Terra" → geologia) still match.
  */
 export function getEarnedSpecialtyBlocoIds(
   eixos: Eixo[],
@@ -154,7 +185,7 @@ export function getEarnedSpecialtyBlocoIds(
       for (const alt of bloco.alternativeCompletions) {
         if (alt.type !== "especialidade") continue;
         for (const name of alt.items) {
-          if (earnedSpecialtyIds.has(toSpecialtySlug(name))) {
+          if (earnedSpecialtyIds.has(toCanonicalSpecialtyId(name))) {
             blocoIds.add(bloco.id);
           }
         }

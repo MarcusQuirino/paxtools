@@ -504,6 +504,79 @@ test("migrateSpecialtyCompletions: pending rows are dropped without conversion",
   expect(remaining.length).toBe(0);
 });
 
+test("migrateSpecialtyCompletions: legacy renamed specialty converts under its canonical catalog id", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await makeUser(t);
+
+  await t.run(async (ctx) => {
+    await ctx.db.insert("specialtyCompletions", {
+      userId,
+      ramo: "escoteiro",
+      blocoId: "preservacao-biodiversidade",
+      specialtyName: "Ciências da Terra", // renamed to Geologia in the 2025 guide
+      completedAt: 100,
+      status: "approved",
+    });
+  });
+
+  const res = await t.mutation(internal.migrations.migrateSpecialtyCompletions, {});
+  expect(res.convertedYounger).toBe(1);
+  expect(res.skippedUnknown).toBe(0);
+
+  const items = await t.run(async (ctx) =>
+    ctx.db.query("specialtyItemCompletions").collect(),
+  );
+  // Geologia has 6 catalog items; all written under the canonical id.
+  expect(items.length).toBe(6);
+  for (const item of items) {
+    expect(item.specialtyId).toBe("geologia");
+    expect(item.status).toBe("approved");
+  }
+});
+
+test("migrateSpecialtyCompletions: unknown names are left in place and reported", async () => {
+  const t = convexTest(schema, modules);
+  const userId = await makeUser(t);
+
+  await t.run(async (ctx) => {
+    // An insígnia and a retired specialty — neither has a catalog entry.
+    await ctx.db.insert("specialtyCompletions", {
+      userId,
+      ramo: "escoteiro",
+      blocoId: "vida-em-equipe",
+      specialtyName: "Insígnia do Aprender",
+      completedAt: 100,
+      status: "approved",
+    });
+    await ctx.db.insert("specialtyCompletions", {
+      userId,
+      ramo: "escoteiro",
+      blocoId: "habitos-saudaveis",
+      specialtyName: "Noções Desportivas",
+      completedAt: 200,
+      status: "approved",
+    });
+  });
+
+  const res = await t.mutation(internal.migrations.migrateSpecialtyCompletions, {});
+  expect(res.convertedYounger).toBe(0);
+  expect(res.skippedUnknown).toBe(2);
+  expect(res.unknownSpecialties.sort()).toEqual([
+    "Insígnia do Aprender",
+    "Noções Desportivas",
+  ]);
+
+  // Nothing fabricated, nothing deleted.
+  const items = await t.run(async (ctx) =>
+    ctx.db.query("specialtyItemCompletions").collect(),
+  );
+  expect(items.length).toBe(0);
+  const remaining = await t.run(async (ctx) =>
+    ctx.db.query("specialtyCompletions").collect(),
+  );
+  expect(remaining.length).toBe(2);
+});
+
 test("migrateSpecialtyCompletions: idempotent (second run skips duplicates)", async () => {
   const t = convexTest(schema, modules);
   const userId = await makeUser(t);

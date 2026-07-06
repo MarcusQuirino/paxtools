@@ -7,6 +7,7 @@ import {
   getEarnedSpecialtyBlocoIds,
   getSpecialtyLevel,
   toSpecialtySlug,
+  toCanonicalSpecialtyId,
   getCurrentStage,
   getNextStage,
   getBlocksToIrr,
@@ -485,6 +486,23 @@ describe("getEarnedSpecialtyBlocoIds", () => {
     const result = getEarnedSpecialtyBlocoIds(eixos, new Set(["administracao"]));
     expect(result.has("plain-bloco")).toBe(false);
   });
+
+  it("matches legacy-named alternatives via the canonical id", () => {
+    // The progression catalog still says "Ciências da Terra"; the 2025
+    // specialty catalog renamed it to Geologia. Earning "geologia" must
+    // satisfy the bloco.
+    const legacyBloco = makeBloco({
+      id: "legacy-named-bloco",
+      alternativeCompletions: [
+        { type: "especialidade", items: ["Ciências da Terra"] },
+      ],
+    });
+    const result = getEarnedSpecialtyBlocoIds(
+      [makeEixo([legacyBloco])],
+      new Set(["geologia"]),
+    );
+    expect(result).toEqual(new Set(["legacy-named-bloco"]));
+  });
 });
 
 // ── getCurrentStage ────────────────────────────────────────────
@@ -656,5 +674,28 @@ describe("toSpecialtySlug", () => {
   it("is stable — same input always gives same slug", () => {
     const name = "Prevenção ao Bullying";
     expect(toSpecialtySlug(name)).toBe(toSpecialtySlug(name));
+  });
+});
+
+// ── toCanonicalSpecialtyId ─────────────────────────────────────
+
+describe("toCanonicalSpecialtyId", () => {
+  it("resolves 2025-guide renames to catalog ids", () => {
+    expect(toCanonicalSpecialtyId("Ciências da Terra")).toBe("geologia");
+    expect(toCanonicalSpecialtyId("Tradições dos Povos Indígenas")).toBe(
+      "tradicoes-dos-povos-originarios",
+    );
+    expect(toCanonicalSpecialtyId("Natureza e Ciências Ambientais")).toBe(
+      "natureza-e-ciencias-naturais",
+    );
+  });
+
+  it("passes non-aliased names through as plain slugs", () => {
+    expect(toCanonicalSpecialtyId("Acampamento")).toBe("acampamento");
+    expect(toCanonicalSpecialtyId("Administração")).toBe("administracao");
+    // Retired specialty with no canonical counterpart stays as its own slug.
+    expect(toCanonicalSpecialtyId("Noções Desportivas")).toBe(
+      "nocoes-desportivas",
+    );
   });
 });
