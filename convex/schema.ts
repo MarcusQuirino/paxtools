@@ -97,9 +97,9 @@ export default defineSchema({
 
   // Project-step specialty tracking for the older ramoGroup (sênior + pioneiro).
   // Identity: (userId, ramoGroup, specialtyId, step).
-  // Steps: conhecer → fazer → compartilhar (sequential; UI enforces locking).
-  // Specialty is earned when the compartilhar step is approved.
-  // `fileIds` reserved for a future upload UI.
+  // Steps: conhecer → fazer → compartilhar (independent; written/approved in any
+  // order — the ordering is presentational only). Specialty is earned when all
+  // three steps are approved (ADR 0002). `fileIds` reserved for a future upload UI.
   specialtyProjectReports: defineTable({
     userId: v.id("users"),
     ramoGroup: v.union(v.literal("younger"), v.literal("older")),

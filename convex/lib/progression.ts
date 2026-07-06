@@ -6,6 +6,7 @@ import {
   getEarnedSpecialtyIds,
   getEarnedSpecialtyBlocoIds,
   isIrrComplete,
+  toCanonicalSpecialtyId,
 } from "../../src/lib/completion-logic";
 import { getEixosForRamo, type Ramo } from "../../src/data/progression-data";
 import { getRamoRules } from "../../src/data/progression-rules";
@@ -95,24 +96,38 @@ export async function readCurrentRamoCustomActions(
 }
 
 /**
- * Compute what a user has earned *via especialidade* (#44): for each
- * younger-catalog specialty earned at level ≥ 1 (from approved
- * `specialtyItemCompletions` counts), returns both the earned specialty ids and
- * the bloco(s) whose `alternativeCompletions` name them. `blocoIds` drives bloco
- * completion; `specialtyIds` lets the UI mark the exact specialty checkbox
+ * Compute what a user has earned *via especialidade*: the earned specialty ids
+ * and the bloco(s) whose `alternativeCompletions` name them. `blocoIds` drives
+ * bloco completion; `specialtyIds` lets the UI mark the exact specialty checkbox
  * (blocos list many alternatives, so the blocoId alone can't pick which).
- * Purely derived — no extra storage. Older ramoGroups have no item completions,
- * so both are naturally empty for them (project auto-completion is out of #44).
+ * Purely derived — no extra storage.
+ *
+ * - Younger (#44): a specialty is earned at level ≥ 1 from approved
+ *   `specialtyItemCompletions` counts.
+ * - Older (ADR 0002): a specialty is earned when all three of its project steps
+ *   (`specialtyProjectReports`) are approved — binary, no levels.
  */
 export async function readEarnedSpecialtyBlocoIds(
   ctx: QueryCtx | MutationCtx,
   userId: Id<"users">,
   ramo: Ramo | null | undefined,
 ): Promise<{ blocoIds: Set<string>; specialtyIds: Set<string> }> {
-  if (ramoGroupForRamo(ramo) !== "younger") {
-    return { blocoIds: new Set(), specialtyIds: new Set() };
-  }
+  const specialtyIds =
+    ramoGroupForRamo(ramo) === "older"
+      ? await readEarnedOlderSpecialtyIds(ctx, userId)
+      : await readEarnedYoungerSpecialtyIds(ctx, userId);
 
+  return {
+    blocoIds: getEarnedSpecialtyBlocoIds(getEixosForRamo(ramo), specialtyIds),
+    specialtyIds,
+  };
+}
+
+/** Younger: earned specialty ids from approved item-completion counts (#44). */
+async function readEarnedYoungerSpecialtyIds(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+): Promise<Set<string>> {
   // Approved = anything not explicitly pending (matches the /especialidades read
   // and migration, which write status "approved" but treat a missing status as
   // approved too).
@@ -124,15 +139,41 @@ export async function readEarnedSpecialtyBlocoIds(
     (i) => i.ramoGroup === "younger" && i.status !== "pending",
   );
 
-  const specialtyIds = getEarnedSpecialtyIds(
+  return getEarnedSpecialtyIds(
     approvedItems,
     (specialtyId) => YOUNGER_SPECIALTY_BY_ID.get(specialtyId)?.items.length ?? 0,
   );
+}
 
-  return {
-    blocoIds: getEarnedSpecialtyBlocoIds(getEixosForRamo(ramo), specialtyIds),
-    specialtyIds,
-  };
+/**
+ * Older (ADR 0002): a specialty is earned once all three project steps are
+ * approved. Compares `status === "approved"` explicitly so a hypothetical
+ * non-approved/non-pending row could never be miscounted as earned.
+ */
+async function readEarnedOlderSpecialtyIds(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+): Promise<Set<string>> {
+  const reports = await ctx.db
+    .query("specialtyProjectReports")
+    .withIndex("by_userId", (q) => q.eq("userId", userId))
+    .take(2000);
+
+  const approvedStepsBySpecialty = new Map<string, Set<string>>();
+  for (const r of reports) {
+    if (r.ramoGroup !== "older" || r.status !== "approved") continue;
+    const steps = approvedStepsBySpecialty.get(r.specialtyId) ?? new Set();
+    steps.add(r.step);
+    approvedStepsBySpecialty.set(r.specialtyId, steps);
+  }
+
+  const earned = new Set<string>();
+  for (const [specialtyId, steps] of approvedStepsBySpecialty) {
+    // Exactly three distinct steps exist (conhecer/fazer/compartilhar), and a
+    // row is unique per (user, group, specialty, step), so size 3 ⇒ all approved.
+    if (steps.size === 3) earned.add(toCanonicalSpecialtyId(specialtyId));
+  }
+  return earned;
 }
 
 export type ProgressionSnapshot = {

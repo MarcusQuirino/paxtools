@@ -396,8 +396,9 @@ export const rejectSpecialtyItems = mutation({
 // Older ramoGroup (sênior + pioneiro) — project-report steps (#43)
 //
 // Each especialidade is a three-step project: conhecer → fazer → compartilhar.
-// Steps are sequential: a step can only be submitted once the prior step is
-// approved. The specialty is earned when the compartilhar step is approved.
+// The steps are independent — an escoteiro may write and submit them in any
+// order, and an escotista approves each on its own. The specialty is earned
+// (binarily — no levels) once all three steps are approved (ADR 0002).
 // ---------------------------------------------------------------------------
 
 const STEP_ORDER = ["conhecer", "fazer", "compartilhar"] as const;
@@ -409,16 +410,10 @@ const projectStep = v.union(
   v.literal("compartilhar"),
 );
 
-/** The step that must be approved before `step` can be submitted (null for conhecer). */
-function prerequisiteStep(step: ProjectStep): ProjectStep | null {
-  const idx = STEP_ORDER.indexOf(step);
-  return idx <= 0 ? null : STEP_ORDER[idx - 1]!;
-}
-
 /**
  * Return all specialtyProjectReports for the current user.
  * The older /especialidades UI uses this to render each step's status and
- * to derive sequential locking (a step is locked until its predecessor is approved).
+ * to show how many of the three steps are approved.
  */
 export const getMySpecialtyReports = query({
   args: {},
@@ -479,10 +474,32 @@ async function findReport(
 }
 
 /**
+ * True when every step *other than* `doc.step` is already approved — i.e.
+ * approving `doc` would leave all three steps approved and earn the specialty.
+ */
+async function otherStepsAllApproved(
+  ctx: QueryCtx,
+  doc: Doc<"specialtyProjectReports">,
+): Promise<boolean> {
+  const reports = await ctx.db
+    .query("specialtyProjectReports")
+    .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
+      q
+        .eq("userId", doc.userId)
+        .eq("ramoGroup", doc.ramoGroup)
+        .eq("specialtyId", doc.specialtyId),
+    )
+    .collect();
+  const statusByStep = new Map(reports.map((r) => [r.step, r.status]));
+  return STEP_ORDER.filter((s) => s !== doc.step).every(
+    (s) => statusByStep.get(s) === "approved",
+  );
+}
+
+/**
  * Submit (create or replace) a project-step report for the current user.
  *
- * - Sequential lock: a step may only be submitted once its predecessor step is
- *   `"approved"` (conhecer has no predecessor). Enforced server-side.
+ * - Steps are independent: any step may be submitted in any order (ADR 0002).
  * - If a pending row already exists for this step → its text is replaced and it
  *   stays pending (re-submit).
  * - If the row is already approved → throws (escoteiro cannot overwrite an
@@ -520,23 +537,6 @@ export const submitSpecialtyStep = mutation({
     const text = args.text.trim();
     if (!text) throw new Error("O relato não pode estar vazio.");
 
-    // Sequential lock: predecessor step must be approved.
-    const prereq = prerequisiteStep(args.step);
-    if (prereq) {
-      const prev = await findReport(
-        ctx,
-        effectiveUserId,
-        ramoGroup,
-        args.specialtyId,
-        prereq,
-      );
-      if (!prev || prev.status !== "approved") {
-        throw new Error(
-          `A etapa "${prereq}" precisa ser aprovada antes de enviar "${args.step}".`,
-        );
-      }
-    }
-
     const now = Date.now();
     const existing = await findReport(
       ctx,
@@ -572,17 +572,19 @@ export const submitSpecialtyStep = mutation({
       });
     }
 
-    // The earned cascade (compartilhar → specialty earned → level-up toasts) runs
-    // in approveSpecialtyStep, where a pre-write snapshot is available to diff
-    // against. Direct escotista-on-behalf writes skip toasts (rare path).
+    // The earned cascade (all three steps approved → specialty earned → level-up
+    // toasts) runs in approveSpecialtyStep, where a pre-write snapshot is
+    // available to diff against. Direct escotista-on-behalf writes skip toasts
+    // (rare path).
     return [];
   },
 });
 
 /**
  * Approve a pending project-step report.
- * When the approved step is `"compartilhar"`, the specialty is earned and the
- * level-up cascade runs (same mechanism as bloco/action approvals).
+ * When this approval makes all three steps approved, the specialty is earned and
+ * the level-up cascade runs (same mechanism as bloco/action approvals). Which
+ * step is approved last does not matter — steps are unordered (ADR 0002).
  */
 export const approveSpecialtyStep = mutation({
   args: { reportId: v.id("specialtyProjectReports") },
@@ -594,8 +596,10 @@ export const approveSpecialtyStep = mutation({
 
     const { target } = await assertCanActOnEscoteiro(ctx, doc.userId);
 
-    const isFinalStep = doc.step === "compartilhar";
-    const before = isFinalStep
+    // This approval earns the specialty iff the other two steps are already
+    // approved. Snapshot before the write so the cascade can diff against it.
+    const completesSpecialty = await otherStepsAllApproved(ctx, doc);
+    const before = completesSpecialty
       ? await snapshotProgression(ctx, doc.userId)
       : null;
 
@@ -612,7 +616,7 @@ export const approveSpecialtyStep = mutation({
       summary: `Aprovou etapa "${doc.step}" da especialidade: ${doc.specialtyId}`,
     });
 
-    if (isFinalStep && before) {
+    if (before) {
       return detectLevelUps(ctx, user, target, before);
     }
     return [];

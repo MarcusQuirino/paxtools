@@ -16,7 +16,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronDown, Award, Trophy, Lock, CheckCircle2 } from "lucide-react";
+import { ChevronDown, Award, Trophy, CheckCircle2 } from "lucide-react";
 import {
   YOUNGER_SPECIALTIES_BY_EIXO,
   type YoungSpecialty,
@@ -487,7 +487,6 @@ function StepCard({
   step,
   suggestions,
   row,
-  locked,
   onSubmit,
   isSubmitting,
 }: {
@@ -495,7 +494,6 @@ function StepCard({
   step: Step;
   suggestions: string[];
   row: ReportRow | undefined;
-  locked: boolean;
   onSubmit: (specialtyId: string, step: Step, text: string) => void;
   isSubmitting: boolean;
 }) {
@@ -509,19 +507,13 @@ function StepCard({
     setText(row?.text ?? "");
   }, [row?._id, row?.text]);
 
-  const canEdit = !locked && !isApproved;
+  const canEdit = !isApproved;
   const dirty = text.trim() !== (row?.text ?? "").trim();
 
   return (
     <div
       className={`rounded-md border-2 border-black p-3 shadow-[2px_2px_0px_0px_#000] ${
-        isApproved
-          ? "bg-green-50/60"
-          : locked
-            ? "bg-muted/40"
-            : isPending
-              ? "bg-amber-50/60"
-              : "bg-card"
+        isApproved ? "bg-green-50/60" : isPending ? "bg-amber-50/60" : "bg-card"
       }`}
     >
       <div className="flex items-center gap-2 mb-2">
@@ -545,24 +537,10 @@ function StepCard({
             Pendente
           </Badge>
         )}
-        {locked && !isApproved && (
-          <Badge
-            variant="outline"
-            className="gap-1 text-xs border-muted-foreground/40 text-muted-foreground"
-          >
-            <Lock className="size-3" />
-            Bloqueado
-          </Badge>
-        )}
       </div>
 
-      {locked && !isApproved ? (
-        <p className="text-xs text-muted-foreground">
-          Conclua e tenha a etapa anterior aprovada para desbloquear.
-        </p>
-      ) : (
-        <>
-          {suggestions.length > 0 && (
+      <>
+        {suggestions.length > 0 && (
             <div className="mb-2">
               <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1">
                 Sugestões
@@ -604,8 +582,7 @@ function StepCard({
               </Button>
             </div>
           )}
-        </>
-      )}
+      </>
     </div>
   );
 }
@@ -625,20 +602,12 @@ function OlderSpecialtyCard({
 }) {
   const { ref, open, setOpen } = useDeepLinkHighlight(!!highlighted);
 
-  const conhecer = reports.get("conhecer");
-  const fazer = reports.get("fazer");
-  const compartilhar = reports.get("compartilhar");
-  const earned = compartilhar?.status === "approved";
-
-  const isLocked = (step: Step): boolean => {
-    if (step === "conhecer") return false;
-    if (step === "fazer") return conhecer?.status !== "approved";
-    return fazer?.status !== "approved";
-  };
-
   const approvedCount = STEP_ORDER.filter(
     (s) => reports.get(s)?.status === "approved",
   ).length;
+  // Earned only once all three steps are approved (ADR 0002).
+  const earned = approvedCount === 3;
+
   const suggestionsFor = (step: Step): string[] =>
     step === "conhecer"
       ? specialty.conhecerSuggestions
@@ -690,7 +659,6 @@ function OlderSpecialtyCard({
                 step={step}
                 suggestions={suggestionsFor(step)}
                 row={reports.get(step)}
-                locked={isLocked(step)}
                 onSubmit={onSubmit}
                 isSubmitting={isSubmitting}
               />
@@ -722,10 +690,11 @@ function OlderEixoSection({
   );
   const meta = EIXO_LABELS[eixoId] ?? { name: eixoId, color: "#666" };
 
-  const earnedCount = specialties.filter(
-    (s) =>
-      reportsBySpecialty.get(s.id)?.get("compartilhar")?.status === "approved",
-  ).length;
+  // Earned = all three steps approved (ADR 0002).
+  const earnedCount = specialties.filter((s) => {
+    const reports = reportsBySpecialty.get(s.id);
+    return STEP_ORDER.every((step) => reports?.get(step)?.status === "approved");
+  }).length;
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -813,8 +782,9 @@ function OlderEspecialidadesContent({ highlightId }: { highlightId?: string }) {
         <PlanNav />
 
         <p className="text-xs text-muted-foreground px-1">
-          Cada especialidade é um projeto em três etapas: Conhecer → Fazer →
-          Compartilhar. Cada etapa é liberada após a anterior ser aprovada.
+          Cada especialidade é um projeto em três etapas: Conhecer, Fazer e
+          Compartilhar. Você pode escrever os relatos em qualquer ordem; a
+          especialidade é conquistada quando as três etapas forem aprovadas.
         </p>
 
         <div className="space-y-2">

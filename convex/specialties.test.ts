@@ -452,24 +452,30 @@ describe("submitSpecialtyStep", () => {
     expect(rows[0]!.text).toBe("Meu relato de conhecer.");
   });
 
-  test("submit fazer before conhecer approved → throws (sequential lock)", async () => {
+  test("steps are independent — submit in any order (compartilhar first)", async () => {
     const t = convexTest(schema, modules);
     const { escoteiroId } = await seedOlderGroup(t);
 
-    // conhecer submitted but only pending
+    // No sequential lock (ADR 0002): submit the last step first, with no
+    // predecessor written or approved.
     await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
       specialtyId: "comunicacoes",
-      step: "conhecer",
-      text: "Relato conhecer.",
+      step: "compartilhar",
+      text: "Relato compartilhar.",
+    });
+    await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+      specialtyId: "comunicacoes",
+      step: "fazer",
+      text: "Relato fazer.",
     });
 
-    await expect(
-      as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
-        specialtyId: "comunicacoes",
-        step: "fazer",
-        text: "Relato fazer.",
-      }),
-    ).rejects.toThrow();
+    const rows = await reportsFor(t, escoteiroId);
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.status === "pending")).toBe(true);
+    expect(rows.map((r) => r.step).sort((a, b) => a.localeCompare(b))).toEqual([
+      "compartilhar",
+      "fazer",
+    ]);
   });
 
   test("empty text → throws", async () => {
@@ -505,21 +511,16 @@ describe("submitSpecialtyStep", () => {
     expect(rows[0]!.status).toBe("pending");
   });
 
-  test("approve conhecer → unlocks fazer submission", async () => {
+  test("submit fazer while conhecer is only pending → allowed (no lock)", async () => {
     const t = convexTest(schema, modules);
-    const { escoteiroId, escotistaId } = await seedOlderGroup(t);
+    const { escoteiroId } = await seedOlderGroup(t);
 
     await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
       specialtyId: "comunicacoes",
       step: "conhecer",
       text: "Relato conhecer.",
     });
-    const rows = await reportsFor(t, escoteiroId);
-    await as(t, escotistaId).mutation(api.specialties.approveSpecialtyStep, {
-      reportId: rows[0]!._id,
-    });
-
-    // Now fazer should be allowed
+    // conhecer still pending — fazer must submit anyway.
     await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
       specialtyId: "comunicacoes",
       step: "fazer",
@@ -528,8 +529,7 @@ describe("submitSpecialtyStep", () => {
 
     const after = await reportsFor(t, escoteiroId);
     expect(after).toHaveLength(2);
-    const fazer = after.find((r) => r.step === "fazer");
-    expect(fazer?.status).toBe("pending");
+    expect(after.find((r) => r.step === "fazer")?.status).toBe("pending");
   });
 
   test("escoteiro cannot overwrite an approved step", async () => {
@@ -581,8 +581,75 @@ describe("approveSpecialtyStep + rejectSpecialtyStep", () => {
     const rows = await reportsFor(t, escoteiroId);
     expect(rows).toHaveLength(3);
     expect(rows.every((r) => r.status === "approved")).toBe(true);
-    // compartilhar approval returns the level-up toast array (may be empty until #44)
+    // The final approval returns the level-up toast array (ADR 0002).
     expect(Array.isArray(toasts)).toBe(true);
+  });
+
+  test("earned only when all three approved — two approved is not enough", async () => {
+    const t = convexTest(schema, modules);
+    const { escoteiroId, escotistaId } = await seedOlderGroup(t);
+    // "comunicacoes" is named in the senior bloco "criatividade-inovacao".
+    const linkedBlocoId = "criatividade-inovacao";
+
+    const approve = async (step: "conhecer" | "fazer" | "compartilhar") => {
+      await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+        specialtyId: "comunicacoes",
+        step,
+        text: `Relato ${step}.`,
+      });
+      const rows = await reportsFor(t, escoteiroId);
+      const row = rows.find((r) => r.step === step && r.status === "pending")!;
+      await as(t, escotistaId).mutation(api.specialties.approveSpecialtyStep, {
+        reportId: row._id,
+      });
+    };
+
+    await approve("conhecer");
+    await approve("fazer");
+
+    let comp = await as(t, escoteiroId).query(
+      api.progression.getMyCompletions,
+      {},
+    );
+    expect(comp.earnedSpecialtyBlocoIds).not.toContain(linkedBlocoId);
+
+    // The third approval earns the specialty and completes the linked bloco.
+    await approve("compartilhar");
+
+    comp = await as(t, escoteiroId).query(api.progression.getMyCompletions, {});
+    expect(comp.earnedSpecialtyBlocoIds).toContain(linkedBlocoId);
+  });
+
+  test("grant is order-independent — approving conhecer last still earns", async () => {
+    const t = convexTest(schema, modules);
+    const { escoteiroId, escotistaId } = await seedOlderGroup(t);
+
+    // Submit all three up front, then approve in reverse order.
+    for (const step of ["conhecer", "fazer", "compartilhar"] as const) {
+      await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+        specialtyId: "comunicacoes",
+        step,
+        text: `Relato ${step}.`,
+      });
+    }
+    const rows = await reportsFor(t, escoteiroId);
+    const byStep = (s: string) => rows.find((r) => r.step === s)!._id;
+    await as(t, escotistaId).mutation(api.specialties.approveSpecialtyStep, {
+      reportId: byStep("compartilhar"),
+    });
+    await as(t, escotistaId).mutation(api.specialties.approveSpecialtyStep, {
+      reportId: byStep("fazer"),
+    });
+    // conhecer approved last is the one that completes the set.
+    await as(t, escotistaId).mutation(api.specialties.approveSpecialtyStep, {
+      reportId: byStep("conhecer"),
+    });
+
+    const comp = await as(t, escoteiroId).query(
+      api.progression.getMyCompletions,
+      {},
+    );
+    expect(comp.earnedSpecialtyBlocoIds).toContain("criatividade-inovacao");
   });
 
   test("reject a step → row deleted, escoteiro can resubmit", async () => {
