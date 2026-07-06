@@ -16,6 +16,14 @@ master produces a Preview deployment; Vercel keeps the stable
 staging's `SITE_URL` on the staging Convex deployment, which is what makes
 Google OAuth work there.
 
+Vercel Deployment Protection (SSO) is **intentionally disabled** for this
+project: preview/staging URLs are publicly reachable. This is required —
+with protection on, the staging alias sits behind a Vercel login wall,
+which breaks Google sign-in UX and Playwright runs (bypass secrets are a
+Pro feature). Staging holds only seeded test data and disposable accounts,
+so public previews are acceptable. Don't re-enable it without a plan for
+staging auth.
+
 ## What happens on merge to master
 
 1. Vercel builds the frontend with Preview env vars (staging Convex URLs,
@@ -52,6 +60,12 @@ gh workflow run deploy-prod.yml -f tag=v1.5.0
 
 Rollback: re-run the workflow with the previous tag (redeploys old backend
 and frontend), or use Vercel's instant rollback for frontend-only issues.
+
+Pipeline verification status: the master→staging half was exercised
+end-to-end on 2026-07-06 (PR #55: CI gate, convex deploy, migration
+runner, staging alias, test-login). `deploy-prod.yml` has not run yet —
+its first execution is the first real release after PR #55; watch it
+closely that time.
 
 **Rule:** Convex functions must stay backward-compatible with the previous
 frontend for the duration of a release (old frontend + new backend overlap
