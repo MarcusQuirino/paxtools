@@ -31,6 +31,8 @@ export function useProgression(targetUserId?: Id<"users">) {
       status?: string;
     }[];
     irrItems: { itemId: string; status?: string }[];
+    earnedSpecialtyBlocoIds?: string[];
+    earnedSpecialtyIds?: string[];
   }>(queryOptions);
 
   const eixos = useMemo(() => getEixosForRamo(data.ramo), [data.ramo]);
@@ -82,6 +84,21 @@ export function useProgression(targetUserId?: Id<"users">) {
     [data.customActions],
   );
 
+  // Blocos satisfied via an earned especialidade (level ≥ 1). Computed server-side
+  // from approved specialtyItemCompletions counts + the catalog (#44) and returned
+  // as an id list, so the client and snapshotProgression stay in agreement.
+  const earnedSpecialtyBlocoIds = useMemo(
+    () => new Set(data.earnedSpecialtyBlocoIds ?? []),
+    [data.earnedSpecialtyBlocoIds],
+  );
+
+  // Canonical ids of the specialties earned via items (#44), so the bloco view
+  // can mark the exact specialty checkbox — not just know the bloco is satisfied.
+  const earnedSpecialtyIds = useMemo(
+    () => new Set(data.earnedSpecialtyIds ?? []),
+    [data.earnedSpecialtyIds],
+  );
+
   const { approved: completedBlockIds, pending: pendingBlockIds } = useMemo(
     () =>
       getCompletedBlockIds(
@@ -89,14 +106,14 @@ export function useProgression(targetUserId?: Id<"users">) {
         approvedActionIds,
         pendingActionIds,
         customActionsWithStatus,
-        specialtiesWithStatus,
+        earnedSpecialtyBlocoIds,
       ),
     [
       eixos,
       approvedActionIds,
       pendingActionIds,
       customActionsWithStatus,
-      specialtiesWithStatus,
+      earnedSpecialtyBlocoIds,
     ],
   );
 
@@ -141,6 +158,8 @@ export function useProgression(targetUserId?: Id<"users">) {
     customActions: customActionsWithStatus,
     completedBlockIds,
     pendingBlockIds,
+    earnedSpecialtyBlocoIds,
+    earnedSpecialtyIds,
     completedBlockCount,
     pendingBlockCount: pendingBlockIds.size,
     approvedIrrItemIds,

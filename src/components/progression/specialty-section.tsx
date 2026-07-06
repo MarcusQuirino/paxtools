@@ -1,8 +1,10 @@
 import type { AlternativeCompletion, CompletionStatus } from "@/data/types";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Award, Clock } from "lucide-react";
+import { Award, Clock, ArrowRight } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { PlanStar } from "./plan-star";
 import { encodePlanKey } from "@/lib/plan-keys";
+import { getSpecialtyMark, toCanonicalSpecialtyId } from "@/lib/completion-logic";
 
 type SpecialtySectionProps = {
   blocoId: string;
@@ -12,6 +14,8 @@ type SpecialtySectionProps = {
     specialtyName: string;
     status: CompletionStatus;
   }[];
+  /** Canonical ids of specialties earned via items (#44) — mark those boxes read-only. */
+  earnedSpecialtyIds?: Set<string>;
   onToggle: (blocoId: string, specialtyName: string) => void;
   plannedKeys?: Set<string>;
   onTogglePlanned?: (itemKey: string) => void;
@@ -23,6 +27,7 @@ export function SpecialtySection({
   blocoId,
   alternatives,
   completedSpecialties,
+  earnedSpecialtyIds,
   onToggle,
   plannedKeys,
   onTogglePlanned,
@@ -31,10 +36,7 @@ export function SpecialtySection({
 }: SpecialtySectionProps) {
   if (alternatives.length === 0) return null;
 
-  const getStatus = (name: string) =>
-    completedSpecialties.find(
-      (s) => s.blocoId === blocoId && s.specialtyName === name,
-    );
+  const earned = earnedSpecialtyIds ?? new Set<string>();
 
   const isPlanned = (name: string) =>
     !planOnly ||
@@ -63,11 +65,14 @@ export function SpecialtySection({
             {alt.type === "especialidade" ? "Especialidades" : "Insígnias"}
           </div>
           {alt.items.map((item) => {
-            const completion = getStatus(item);
-            const isChecked = !!completion;
-            const isPending = completion?.status === "pending";
-            const isLocked =
-              lockApproved && isChecked && completion?.status === "approved";
+            const { checked: isChecked, pending: isPending, locked: isLocked } =
+              getSpecialtyMark(
+                item,
+                blocoId,
+                completedSpecialties,
+                earned,
+                !!lockApproved,
+              );
             const planKey = encodePlanKey({
               kind: "specialty",
               blocoId,
@@ -86,9 +91,7 @@ export function SpecialtySection({
                   disabled={isLocked}
                   className="size-5"
                   style={
-                    isChecked
-                      ? { opacity: isPending ? 0.4 : 1 }
-                      : undefined
+                    isChecked ? { opacity: isPending ? 0.4 : 1 } : undefined
                   }
                 />
                 <span
@@ -102,6 +105,17 @@ export function SpecialtySection({
                 >
                   {item}
                 </span>
+                {alt.type === "especialidade" && (
+                  <Link
+                    to="/especialidades"
+                    search={{ specialty: toCanonicalSpecialtyId(item) }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-0.5 text-xs font-medium text-primary hover:underline shrink-0"
+                  >
+                    ver
+                    <ArrowRight className="size-3" />
+                  </Link>
+                )}
                 {isPending && (
                   <Clock className="size-3.5 text-slate-400 shrink-0" />
                 )}

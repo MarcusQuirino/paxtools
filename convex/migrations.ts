@@ -1,6 +1,10 @@
 import { internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
+import { toCanonicalSpecialtyId } from "../src/lib/completion-logic";
+import { ramoGroupForRamo } from "./lib/progression";
+import { YOUNGER_SPECIALTY_BY_ID } from "../src/data/specialty-data/younger";
+import { OLDER_SPECIALTY_BY_ID } from "../src/data/specialty-data/older";
 
 const RAMO_PREFIXES = ["lobinho:", "escoteiro:", "senior:", "pioneiro:"];
 
@@ -391,5 +395,164 @@ export const backfillRamoOnCompletions = internalMutation({
     }
 
     return { dryRun, stamped, merged, skipped, perTable };
+  },
+});
+
+// ── Especialidades migration (#41) ───────────────────────────────────────────
+
+/**
+ * One-off migration: convert legacy `specialtyCompletions` rows into the new
+ * `specialtyItemCompletions` (younger) and `specialtyProjectReports` (older)
+ * tables introduced in #41.
+ *
+ * Strategy:
+ *   - Pending rows: dropped without conversion (escoteiros resubmit under the
+ *     new item/step UI).
+ *   - Approved rows (or null-status rows, which prod treats as approved):
+ *       - Younger (lobinho/escoteiro): insert one `specialtyItemCompletions`
+ *         row per catalog item, all approved, carrying approvedBy/approvedAt.
+ *       - Older (senior/pioneiro): insert all three `specialtyProjectReports`
+ *         steps (conhecer/fazer/compartilhar) approved, representing earned.
+ *   - Names resolve to catalog ids via `toCanonicalSpecialtyId` (handles the
+ *     2025-guide renames). Rows whose name still has no catalog entry — e.g.
+ *     insígnias, or "Noções Desportivas" (retired) — are LEFT IN PLACE and
+ *     reported in `unknownSpecialties`, never converted or deleted: writing an
+ *     id the catalog can't resolve would produce rows that can never reach a
+ *     level, and deleting the source would lose the only record.
+ *   - Source rows are deleted after conversion (when dryRun=false).
+ *   - Idempotent: existing target rows for the same (userId, ramoGroup,
+ *     specialtyId, itemIndex/step) are skipped (not duplicated).
+ *
+ * Run:
+ *   bunx convex run migrations:migrateSpecialtyCompletions '{"dryRun": true}'
+ *   bunx convex run migrations:migrateSpecialtyCompletions '{}'
+ */
+export const migrateSpecialtyCompletions = internalMutation({
+  args: { dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const dryRun = args.dryRun ?? false;
+
+    const all = await ctx.db.query("specialtyCompletions").collect();
+
+    let skippedPending = 0;
+    let skippedUnknown = 0;
+    let convertedYounger = 0;
+    let convertedOlder = 0;
+    let skippedDuplicate = 0;
+    const unknownSpecialties: string[] = [];
+
+    for (const row of all) {
+      // Pending rows: drop (no conversion).
+      if (row.status === "pending") {
+        skippedPending++;
+        if (!dryRun) await ctx.db.delete(row._id);
+        continue;
+      }
+
+      const ramoGroup = ramoGroupForRamo(row.ramo ?? "escoteiro");
+      const specialtyId = toCanonicalSpecialtyId(row.specialtyName);
+      const approvedBy = row.approvedBy;
+      const approvedAt = row.approvedAt;
+      const completedAt = row.completedAt;
+
+      if (ramoGroup === "younger") {
+        const catalogEntry = YOUNGER_SPECIALTY_BY_ID.get(specialtyId);
+        if (!catalogEntry) {
+          // No catalog entry (insígnia, retired or missing specialty): leave
+          // the legacy row untouched and report it for manual follow-up.
+          skippedUnknown++;
+          unknownSpecialties.push(row.specialtyName);
+          continue;
+        }
+        const itemCount = catalogEntry.items.length;
+
+        for (let i = 0; i < itemCount; i++) {
+          // Check for existing row (idempotency).
+          const existing = await ctx.db
+            .query("specialtyItemCompletions")
+            .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
+              q
+                .eq("userId", row.userId)
+                .eq("ramoGroup", ramoGroup)
+                .eq("specialtyId", specialtyId),
+            )
+            .filter((q) => q.eq(q.field("itemIndex"), i))
+            .first();
+
+          if (existing) {
+            skippedDuplicate++;
+            continue;
+          }
+
+          if (!dryRun) {
+            await ctx.db.insert("specialtyItemCompletions", {
+              userId: row.userId,
+              ramoGroup,
+              specialtyId,
+              itemIndex: i,
+              completedAt,
+              status: "approved",
+              approvedBy,
+              approvedAt,
+            });
+          }
+        }
+        convertedYounger++;
+      } else {
+        if (!OLDER_SPECIALTY_BY_ID.has(specialtyId)) {
+          skippedUnknown++;
+          unknownSpecialties.push(row.specialtyName);
+          continue;
+        }
+        // Older group: create all three steps as approved.
+        const steps = ["conhecer", "fazer", "compartilhar"] as const;
+        for (const step of steps) {
+          const existing = await ctx.db
+            .query("specialtyProjectReports")
+            .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
+              q
+                .eq("userId", row.userId)
+                .eq("ramoGroup", ramoGroup)
+                .eq("specialtyId", specialtyId),
+            )
+            .filter((q) => q.eq(q.field("step"), step))
+            .first();
+
+          if (existing) {
+            skippedDuplicate++;
+            continue;
+          }
+
+          if (!dryRun) {
+            await ctx.db.insert("specialtyProjectReports", {
+              userId: row.userId,
+              ramoGroup,
+              specialtyId,
+              step,
+              text: `Migrado do sistema legado (${row.specialtyName})`,
+              completedAt,
+              status: "approved",
+              approvedBy,
+              approvedAt,
+            });
+          }
+        }
+        convertedOlder++;
+      }
+
+      // Delete source row.
+      if (!dryRun) await ctx.db.delete(row._id);
+    }
+
+    return {
+      dryRun,
+      total: all.length,
+      skippedPending,
+      skippedUnknown,
+      convertedYounger,
+      convertedOlder,
+      skippedDuplicate,
+      unknownSpecialties: [...new Set(unknownSpecialties)],
+    };
   },
 });

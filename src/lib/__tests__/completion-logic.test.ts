@@ -3,6 +3,12 @@ import type { Action, Bloco, Eixo } from "@/data/types";
 import {
   getBlocoProgress,
   getCompletedBlockIds,
+  getEarnedSpecialtyIds,
+  getEarnedSpecialtyBlocoIds,
+  getSpecialtyLevel,
+  getSpecialtyMark,
+  toSpecialtySlug,
+  toCanonicalSpecialtyId,
   getCurrentStage,
   getNextStage,
   getBlocksToIrr,
@@ -222,12 +228,53 @@ describe("getBlocoProgress", () => {
   });
 });
 
+// ── getSpecialtyLevel ─────────────────────────────────────────
+
+describe("getSpecialtyLevel", () => {
+  it("returns 0 when no items approved", () => {
+    expect(getSpecialtyLevel(0, 8)).toBe(0);
+  });
+
+  it("returns 0 when approved count is below the half threshold", () => {
+    expect(getSpecialtyLevel(1, 8)).toBe(0);
+    expect(getSpecialtyLevel(3, 8)).toBe(0);
+  });
+
+  it("returns 1 when approved count exactly meets the half threshold", () => {
+    expect(getSpecialtyLevel(4, 8)).toBe(1);
+    expect(getSpecialtyLevel(3, 6)).toBe(1);
+  });
+
+  it("returns 1 when above half but below all", () => {
+    expect(getSpecialtyLevel(5, 8)).toBe(1);
+    expect(getSpecialtyLevel(7, 8)).toBe(1);
+  });
+
+  it("returns 2 when all items approved", () => {
+    expect(getSpecialtyLevel(8, 8)).toBe(2);
+    expect(getSpecialtyLevel(6, 6)).toBe(2);
+  });
+
+  it("returns 0 when totalItems is 0", () => {
+    expect(getSpecialtyLevel(0, 0)).toBe(0);
+  });
+
+  it("works for odd total: half rounds down, so ≥ ceil is level 1", () => {
+    // 7 items: half = 3.5, so 4 approved → level 1 (4 >= 3.5)
+    expect(getSpecialtyLevel(3, 7)).toBe(0);
+    expect(getSpecialtyLevel(4, 7)).toBe(1);
+    expect(getSpecialtyLevel(7, 7)).toBe(2);
+  });
+});
+
 // ── getCompletedBlockIds ───────────────────────────────────────
+
+const emptyEarnedSpecialties = new Set<string>();
 
 describe("getCompletedBlockIds", () => {
   it("returns empty sets when nothing completed", () => {
     const eixos = [makeEixo([makeBloco()])];
-    const result = getCompletedBlockIds(eixos, new Set(), emptyPending, [], []);
+    const result = getCompletedBlockIds(eixos, new Set(), emptyPending, [], emptyEarnedSpecialties);
 
     expect(result.approved.size).toBe(0);
     expect(result.pending.size).toBe(0);
@@ -252,7 +299,7 @@ describe("getCompletedBlockIds", () => {
       "bloco-2:variable:1",
     ]);
 
-    const result = getCompletedBlockIds(eixos, completed, emptyPending, [], []);
+    const result = getCompletedBlockIds(eixos, completed, emptyPending, [], emptyEarnedSpecialties);
     expect(result.approved.has("bloco-1")).toBe(true);
     expect(result.approved.has("bloco-2")).toBe(true);
     expect(result.approved.size).toBe(2);
@@ -272,7 +319,7 @@ describe("getCompletedBlockIds", () => {
       { blocoId: "test-bloco", completed: true },
     ];
 
-    const result = getCompletedBlockIds(eixos, completed, emptyPending, customActions, []);
+    const result = getCompletedBlockIds(eixos, completed, emptyPending, customActions, emptyEarnedSpecialties);
     expect(result.approved.has("test-bloco")).toBe(true);
   });
 
@@ -290,16 +337,16 @@ describe("getCompletedBlockIds", () => {
       { blocoId: "test-bloco", completed: false },
     ];
 
-    const result = getCompletedBlockIds(eixos, completed, emptyPending, customActions, []);
+    const result = getCompletedBlockIds(eixos, completed, emptyPending, customActions, emptyEarnedSpecialties);
     // Only 1 variable done, needs 2 -- not complete
     expect(result.approved.has("test-bloco")).toBe(false);
   });
 
-  it("specialty completions bypass variable for matching bloco", () => {
+  it("earned specialty (level ≥ 1) bypasses variable for matching bloco", () => {
     const bloco = makeBloco();
     const eixos = [makeEixo([bloco])];
 
-    // All fixed done, 0 variable -- but specialty covers it
+    // All fixed done, 0 variable -- but specialty at level ≥ 1 covers it
     const completed = new Set([
       "test-bloco:fixed:0",
       "test-bloco:fixed:1",
@@ -310,9 +357,29 @@ describe("getCompletedBlockIds", () => {
       completed,
       emptyPending,
       [],
-      [{ blocoId: "test-bloco", status: "approved" }],
+      new Set(["test-bloco"]),
     );
     expect(result.approved.has("test-bloco")).toBe(true);
+  });
+
+  it("specialty NOT in earnedSpecialtyBlocoIds does not satisfy variable", () => {
+    const bloco = makeBloco();
+    const eixos = [makeEixo([bloco])];
+
+    const completed = new Set([
+      "test-bloco:fixed:0",
+      "test-bloco:fixed:1",
+    ]);
+
+    // earnedSpecialtyBlocoIds is empty — variable requirement unsatisfied
+    const result = getCompletedBlockIds(
+      eixos,
+      completed,
+      emptyPending,
+      [],
+      emptyEarnedSpecialties,
+    );
+    expect(result.approved.has("test-bloco")).toBe(false);
   });
 
   it("does not mark incomplete blocks", () => {
@@ -328,10 +395,114 @@ describe("getCompletedBlockIds", () => {
       // incomplete-bloco has nothing
     ]);
 
-    const result = getCompletedBlockIds(eixos, completed, emptyPending, [], []);
+    const result = getCompletedBlockIds(eixos, completed, emptyPending, [], emptyEarnedSpecialties);
     expect(result.approved.has("complete-bloco")).toBe(true);
     expect(result.approved.has("incomplete-bloco")).toBe(false);
     expect(result.approved.size).toBe(1);
+  });
+});
+
+// ── getEarnedSpecialtyIds ──────────────────────────────────────
+
+describe("getEarnedSpecialtyIds", () => {
+  const totals = new Map([
+    ["administracao", 6],
+    ["idiomas", 8],
+  ]);
+  const getTotal = (id: string) => totals.get(id) ?? 0;
+
+  it("includes a specialty at level 1 (half approved)", () => {
+    const items = Array.from({ length: 3 }, () => ({
+      specialtyId: "administracao",
+    }));
+    expect(getEarnedSpecialtyIds(items, getTotal)).toEqual(
+      new Set(["administracao"]),
+    );
+  });
+
+  it("includes a specialty at level 2 (all approved)", () => {
+    const items = Array.from({ length: 8 }, () => ({ specialtyId: "idiomas" }));
+    expect(getEarnedSpecialtyIds(items, getTotal)).toEqual(
+      new Set(["idiomas"]),
+    );
+  });
+
+  it("excludes a specialty below the level-1 threshold", () => {
+    const items = [{ specialtyId: "administracao" }, { specialtyId: "administracao" }];
+    expect(getEarnedSpecialtyIds(items, getTotal).size).toBe(0);
+  });
+
+  it("ignores items for unknown specialtyIds (0 total)", () => {
+    const items = Array.from({ length: 5 }, () => ({
+      specialtyId: "nao-existe",
+    }));
+    expect(getEarnedSpecialtyIds(items, getTotal).size).toBe(0);
+  });
+
+  it("counts each specialty independently", () => {
+    const items = [
+      { specialtyId: "administracao" },
+      { specialtyId: "administracao" },
+      { specialtyId: "administracao" },
+      { specialtyId: "idiomas" }, // only 1/8 → not earned
+    ];
+    expect(getEarnedSpecialtyIds(items, getTotal)).toEqual(
+      new Set(["administracao"]),
+    );
+  });
+});
+
+// ── getEarnedSpecialtyBlocoIds ─────────────────────────────────
+
+describe("getEarnedSpecialtyBlocoIds", () => {
+  const bloco = makeBloco({
+    id: "bloco-with-specialty",
+    alternativeCompletions: [
+      { type: "especialidade", items: ["Administração", "Idiomas"] },
+      { type: "insignia", items: ["Insígnia do Aprender"] },
+    ],
+  });
+  const plainBloco = makeBloco({ id: "plain-bloco" });
+  const eixos = [makeEixo([bloco, plainBloco])];
+
+  it("maps an earned specialty (by slug) to its bloco", () => {
+    // "Administração" slugifies to "administracao"
+    const result = getEarnedSpecialtyBlocoIds(eixos, new Set(["administracao"]));
+    expect(result).toEqual(new Set(["bloco-with-specialty"]));
+  });
+
+  it("returns empty when no specialties are earned", () => {
+    expect(getEarnedSpecialtyBlocoIds(eixos, new Set()).size).toBe(0);
+  });
+
+  it("ignores insignia-type alternatives", () => {
+    const result = getEarnedSpecialtyBlocoIds(
+      eixos,
+      new Set([toSpecialtySlug("Insígnia do Aprender")]),
+    );
+    expect(result.size).toBe(0);
+  });
+
+  it("does not touch blocos without alternativeCompletions", () => {
+    const result = getEarnedSpecialtyBlocoIds(eixos, new Set(["administracao"]));
+    expect(result.has("plain-bloco")).toBe(false);
+  });
+
+  it("matches legacy-named alternatives via the canonical id", () => {
+    // The progression catalog still says "Ciências da Terra"; the 2025
+    // specialty catalog renamed it to Geologia. Earning "geologia" must
+    // satisfy the bloco.
+    const legacyBloco = makeBloco({
+      id: "legacy-named-bloco",
+      alternativeCompletions: [
+        { type: "especialidade", items: ["Ciências da Terra"] },
+      ],
+    });
+    const result = getEarnedSpecialtyBlocoIds(
+      [makeEixo([legacyBloco])],
+      new Set(["geologia"]),
+    );
+    expect(result).toEqual(new Set(["legacy-named-bloco"]));
   });
 });
 
@@ -472,5 +643,149 @@ describe("isIrrComplete", () => {
     // Shared 5-slot ids across ramos, so the same manual-item set completes it.
     expect(isIrrComplete(18, new Set(), "senior")).toBe(false);
     expect(isIrrComplete(18, allManualItems, "senior")).toBe(true);
+  });
+});
+
+// ── toSpecialtySlug ────────────────────────────────────────────
+
+describe("toSpecialtySlug", () => {
+  it("lowercases and trims", () => {
+    expect(toSpecialtySlug("Acampamento")).toBe("acampamento");
+  });
+
+  it("replaces spaces with hyphens", () => {
+    expect(toSpecialtySlug("Arte Digital")).toBe("arte-digital");
+  });
+
+  it("strips diacritics", () => {
+    expect(toSpecialtySlug("Anatomia Humana")).toBe("anatomia-humana");
+    expect(toSpecialtySlug("Administração")).toBe("administracao");
+    expect(toSpecialtySlug("Ciências da Terra")).toBe("ciencias-da-terra");
+  });
+
+  it("strips non-alphanumeric characters (e.g. & / .)", () => {
+    expect(toSpecialtySlug("A&B")).toBe("ab");
+    expect(toSpecialtySlug("X/Y")).toBe("xy");
+  });
+
+  it("collapses multiple spaces into one hyphen", () => {
+    expect(toSpecialtySlug("  Multiple   Spaces  ")).toBe("multiple-spaces");
+  });
+
+  it("is stable — same input always gives same slug", () => {
+    const name = "Prevenção ao Bullying";
+    expect(toSpecialtySlug(name)).toBe(toSpecialtySlug(name));
+  });
+});
+
+// ── getSpecialtyMark ───────────────────────────────────────────
+
+describe("getSpecialtyMark", () => {
+  const NONE = new Set<string>();
+
+  it("marks an item-earned specialty checked+locked even with no legacy row", () => {
+    // The reported bug: bloco shows 100% via items but the box was empty.
+    const mark = getSpecialtyMark(
+      "Acampamento",
+      "b1",
+      [],
+      new Set(["acampamento"]),
+      false,
+    );
+    expect(mark.checked).toBe(true);
+    expect(mark.earnedViaItems).toBe(true);
+    expect(mark.locked).toBe(true);
+    expect(mark.pending).toBe(false);
+  });
+
+  it("resolves legacy renamed names to their canonical earned id", () => {
+    // "Ciências da Terra" → geologia (2025-guide rename).
+    const mark = getSpecialtyMark(
+      "Ciências da Terra",
+      "b1",
+      [],
+      new Set(["geologia"]),
+      false,
+    );
+    expect(mark.checked).toBe(true);
+    expect(mark.earnedViaItems).toBe(true);
+  });
+
+  it("leaves an unearned specialty unchecked", () => {
+    const mark = getSpecialtyMark("Acampamento", "b1", [], NONE, false);
+    expect(mark.checked).toBe(false);
+    expect(mark.locked).toBe(false);
+  });
+
+  it("reflects a pending legacy toggle as checked+pending", () => {
+    const mark = getSpecialtyMark(
+      "Acampamento",
+      "b1",
+      [{ blocoId: "b1", specialtyName: "Acampamento", status: "pending" }],
+      NONE,
+      false,
+    );
+    expect(mark.checked).toBe(true);
+    expect(mark.pending).toBe(true);
+    expect(mark.locked).toBe(false);
+  });
+
+  it("item-earned overrides a pending legacy row (approved, not pending)", () => {
+    const mark = getSpecialtyMark(
+      "Acampamento",
+      "b1",
+      [{ blocoId: "b1", specialtyName: "Acampamento", status: "pending" }],
+      new Set(["acampamento"]),
+      false,
+    );
+    expect(mark.checked).toBe(true);
+    expect(mark.pending).toBe(false);
+    expect(mark.locked).toBe(true);
+  });
+
+  it("locks an approved legacy row only when lockApproved is set", () => {
+    const row = [
+      { blocoId: "b1", specialtyName: "Acampamento", status: "approved" as const },
+    ];
+    expect(getSpecialtyMark("Acampamento", "b1", row, NONE, false).locked).toBe(
+      false,
+    );
+    expect(getSpecialtyMark("Acampamento", "b1", row, NONE, true).locked).toBe(
+      true,
+    );
+  });
+
+  it("scopes the legacy row lookup to the same bloco", () => {
+    const mark = getSpecialtyMark(
+      "Acampamento",
+      "b1",
+      [{ blocoId: "b2", specialtyName: "Acampamento", status: "approved" }],
+      NONE,
+      false,
+    );
+    expect(mark.checked).toBe(false);
+  });
+});
+
+// ── toCanonicalSpecialtyId ─────────────────────────────────────
+
+describe("toCanonicalSpecialtyId", () => {
+  it("resolves 2025-guide renames to catalog ids", () => {
+    expect(toCanonicalSpecialtyId("Ciências da Terra")).toBe("geologia");
+    expect(toCanonicalSpecialtyId("Tradições dos Povos Indígenas")).toBe(
+      "tradicoes-dos-povos-originarios",
+    );
+    expect(toCanonicalSpecialtyId("Natureza e Ciências Ambientais")).toBe(
+      "natureza-e-ciencias-naturais",
+    );
+  });
+
+  it("passes non-aliased names through as plain slugs", () => {
+    expect(toCanonicalSpecialtyId("Acampamento")).toBe("acampamento");
+    expect(toCanonicalSpecialtyId("Administração")).toBe("administracao");
+    // Retired specialty with no canonical counterpart stays as its own slug.
+    expect(toCanonicalSpecialtyId("Noções Desportivas")).toBe(
+      "nocoes-desportivas",
+    );
   });
 });

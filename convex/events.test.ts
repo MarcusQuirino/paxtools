@@ -192,7 +192,7 @@ describe("level-up detection", () => {
 
     const approved = new Set<string>();
     const countWith = (ids: Set<string>) =>
-      getCompletedBlockIds(eixos, ids, new Set(), [], []).approved.size;
+      getCompletedBlockIds(eixos, ids, new Set(), [], new Set<string>()).approved.size;
 
     // Greedily complete whole blocks (all their actions approved) until exactly
     // 3 blocks count as complete — one short of Trilha (4). Robust to any

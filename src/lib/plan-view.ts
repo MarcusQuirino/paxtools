@@ -1,6 +1,7 @@
 import type { Bloco, CustomAction, Eixo } from "../data/types";
 import type { Doc } from "../../convex/_generated/dataModel";
 import { decodePlanKey } from "./plan-keys";
+import { getSpecialtyMark } from "./completion-logic";
 
 export type PlanItemResolved =
   | {
@@ -92,6 +93,8 @@ export type ResolverInput = {
     specialtyName: string;
     status: "pending" | "approved";
   }[];
+  /** Canonical ids of specialties earned via items (#44) — count as approved. */
+  earnedSpecialtyIds?: Set<string>;
   customActions: CustomAction[];
 };
 
@@ -135,8 +138,12 @@ export function resolvePlanItems(
     } else if (decoded.kind === "specialty") {
       const hit = input.catalog.blocosById.get(decoded.blocoId);
       if (!hit) continue;
-      const completion = specialtyByKey.get(
-        `${decoded.blocoId}:${decoded.specialtyName}`,
+      const mark = getSpecialtyMark(
+        decoded.specialtyName,
+        decoded.blocoId,
+        input.completedSpecialties,
+        input.earnedSpecialtyIds ?? new Set(),
+        false,
       );
       resolved.push({
         itemKey: p.itemKey,
@@ -145,8 +152,11 @@ export function resolvePlanItems(
         eixo: hit.eixo,
         bloco: hit.bloco,
         specialtyName: decoded.specialtyName,
-        checked: !!completion,
-        status: completion?.status,
+        checked: mark.checked,
+        status: mark.earnedViaItems
+          ? "approved"
+          : specialtyByKey.get(`${decoded.blocoId}:${decoded.specialtyName}`)
+              ?.status,
       });
     } else if (decoded.kind === "custom") {
       const custom = customById.get(decoded.customActionId);

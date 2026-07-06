@@ -30,6 +30,10 @@ type BlocoCardProps = {
   onAddCustom: (blocoId: string, text: string) => void;
   onToggleCustom: (id: Id<"customActions">) => void;
   onDeleteCustom: (id: Id<"customActions">) => void;
+  /** Bloco satisfied via an earned especialidade (level ≥ 1) — computed on read (#44). */
+  earnedViaSpecialty?: boolean;
+  /** Canonical ids of specialties earned via items (#44), for marking the exact checkbox. */
+  earnedSpecialtyIds?: Set<string>;
   plannedKeys?: Set<string>;
   onTogglePlanned?: (itemKey: string) => void;
   planOnly?: boolean;
@@ -50,6 +54,8 @@ export function BlocoCard({
   onAddCustom,
   onToggleCustom,
   onDeleteCustom,
+  earnedViaSpecialty,
+  earnedSpecialtyIds,
   plannedKeys,
   onTogglePlanned,
   planOnly,
@@ -61,9 +67,11 @@ export function BlocoCard({
   const pendingCustomCompleted = customActions.filter(
     (c) => c.blocoId === bloco.id && c.completed && c.status === "pending",
   ).length;
-  const hasApprovedSpecialty = completedSpecialties.some(
-    (s) => s.blocoId === bloco.id && s.status !== "pending",
-  );
+  const hasApprovedSpecialty =
+    !!earnedViaSpecialty ||
+    completedSpecialties.some(
+      (s) => s.blocoId === bloco.id && s.status !== "pending",
+    );
   const hasPendingSpecialty = completedSpecialties.some(
     (s) => s.blocoId === bloco.id && s.status === "pending",
   );
@@ -172,6 +180,7 @@ export function BlocoCard({
           blocoId={bloco.id}
           alternatives={bloco.alternativeCompletions}
           completedSpecialties={completedSpecialties}
+          earnedSpecialtyIds={earnedSpecialtyIds}
           onToggle={onToggleSpecialty}
           plannedKeys={plannedKeys}
           onTogglePlanned={onTogglePlanned}

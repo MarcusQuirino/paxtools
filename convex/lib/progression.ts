@@ -3,11 +3,28 @@ import type { Doc, Id } from "../_generated/dataModel";
 import {
   getCompletedBlockIds,
   getCurrentStage,
+  getEarnedSpecialtyIds,
+  getEarnedSpecialtyBlocoIds,
   isIrrComplete,
+  toCanonicalSpecialtyId,
 } from "../../src/lib/completion-logic";
 import { getEixosForRamo, type Ramo } from "../../src/data/progression-data";
 import { getRamoRules } from "../../src/data/progression-rules";
+import { YOUNGER_SPECIALTY_BY_ID } from "../../src/data/specialty-data/younger";
 import { logRamoEvent } from "./events";
+
+/**
+ * The ramoGroup a ramo belongs to. Lobinho + escoteiro share "younger" (one
+ * item-based specialty catalog); sênior + pioneiro share "older" (project-based).
+ * An unset ramo (mid-onboarding) defaults to "younger". The single place this
+ * mapping lives, so specialties/progression reads can't drift.
+ */
+export function ramoGroupForRamo(
+  ramo: string | undefined | null,
+): "younger" | "older" {
+  if (ramo === "senior" || ramo === "pioneiro") return "older";
+  return "younger";
+}
 
 /**
  * The codebase-wide default ramo — and prod's only ramo. A user with no ramo
@@ -44,11 +61,12 @@ export async function readCurrentRamoIrrItems(
 }
 
 /**
- * Read a user's especialidade completions for their CURRENT ramo (#37). Same
- * (userId, ramo) isolation as the IRR read, and the same null-ramo → "escoteiro"
- * default, kept here so self read / escotista-view read / snapshot can't drift.
- * blocoIds are shared across ramos, so this filter (not the blocoId) is what
- * stops a past ramo's especialidades bleeding into the current one.
+ * @deprecated Use specialtyItemCompletions / specialtyProjectReports instead.
+ * Still called by `getMyCompletions` / `getCompletionsForUser` to serve the
+ * legacy specialty display until #42–44 replace it. Also used by
+ * `migrations:migrateSpecialtyCompletions` to read rows for conversion.
+ * Will be removed once the new specialty UI (#42–44) ships and migration
+ * is confirmed on prod.
  */
 export async function readCurrentRamoSpecialties(
   ctx: QueryCtx | MutationCtx,
@@ -75,6 +93,87 @@ export async function readCurrentRamoCustomActions(
       q.eq("userId", userId).eq("ramo", ramo ?? DEFAULT_RAMO),
     )
     .take(1000);
+}
+
+/**
+ * Compute what a user has earned *via especialidade*: the earned specialty ids
+ * and the bloco(s) whose `alternativeCompletions` name them. `blocoIds` drives
+ * bloco completion; `specialtyIds` lets the UI mark the exact specialty checkbox
+ * (blocos list many alternatives, so the blocoId alone can't pick which).
+ * Purely derived — no extra storage.
+ *
+ * - Younger (#44): a specialty is earned at level ≥ 1 from approved
+ *   `specialtyItemCompletions` counts.
+ * - Older (ADR 0002): a specialty is earned when all three of its project steps
+ *   (`specialtyProjectReports`) are approved — binary, no levels.
+ */
+export async function readEarnedSpecialtyBlocoIds(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+  ramo: Ramo | null | undefined,
+): Promise<{ blocoIds: Set<string>; specialtyIds: Set<string> }> {
+  const specialtyIds =
+    ramoGroupForRamo(ramo) === "older"
+      ? await readEarnedOlderSpecialtyIds(ctx, userId)
+      : await readEarnedYoungerSpecialtyIds(ctx, userId);
+
+  return {
+    blocoIds: getEarnedSpecialtyBlocoIds(getEixosForRamo(ramo), specialtyIds),
+    specialtyIds,
+  };
+}
+
+/** Younger: earned specialty ids from approved item-completion counts (#44). */
+async function readEarnedYoungerSpecialtyIds(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+): Promise<Set<string>> {
+  // Approved = anything not explicitly pending (matches the /especialidades read
+  // and migration, which write status "approved" but treat a missing status as
+  // approved too).
+  const items = await ctx.db
+    .query("specialtyItemCompletions")
+    .withIndex("by_userId", (q) => q.eq("userId", userId))
+    .take(2000);
+  const approvedItems = items.filter(
+    (i) => i.ramoGroup === "younger" && i.status !== "pending",
+  );
+
+  return getEarnedSpecialtyIds(
+    approvedItems,
+    (specialtyId) => YOUNGER_SPECIALTY_BY_ID.get(specialtyId)?.items.length ?? 0,
+  );
+}
+
+/**
+ * Older (ADR 0002): a specialty is earned once all three project steps are
+ * approved. Compares `status === "approved"` explicitly so a hypothetical
+ * non-approved/non-pending row could never be miscounted as earned.
+ */
+async function readEarnedOlderSpecialtyIds(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+): Promise<Set<string>> {
+  const reports = await ctx.db
+    .query("specialtyProjectReports")
+    .withIndex("by_userId", (q) => q.eq("userId", userId))
+    .take(2000);
+
+  const approvedStepsBySpecialty = new Map<string, Set<string>>();
+  for (const r of reports) {
+    if (r.ramoGroup !== "older" || r.status !== "approved") continue;
+    const steps = approvedStepsBySpecialty.get(r.specialtyId) ?? new Set();
+    steps.add(r.step);
+    approvedStepsBySpecialty.set(r.specialtyId, steps);
+  }
+
+  const earned = new Set<string>();
+  for (const [specialtyId, steps] of approvedStepsBySpecialty) {
+    // Exactly three distinct steps exist (conhecer/fazer/compartilhar), and a
+    // row is unique per (user, group, specialty, step), so size 3 ⇒ all approved.
+    if (steps.size === 3) earned.add(toCanonicalSpecialtyId(specialtyId));
+  }
+  return earned;
 }
 
 export type ProgressionSnapshot = {
@@ -107,7 +206,6 @@ export async function snapshotProgression(
     .query("actionCompletions")
     .withIndex("by_userId", (q) => q.eq("userId", userId))
     .take(500);
-  const specialties = await readCurrentRamoSpecialties(ctx, userId, ramo);
   const customActions = await readCurrentRamoCustomActions(ctx, userId, ramo);
   // IRR items are ramo-scoped: only the current ramo's recognition rows feed
   // the IRR-complete check.
@@ -121,6 +219,10 @@ export async function snapshotProgression(
   );
 
   const eixos = getEixosForRamo(ramo);
+  // Blocos satisfied via an earned especialidade (level ≥ 1), computed on read
+  // from approved specialtyItemCompletions counts + the catalog (#44).
+  const { blocoIds: earnedSpecialtyBlocoIds } =
+    await readEarnedSpecialtyBlocoIds(ctx, userId, ramo);
   const { approved } = getCompletedBlockIds(
     eixos,
     approvedActionIds,
@@ -130,7 +232,7 @@ export async function snapshotProgression(
       completed: c.completed,
       status: c.status,
     })),
-    specialties.map((s) => ({ blocoId: s.blocoId, status: s.status })),
+    earnedSpecialtyBlocoIds,
   );
 
   const completedBlockCount = approved.size;

@@ -21,6 +21,12 @@ import {
 } from "@/data/progression-data";
 import { getRamoRules } from "@/data/progression-rules";
 import { notifyLevelUps } from "@/lib/level-up-toast";
+import { YOUNGER_SPECIALTY_BY_ID } from "@/data/specialty-data/younger";
+import {
+  OLDER_SPECIALTY_BY_ID,
+  PROJECT_STEP_LABELS,
+  type ProjectStep,
+} from "@/data/specialty-data/older";
 
 export const Route = createFileRoute("/escotista/pending")({
   component: PendingApprovalsPage,
@@ -133,8 +139,163 @@ type PendingEntry = {
     blocoId: string;
     text: string;
   }[];
+  /** New specialty item completions (#42). One row per item. */
+  pendingSpecialtyItems?: {
+    _id: Id<"specialtyItemCompletions">;
+    specialtyId: string;
+    itemIndex: number;
+    ramoGroup: "younger" | "older";
+  }[];
+  /** Older-group project-step submissions (#43). One row per pending step. */
+  pendingSpecialtyReports?: {
+    _id: Id<"specialtyProjectReports">;
+    specialtyId: string;
+    step: ProjectStep;
+    text: string;
+    ramoGroup: "younger" | "older";
+  }[];
   totalPending: number;
 };
+
+/** One card per pending project step showing the submitted report text + approve/reject. */
+function PendingSpecialtyReportCard({
+  reportId,
+  specialtyId,
+  step,
+  text,
+}: {
+  reportId: Id<"specialtyProjectReports">;
+  specialtyId: string;
+  step: ProjectStep;
+  text: string;
+}) {
+  const specialtyName = OLDER_SPECIALTY_BY_ID.get(specialtyId)?.name ?? specialtyId;
+
+  const approveFn = useConvexMutation(api.specialties.approveSpecialtyStep);
+  const rejectFn = useConvexMutation(api.specialties.rejectSpecialtyStep);
+  const { mutate: approve, isPending: isApproving } = useMutation({
+    mutationFn: approveFn,
+    onSuccess: notifyLevelUps,
+  });
+  const { mutate: reject, isPending: isRejecting } = useMutation({
+    mutationFn: rejectFn,
+  });
+  const isBusy = isApproving || isRejecting;
+
+  return (
+    <div className="rounded-md border-2 border-amber-300 bg-amber-50 p-3 space-y-2">
+      <p className="text-xs font-black uppercase tracking-widest text-amber-800">
+        {specialtyName} · {PROJECT_STEP_LABELS[step] ?? step}
+      </p>
+      <p className="text-sm text-foreground whitespace-pre-wrap px-1 border-l-2 border-amber-300">
+        {text}
+      </p>
+      <div className="flex gap-2 pt-1">
+        <Button
+          size="sm"
+          className="flex-1 bg-emerald-700 text-white border-black hover:bg-emerald-800"
+          disabled={isBusy}
+          onClick={() => approve({ reportId })}
+        >
+          <Check className="size-3 mr-1" />
+          Aprovar
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="flex-1 bg-destructive text-white border-black hover:bg-destructive/80"
+          disabled={isBusy}
+          onClick={() => reject({ reportId })}
+        >
+          <X className="size-3 mr-1" />
+          Rejeitar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** One card per (escoteiro, specialty) showing pending items and approve/reject buttons. */
+function PendingSpecialtyCard({
+  escoteiroId,
+  specialtyId,
+  ramoGroup,
+  pendingItems,
+}: {
+  escoteiroId: Id<"users">;
+  specialtyId: string;
+  ramoGroup: "younger" | "older";
+  pendingItems: { _id: Id<"specialtyItemCompletions">; itemIndex: number }[];
+}) {
+  const specialty = ramoGroup === "younger" ? YOUNGER_SPECIALTY_BY_ID.get(specialtyId) : null;
+  const specialtyName = specialty?.name ?? specialtyId;
+
+  const approveItemsFn = useConvexMutation(api.specialties.approveSpecialtyItems);
+  const rejectItemsFn = useConvexMutation(api.specialties.rejectSpecialtyItems);
+  const { mutate: approveItems, isPending: isApproving } = useMutation({
+    mutationFn: approveItemsFn,
+    onSuccess: notifyLevelUps,
+  });
+  const { mutate: rejectItems, isPending: isRejecting } = useMutation({
+    mutationFn: rejectItemsFn,
+  });
+
+  const isBusy = isApproving || isRejecting;
+
+  return (
+    <div className="rounded-md border-2 border-amber-300 bg-amber-50 p-3 space-y-2">
+      <p className="text-xs font-black uppercase tracking-widest text-amber-800">
+        Especialidade: {specialtyName}
+      </p>
+      <div className="space-y-1">
+        {pendingItems.map((item) => {
+          const itemText = specialty?.items[item.itemIndex];
+          return (
+            <div key={item._id} className="text-sm text-foreground px-1">
+              <span className="font-bold">{item.itemIndex + 1}.</span>{" "}
+              {itemText ?? `Item ${item.itemIndex + 1}`}
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex gap-2 pt-1">
+        <Button
+          size="sm"
+          className="flex-1 bg-emerald-700 text-white border-black hover:bg-emerald-800"
+          disabled={isBusy}
+          onClick={() =>
+            approveItems({
+              escoteiroId,
+              specialtyId,
+              ramoGroup,
+              itemIds: pendingItems.map((i) => i._id),
+            })
+          }
+        >
+          <Check className="size-3 mr-1" />
+          Aprovar ({pendingItems.length})
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="flex-1 bg-destructive text-white border-black hover:bg-destructive/80"
+          disabled={isBusy}
+          onClick={() =>
+            rejectItems({
+              escoteiroId,
+              specialtyId,
+              ramoGroup,
+              itemIds: pendingItems.map((i) => i._id),
+            })
+          }
+        >
+          <X className="size-3 mr-1" />
+          Rejeitar
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function EscoteiroPendingCard({
   entry,
@@ -284,6 +445,25 @@ function EscoteiroPendingCard({
   const specialties = allItems.filter((i) => i.type === "specialty");
   const irrItems = allItems.filter((i) => i.type === "irr");
 
+  // New specialty items grouped by (ramoGroup, specialtyId)
+  const specialtyItemGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      { ramoGroup: "younger" | "older"; items: { _id: Id<"specialtyItemCompletions">; itemIndex: number }[] }
+    >();
+    for (const item of entry.pendingSpecialtyItems ?? []) {
+      const key = `${item.ramoGroup}:${item.specialtyId}`;
+      const group = groups.get(key) ?? { ramoGroup: item.ramoGroup, items: [] };
+      group.items.push({ _id: item._id, itemIndex: item.itemIndex });
+      groups.set(key, group);
+    }
+    return Array.from(groups.entries()).map(([key, { ramoGroup, items }]) => ({
+      specialtyId: key.slice(ramoGroup.length + 1),
+      ramoGroup,
+      items,
+    }));
+  }, [entry.pendingSpecialtyItems]);
+
   return (
     <Collapsible>
       <div className="rounded-md border-2 border-black bg-card overflow-hidden shadow-[3px_3px_0px_0px_#000]">
@@ -379,7 +559,43 @@ function EscoteiroPendingCard({
               </div>
             )}
 
-            {/* Bulk action buttons */}
+            {/* New specialty item completions (#42) — separate from bulk flow */}
+            {specialtyItemGroups.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-black uppercase tracking-widest text-primary">
+                  Itens de Especialidade
+                </p>
+                {specialtyItemGroups.map(({ specialtyId, ramoGroup, items }) => (
+                  <PendingSpecialtyCard
+                    key={`${ramoGroup}:${specialtyId}`}
+                    escoteiroId={entry.escoteiro._id}
+                    specialtyId={specialtyId}
+                    ramoGroup={ramoGroup}
+                    pendingItems={items}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Older-group project-step submissions (#43) */}
+            {(entry.pendingSpecialtyReports ?? []).length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-black uppercase tracking-widest text-primary">
+                  Projetos de Especialidade
+                </p>
+                {(entry.pendingSpecialtyReports ?? []).map((report) => (
+                  <PendingSpecialtyReportCard
+                    key={report._id}
+                    reportId={report._id}
+                    specialtyId={report.specialtyId}
+                    step={report.step}
+                    text={report.text}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Bulk action buttons — only for legacy items */}
             <div className="pt-2 border-t-2 border-black flex gap-2">
               <Button
                 variant="outline"
