@@ -1,5 +1,102 @@
 # paxtools
 
+## 1.4.0
+
+### Minor Changes
+
+- 893ce8d: feat(especialidades): bloco deep-link & auto-completion via specialty level (#44)
+  - Wire the younger specialty system into bloco progression: a bloco's ação
+    variável section is now satisfied when a linked especialidade reaches level ≥ 1,
+    computed purely on read from approved `specialtyItemCompletions` counts — no
+    extra storage.
+  - Pure logic (`src/lib/completion-logic.ts`): add `getEarnedSpecialtyIds` (approved
+    item counts + catalog totals → earned specialty slugs at level ≥ 1) and
+    `getEarnedSpecialtyBlocoIds` (earned slugs + eixos → satisfied blocoIds, matching
+    `alternativeCompletions` names via `toSpecialtySlug`).
+  - Backend: `readEarnedSpecialtyBlocoIds` + shared `ramoGroupForRamo` in
+    `convex/lib/progression.ts`; `snapshotProgression` now populates
+    `earnedSpecialtyBlocoIds` (previously an empty-set TODO), so `detectLevelUps`
+    picks up etapa advances crossed by a specialty-completed bloco. `getMyCompletions`
+    / `getCompletionsForUser` return `earnedSpecialtyBlocoIds` so the client agrees
+    with the server. `convex/specialties.ts` now imports the shared `ramoGroupForRamo`.
+  - Client: `use-progression` builds the earned-bloco set from the query and threads
+    it through `Dashboard` → `EixoSection` → `BlocoCard`, so a bloco satisfied via
+    especialidade shows as complete.
+  - Deep-link: bloco cards with `alternativeCompletions` of type `"especialidade"`
+    render a "ver →" link to `/especialidades?specialty=<slug>`; the route accepts the
+    `specialty` search param and auto-opens, scrolls to, and highlights that specialty
+    (younger and older catalogs).
+  - Older (project-based) blocos are unchanged — auto-completion is derived from
+    `specialtyItemCompletions` (younger) per the issue scope.
+
+- 893ce8d: feat(especialidades): older group — project catalog, sequential steps & escotista approval (#43)
+  - Add `src/data/specialty-data/older.ts` — full official older-group (sênior + pioneiro) catalog: 32 especialidades across the 4 eixos, each with `conhecerSuggestions` / `fazerSuggestions` / `compartilharSuggestions` (parsed from the 2025 Guia de Especialidades e Insígnias — Ramos Sênior e Pioneiro)
+  - Backend (`convex/specialties.ts`): `submitSpecialtyStep` (create/replace a `specialtyProjectReports` row as pending; server-enforced sequential lock — a step is rejected until its predecessor is approved), `approveSpecialtyStep` (compartilhar approval fires the level-up cascade), `rejectSpecialtyStep` (deletes the row so the escoteiro rewrites), `getMySpecialtyReports`, `getSpecialtyReportsForEscoteiro`
+  - `approvals:getPendingForGroup` now includes `pendingSpecialtyReports` and counts them in `totalPending`
+  - Route `/especialidades` renders the older project-step UI for sênior/pioneiro: browse by eixo, per-especialidade Conhecer → Fazer → Compartilhar cards with suggestions, report text areas, submit/resubmit, and sequential locking (Fazer locked until Conhecer approved; Compartilhar until Fazer approved); specialty shown as conquered when Compartilhar is approved
+  - Escotista pending queue renders one card per pending project step with the submitted text and approve/reject controls
+  - `ramoGroup` is `"older"` on all written records; sênior and pioneiro share one catalog and completions
+  - Tests: convex-test covers submit → pending, sequential lock (fazer before conhecer approved throws), approve → unlock next, full three-step approve → earned cascade, reject → row deleted + resubmit, resubmit replaces pending text, and approved-step overwrite protection
+
+- 893ce8d: feat(especialidades): drop step blocking for older projects & complete blocos on earn
+
+  Older-ramo (sênior/pioneiro) especialidades are three-step projects (conhecer →
+  fazer → compartilhar). They previously enforced a strict order — a step could
+  only be submitted once its predecessor was approved, and the UI locked later
+  steps. In QA this proved to be friction, so we drop the gate (ADR 0002).
+  - **Unordered steps.** `submitSpecialtyStep` no longer requires the predecessor
+    to be approved; the escoteiro writes and submits the three reports in any
+    order. The frontend `isLocked` / "Bloqueado" state and its copy are removed.
+  - **Binary grant on all-three-approved.** Approvals stay per-step and independent
+    (trickle into the escotista queue as written). The specialty is earned the
+    moment the _third_ step reaches `approved` — whichever step that is —
+    replacing the `compartilhar`-specific trigger for the level-up cascade.
+  - **Older especialidades now complete their bloco.** `readEarnedSpecialtyBlocoIds`
+    gains an older branch: a specialty earned (all three steps approved) satisfies
+    any bloco that names it as an alternative completion, mirroring the younger
+    path (#44). Previously this was hard-returned empty for older ramos, so a fully
+    approved project never counted toward progression. Derived on read — retroactive,
+    no migration.
+
+  Rejection stays delete-based for now (preserving the report text on rejection is
+  deferred; see ADR 0002).
+
+- 893ce8d: feat(especialidades): schema, migration & pure-logic prefactor (#41)
+  - Add `specialtyItemCompletions` table (younger ramoGroup item-level tracking)
+  - Add `specialtyProjectReports` table (older ramoGroup project-step tracking)
+  - Mark `specialtyCompletions` as deprecated (kept live during migration window; full purge deferred to #42–44)
+  - Add `getSpecialtyLevel(approvedCount, totalItems): 0|1|2` pure function
+  - Update `getCompletedBlockIds` to accept `earnedSpecialtyBlocoIds: Set<string>` (replaces raw specialtyCompletions array); callers now pass empty set until #44 wires the real computed set
+  - Add `migrations:migrateSpecialtyCompletions` — converts approved older rows to 3-step project reports and younger rows to per-item completions; pending rows dropped; idempotent. Names resolve to canonical catalog ids and are validated against the catalog: unknown names (insígnias, retired/missing specialties) are left in place and reported in `unknownSpecialties` instead of being converted or deleted; item counts come from the catalog entry itself
+  - Add `toSpecialtySlug(name)` and `toCanonicalSpecialtyId(name)` pure functions (exported from `src/lib/completion-logic.ts`; shared by migrations, earned-specialty matching and deep-links). `toCanonicalSpecialtyId` resolves 2025-guide renames via `LEGACY_SPECIALTY_SLUG_ALIASES` (Ciências da Terra → geologia, Tradições dos Povos Indígenas → tradicoes-dos-povos-originarios, Natureza e Ciências Ambientais → natureza-e-ciencias-naturais)
+
+- 893ce8d: feat(especialidades): younger specialty catalog, item checklist & escotista approval (#42)
+  - Adds full younger-group (lobinho + escoteiro) specialty catalog: 168 specialties with 6 or 8 items each, organised by eixo, parsed from the official 2025 Brazilian scout guide (Guia de Especialidades e Insígnias).
+  - New `/especialidades` route: browse specialties by eixo, per-specialty collapsible checklist, level badges (0 / 1 / 2) derived from approved item count, progress bar per specialty.
+  - New `convex/specialties.ts`: `toggleSpecialtyItem`, `approveSpecialtyItem`, `rejectSpecialtyItem`, `approveSpecialtyItems`, `rejectSpecialtyItems`, `getMySpecialtyItems`, `getSpecialtyItemsForEscoteiro`, `getPendingSpecialtyItemsForGroup`.
+  - Escotista pending queue now shows pending specialty items grouped by specialty, with per-specialty approve/reject controls separate from the legacy bulk flow.
+  - Navigation updated: `PlanNav` adds an "Esp." tab linking to `/especialidades`.
+
+### Patch Changes
+
+- 893ce8d: fix(especialidades): mark the specialty checkbox when a bloco is auto-completed via items
+
+  A bloco satisfied by an earned especialidade (level ≥ 1 via `specialtyItemCompletions`, #44)
+  showed 100% complete, but the especialidade's checkbox in the bloco view stayed empty — the
+  escoteiro had to re-mark it by hand. The bloco's completion came from `earnedSpecialtyBlocoIds`
+  while the checkbox only read legacy `specialtyCompletions` rows, so the two disagreed.
+  - Backend: `readEarnedSpecialtyBlocoIds` now also returns `specialtyIds` (the earned canonical
+    ids), and `getMyCompletions` / `getCompletionsForUser` return `earnedSpecialtyIds` alongside
+    `earnedSpecialtyBlocoIds` — blocos list many alternatives, so the blocoId alone can't say which
+    one to mark.
+  - Pure logic: add `getSpecialtyMark` in `src/lib/completion-logic.ts` — resolves a specialty's
+    checked/pending/locked state from both sources (earned-via-items wins: checked, approved, and
+    read-only since toggling can't undo item completions).
+  - Client: thread `earnedSpecialtyIds` through `use-progression` → `Dashboard` / plan view →
+    `EixoSection` → `BlocoCard` → `SpecialtySection`, and through `resolvePlanItems` for the plan
+    list view. An especialidade earned via items now renders checked, approved, and locked
+    everywhere.
+
 ## 1.3.0
 
 ### Minor Changes
