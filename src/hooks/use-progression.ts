@@ -32,6 +32,7 @@ export function useProgression(targetUserId?: Id<"users">) {
     }[];
     irrItems: { itemId: string; status?: string }[];
     earnedSpecialtyBlocoIds?: string[];
+    earnedSpecialtyIds?: string[];
   }>(queryOptions);
 
   const eixos = useMemo(() => getEixosForRamo(data.ramo), [data.ramo]);
@@ -89,6 +90,13 @@ export function useProgression(targetUserId?: Id<"users">) {
   const earnedSpecialtyBlocoIds = useMemo(
     () => new Set(data.earnedSpecialtyBlocoIds ?? []),
     [data.earnedSpecialtyBlocoIds],
+  );
+
+  // Canonical ids of the specialties earned via items (#44), so the bloco view
+  // can mark the exact specialty checkbox — not just know the bloco is satisfied.
+  const earnedSpecialtyIds = useMemo(
+    () => new Set(data.earnedSpecialtyIds ?? []),
+    [data.earnedSpecialtyIds],
   );
 
   const { approved: completedBlockIds, pending: pendingBlockIds } = useMemo(
@@ -151,6 +159,7 @@ export function useProgression(targetUserId?: Id<"users">) {
     completedBlockIds,
     pendingBlockIds,
     earnedSpecialtyBlocoIds,
+    earnedSpecialtyIds,
     completedBlockCount,
     pendingBlockCount: pendingBlockIds.size,
     approvedIrrItemIds,

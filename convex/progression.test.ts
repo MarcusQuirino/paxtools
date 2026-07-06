@@ -733,6 +733,7 @@ describe("getMyCompletions", () => {
       customActions: [],
       irrItems: [],
       earnedSpecialtyBlocoIds: [],
+      earnedSpecialtyIds: [],
     });
   });
 

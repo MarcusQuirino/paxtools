@@ -94,6 +94,8 @@ function PlanDashboard() {
     customActions,
     completedBlockIds,
     pendingBlockIds,
+    earnedSpecialtyBlocoIds,
+    earnedSpecialtyIds,
   } = useProgression();
   const { items, plannedKeys, togglePlanned, reorderPlan } = usePlan();
 
@@ -106,6 +108,7 @@ function PlanDashboard() {
         pendingActionIds,
         actionStatusMap,
         completedSpecialties,
+        earnedSpecialtyIds,
         customActions,
       }),
     [
@@ -115,6 +118,7 @@ function PlanDashboard() {
       pendingActionIds,
       actionStatusMap,
       completedSpecialties,
+      earnedSpecialtyIds,
       customActions,
     ],
   );
@@ -156,6 +160,8 @@ function PlanDashboard() {
             actionStatusMap={actionStatusMap}
             completedBlockIds={completedBlockIds}
             pendingBlockIds={pendingBlockIds}
+            earnedSpecialtyBlocoIds={earnedSpecialtyBlocoIds}
+            earnedSpecialtyIds={earnedSpecialtyIds}
             customActions={customActions}
             completedSpecialties={completedSpecialties}
             onToggleAction={(actionId) => toggleAction({ actionId })}

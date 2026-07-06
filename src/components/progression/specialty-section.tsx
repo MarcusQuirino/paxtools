@@ -4,7 +4,7 @@ import { Award, Clock, ArrowRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { PlanStar } from "./plan-star";
 import { encodePlanKey } from "@/lib/plan-keys";
-import { toCanonicalSpecialtyId } from "@/lib/completion-logic";
+import { getSpecialtyMark, toCanonicalSpecialtyId } from "@/lib/completion-logic";
 
 type SpecialtySectionProps = {
   blocoId: string;
@@ -14,6 +14,8 @@ type SpecialtySectionProps = {
     specialtyName: string;
     status: CompletionStatus;
   }[];
+  /** Canonical ids of specialties earned via items (#44) — mark those boxes read-only. */
+  earnedSpecialtyIds?: Set<string>;
   onToggle: (blocoId: string, specialtyName: string) => void;
   plannedKeys?: Set<string>;
   onTogglePlanned?: (itemKey: string) => void;
@@ -25,6 +27,7 @@ export function SpecialtySection({
   blocoId,
   alternatives,
   completedSpecialties,
+  earnedSpecialtyIds,
   onToggle,
   plannedKeys,
   onTogglePlanned,
@@ -33,10 +36,7 @@ export function SpecialtySection({
 }: SpecialtySectionProps) {
   if (alternatives.length === 0) return null;
 
-  const getStatus = (name: string) =>
-    completedSpecialties.find(
-      (s) => s.blocoId === blocoId && s.specialtyName === name,
-    );
+  const earned = earnedSpecialtyIds ?? new Set<string>();
 
   const isPlanned = (name: string) =>
     !planOnly ||
@@ -65,11 +65,14 @@ export function SpecialtySection({
             {alt.type === "especialidade" ? "Especialidades" : "Insígnias"}
           </div>
           {alt.items.map((item) => {
-            const completion = getStatus(item);
-            const isChecked = !!completion;
-            const isPending = completion?.status === "pending";
-            const isLocked =
-              lockApproved && isChecked && completion?.status === "approved";
+            const { checked: isChecked, pending: isPending, locked: isLocked } =
+              getSpecialtyMark(
+                item,
+                blocoId,
+                completedSpecialties,
+                earned,
+                !!lockApproved,
+              );
             const planKey = encodePlanKey({
               kind: "specialty",
               blocoId,

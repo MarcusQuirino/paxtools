@@ -95,19 +95,23 @@ export async function readCurrentRamoCustomActions(
 }
 
 /**
- * Compute the set of blocoIds a user has satisfied *via especialidade* (#44):
- * for each younger-catalog specialty the user has earned at level ≥ 1 (from
- * approved `specialtyItemCompletions` counts), the bloco(s) whose
- * `alternativeCompletions` name that specialty are satisfied. Purely derived —
- * no extra storage. Older ramoGroups have no item completions, so this is
- * naturally empty for them (project-based auto-completion is out of #44 scope).
+ * Compute what a user has earned *via especialidade* (#44): for each
+ * younger-catalog specialty earned at level ≥ 1 (from approved
+ * `specialtyItemCompletions` counts), returns both the earned specialty ids and
+ * the bloco(s) whose `alternativeCompletions` name them. `blocoIds` drives bloco
+ * completion; `specialtyIds` lets the UI mark the exact specialty checkbox
+ * (blocos list many alternatives, so the blocoId alone can't pick which).
+ * Purely derived — no extra storage. Older ramoGroups have no item completions,
+ * so both are naturally empty for them (project auto-completion is out of #44).
  */
 export async function readEarnedSpecialtyBlocoIds(
   ctx: QueryCtx | MutationCtx,
   userId: Id<"users">,
   ramo: Ramo | null | undefined,
-): Promise<Set<string>> {
-  if (ramoGroupForRamo(ramo) !== "younger") return new Set();
+): Promise<{ blocoIds: Set<string>; specialtyIds: Set<string> }> {
+  if (ramoGroupForRamo(ramo) !== "younger") {
+    return { blocoIds: new Set(), specialtyIds: new Set() };
+  }
 
   // Approved = anything not explicitly pending (matches the /especialidades read
   // and migration, which write status "approved" but treat a missing status as
@@ -120,12 +124,15 @@ export async function readEarnedSpecialtyBlocoIds(
     (i) => i.ramoGroup === "younger" && i.status !== "pending",
   );
 
-  const earnedSpecialtyIds = getEarnedSpecialtyIds(
+  const specialtyIds = getEarnedSpecialtyIds(
     approvedItems,
     (specialtyId) => YOUNGER_SPECIALTY_BY_ID.get(specialtyId)?.items.length ?? 0,
   );
 
-  return getEarnedSpecialtyBlocoIds(getEixosForRamo(ramo), earnedSpecialtyIds);
+  return {
+    blocoIds: getEarnedSpecialtyBlocoIds(getEixosForRamo(ramo), specialtyIds),
+    specialtyIds,
+  };
 }
 
 export type ProgressionSnapshot = {
@@ -173,11 +180,8 @@ export async function snapshotProgression(
   const eixos = getEixosForRamo(ramo);
   // Blocos satisfied via an earned especialidade (level ≥ 1), computed on read
   // from approved specialtyItemCompletions counts + the catalog (#44).
-  const earnedSpecialtyBlocoIds = await readEarnedSpecialtyBlocoIds(
-    ctx,
-    userId,
-    ramo,
-  );
+  const { blocoIds: earnedSpecialtyBlocoIds } =
+    await readEarnedSpecialtyBlocoIds(ctx, userId, ramo);
   const { approved } = getCompletedBlockIds(
     eixos,
     approvedActionIds,

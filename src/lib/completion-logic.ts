@@ -195,6 +195,53 @@ export function getEarnedSpecialtyBlocoIds(
   return blocoIds;
 }
 
+/**
+ * Whether a specialty listed under a bloco should render as marked, and how.
+ *
+ * A specialty can be satisfied two ways:
+ *  - *Earned via items* (#44): the escoteiro completed enough of its catalog
+ *    items to reach level ≥ 1. This is computed from `specialtyItemCompletions`
+ *    (surfaced as `earnedSpecialtyIds`), always counts as approved, and cannot
+ *    be un-toggled from the bloco view — so it renders checked and locked.
+ *  - *Legacy manual toggle*: a `specialtyCompletions` row written by
+ *    `toggleSpecialty`, which may be pending or approved.
+ *
+ * Earned-via-items wins: it forces checked+approved+locked regardless of any
+ * legacy row. Without it, the bloco could show 100% (satisfied via items) while
+ * its specialty box stayed empty — the escoteiro had to re-mark it by hand.
+ */
+export type SpecialtyMark = {
+  checked: boolean;
+  pending: boolean;
+  locked: boolean;
+  earnedViaItems: boolean;
+};
+
+export function getSpecialtyMark(
+  specialtyName: string,
+  blocoId: string,
+  completedSpecialties: {
+    blocoId: string;
+    specialtyName: string;
+    status: "pending" | "approved";
+  }[],
+  earnedSpecialtyIds: Set<string>,
+  lockApproved: boolean,
+): SpecialtyMark {
+  const earnedViaItems = earnedSpecialtyIds.has(
+    toCanonicalSpecialtyId(specialtyName),
+  );
+  const completion = completedSpecialties.find(
+    (s) => s.blocoId === blocoId && s.specialtyName === specialtyName,
+  );
+  const checked = earnedViaItems || !!completion;
+  const pending = !earnedViaItems && completion?.status === "pending";
+  const locked =
+    earnedViaItems ||
+    (lockApproved && completion?.status === "approved");
+  return { checked, pending, locked: !!locked, earnedViaItems };
+}
+
 export function getCompletedBlockIds(
   eixos: Eixo[],
   approvedActionIds: Set<string>,

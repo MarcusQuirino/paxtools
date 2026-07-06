@@ -6,6 +6,7 @@ import {
   getEarnedSpecialtyIds,
   getEarnedSpecialtyBlocoIds,
   getSpecialtyLevel,
+  getSpecialtyMark,
   toSpecialtySlug,
   toCanonicalSpecialtyId,
   getCurrentStage,
@@ -674,6 +675,95 @@ describe("toSpecialtySlug", () => {
   it("is stable — same input always gives same slug", () => {
     const name = "Prevenção ao Bullying";
     expect(toSpecialtySlug(name)).toBe(toSpecialtySlug(name));
+  });
+});
+
+// ── getSpecialtyMark ───────────────────────────────────────────
+
+describe("getSpecialtyMark", () => {
+  const NONE = new Set<string>();
+
+  it("marks an item-earned specialty checked+locked even with no legacy row", () => {
+    // The reported bug: bloco shows 100% via items but the box was empty.
+    const mark = getSpecialtyMark(
+      "Acampamento",
+      "b1",
+      [],
+      new Set(["acampamento"]),
+      false,
+    );
+    expect(mark.checked).toBe(true);
+    expect(mark.earnedViaItems).toBe(true);
+    expect(mark.locked).toBe(true);
+    expect(mark.pending).toBe(false);
+  });
+
+  it("resolves legacy renamed names to their canonical earned id", () => {
+    // "Ciências da Terra" → geologia (2025-guide rename).
+    const mark = getSpecialtyMark(
+      "Ciências da Terra",
+      "b1",
+      [],
+      new Set(["geologia"]),
+      false,
+    );
+    expect(mark.checked).toBe(true);
+    expect(mark.earnedViaItems).toBe(true);
+  });
+
+  it("leaves an unearned specialty unchecked", () => {
+    const mark = getSpecialtyMark("Acampamento", "b1", [], NONE, false);
+    expect(mark.checked).toBe(false);
+    expect(mark.locked).toBe(false);
+  });
+
+  it("reflects a pending legacy toggle as checked+pending", () => {
+    const mark = getSpecialtyMark(
+      "Acampamento",
+      "b1",
+      [{ blocoId: "b1", specialtyName: "Acampamento", status: "pending" }],
+      NONE,
+      false,
+    );
+    expect(mark.checked).toBe(true);
+    expect(mark.pending).toBe(true);
+    expect(mark.locked).toBe(false);
+  });
+
+  it("item-earned overrides a pending legacy row (approved, not pending)", () => {
+    const mark = getSpecialtyMark(
+      "Acampamento",
+      "b1",
+      [{ blocoId: "b1", specialtyName: "Acampamento", status: "pending" }],
+      new Set(["acampamento"]),
+      false,
+    );
+    expect(mark.checked).toBe(true);
+    expect(mark.pending).toBe(false);
+    expect(mark.locked).toBe(true);
+  });
+
+  it("locks an approved legacy row only when lockApproved is set", () => {
+    const row = [
+      { blocoId: "b1", specialtyName: "Acampamento", status: "approved" as const },
+    ];
+    expect(getSpecialtyMark("Acampamento", "b1", row, NONE, false).locked).toBe(
+      false,
+    );
+    expect(getSpecialtyMark("Acampamento", "b1", row, NONE, true).locked).toBe(
+      true,
+    );
+  });
+
+  it("scopes the legacy row lookup to the same bloco", () => {
+    const mark = getSpecialtyMark(
+      "Acampamento",
+      "b1",
+      [{ blocoId: "b2", specialtyName: "Acampamento", status: "approved" }],
+      NONE,
+      false,
+    );
+    expect(mark.checked).toBe(false);
   });
 });
 

@@ -126,6 +126,7 @@ export const getMyCompletions = query({
       customActions: [],
       irrItems: [],
       earnedSpecialtyBlocoIds: [] as string[],
+      earnedSpecialtyIds: [] as string[],
     };
 
     const userId = await getAuthUserId(ctx);
@@ -150,7 +151,7 @@ export const getMyCompletions = query({
       user.ramo,
     );
     const irrItems = await readCurrentRamoIrrItems(ctx, userId, user.ramo);
-    const earnedSpecialtyBlocoIds = await readEarnedSpecialtyBlocoIds(
+    const { blocoIds, specialtyIds } = await readEarnedSpecialtyBlocoIds(
       ctx,
       userId,
       user.ramo,
@@ -162,7 +163,8 @@ export const getMyCompletions = query({
       specialties,
       customActions,
       irrItems,
-      earnedSpecialtyBlocoIds: [...earnedSpecialtyBlocoIds],
+      earnedSpecialtyBlocoIds: [...blocoIds],
+      earnedSpecialtyIds: [...specialtyIds],
     };
   },
 });
@@ -195,7 +197,7 @@ export const getCompletionsForUser = query({
       args.targetUserId,
       target?.ramo,
     );
-    const earnedSpecialtyBlocoIds = await readEarnedSpecialtyBlocoIds(
+    const { blocoIds, specialtyIds } = await readEarnedSpecialtyBlocoIds(
       ctx,
       args.targetUserId,
       target?.ramo,
@@ -207,7 +209,8 @@ export const getCompletionsForUser = query({
       specialties,
       customActions,
       irrItems,
-      earnedSpecialtyBlocoIds: [...earnedSpecialtyBlocoIds],
+      earnedSpecialtyBlocoIds: [...blocoIds],
+      earnedSpecialtyIds: [...specialtyIds],
     };
   },
 });
