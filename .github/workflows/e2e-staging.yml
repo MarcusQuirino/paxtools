@@ -22,7 +22,10 @@ jobs:
       # The staging deploy key pins every `bunx convex run` to the staging
       # deployment (the CLI wrapper skips `--deployment` when a key is set).
       CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_STAGING }}
-      TEST_AUTH_PASSWORD: ${{ secrets.TEST_AUTH_PASSWORD }}
+      # Shared test-login password. The fallback matches the repo-wide default
+      # (playwright.config.ts, .env.local) and staging's TEST_AUTH_PASSWORD;
+      # set the TEST_AUTH_PASSWORD repo secret only if staging ever rotates it.
+      TEST_AUTH_PASSWORD: ${{ secrets.TEST_AUTH_PASSWORD || 'paxtools-test-only' }}
       E2E_TARGET: staging
       TEST_AUTH: "1"
     steps:
