@@ -1,0 +1,92 @@
+name: Deploy to Production
+
+# Manual, tag-driven production release. Master merges only ever reach
+# staging (see ci.yml); prod changes exclusively through this workflow:
+#
+#   git tag v1.5.0 && git push origin v1.5.0
+#   gh workflow run deploy-prod.yml -f tag=v1.5.0
+#
+# Order is load-bearing: snapshot -> backend -> migrations -> frontend.
+# If any step fails, the frontend never ships (prod keeps the old build);
+# convex functions must stay backward-compatible with the previous frontend
+# for the duration of a release. Rollback: re-run with the previous tag;
+# data rollback: restore the snapshot artifact via `bunx convex import`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git tag to deploy (e.g. v1.5.0)"
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Release ${{ inputs.tag }}
+    runs-on: ubuntu-latest
+    env:
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PROD }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # A tag can be cut from any commit, including one that never went
+      # through a PR (hotfixes) — re-verify it before touching prod.
+      - name: Lint
+        run: bun run lint
+
+      - name: Test
+        run: bun run test
+
+      - name: Snapshot prod data (restore point)
+        run: bunx convex export --path prod-snapshot-${{ inputs.tag }}.zip
+
+      - name: Upload snapshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-snapshot-${{ inputs.tag }}-${{ github.run_id }}
+          path: prod-snapshot-${{ inputs.tag }}.zip
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Deploy backend to prod
+        run: bunx convex deploy -y
+
+      - name: Run pending migrations
+        run: bunx convex run migrations:runPending
+
+      - name: Wait for migrations to finish
+        run: bun scripts/wait-for-migrations.ts
+
+      - name: Pull Vercel production config
+        run: bunx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build frontend (production env)
+        run: bunx vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy frontend to prod
+        run: bunx vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
