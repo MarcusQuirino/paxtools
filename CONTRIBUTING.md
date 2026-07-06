@@ -104,6 +104,15 @@ bun dev
 - Certifique-se de que `bun run build` passa sem erros
 - PRs menores e focados sao preferidos
 
+### Depois do merge
+
+- Merge em `master` publica automaticamente no ambiente de **staging**
+  (frontend + backend Convex de staging) — nao em producao.
+- Producao e publicada apenas pelo mantenedor, via workflow com tag.
+- Mudancas que alteram dados armazenados precisam de uma migracao
+  (`@convex-dev/migrations` — veja `convex/migrations.ts`).
+- Detalhes em [docs/deploy.md](docs/deploy.md).
+
 ## Areas que precisam de ajuda
 
 - Testes automatizados (unitarios e de integracao)

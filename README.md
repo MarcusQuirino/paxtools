@@ -264,6 +264,16 @@ Inicia simultaneamente o backend Convex e o frontend Vite na porta 3000.
 bun run build
 ```
 
+## Ambientes e deploy
+
+- **Staging** — todo merge em `master` publica automaticamente em
+  [`paxtools-git-master-marcusquirinos-projects.vercel.app`](https://paxtools-git-master-marcusquirinos-projects.vercel.app)
+  (frontend via Vercel + backend Convex de staging via GitHub Actions).
+- **Producao** — publicada apenas manualmente, via workflow com tag:
+  `gh workflow run deploy-prod.yml -f tag=vX.Y.Z`.
+
+Runbook completo (migracoes, rollback, seed de staging): [docs/deploy.md](docs/deploy.md).
+
 ## Cores dos eixos
 
 | Eixo | Cor | Hex |
