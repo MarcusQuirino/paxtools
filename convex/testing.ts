@@ -132,83 +132,123 @@ const CATALOG: CatalogEntry[] = [
   },
 ];
 
+/**
+ * Cascade-delete `targetUsers` and everything they own: per-user rows, auth
+ * rows, and any group in `targetGroups`. Groups and users go last so the
+ * traversals above them still resolve.
+ */
+async function wipeUsersCascade(
+  ctx: { db: import("./_generated/server").MutationCtx["db"] },
+  targetUsers: Doc<"users">[],
+  targetGroups: Doc<"groups">[],
+): Promise<{ deletedUsers: number; deletedGroups: number; deletedRows: number }> {
+  const targetUserIds = new Set<Id<"users">>(targetUsers.map((u) => u._id));
+
+  // 1. Per-user owned rows.
+  const userOwned = [
+    "actionCompletions",
+    "specialtyCompletions",
+    "customActions",
+    "lisDeOuroCompletions",
+    "irrCompletions",
+    "plannedItems",
+  ] as const;
+  let deletedRows = 0;
+  for (const table of userOwned) {
+    for (const uid of targetUserIds) {
+      const rows = await ctx.db
+        .query(table)
+        .withIndex("by_userId", (q) => q.eq("userId", uid))
+        .collect();
+      for (const r of rows) {
+        await ctx.db.delete(r._id);
+        deletedRows++;
+      }
+    }
+  }
+
+  // 2. Auth tables — any row whose userId is a target user. Sessions first
+  // so refresh tokens (which FK by sessionId) can be cleaned alongside.
+  const sessionIdsToDelete = new Set<Id<"authSessions">>();
+  const allSessions = await ctx.db.query("authSessions").collect();
+  for (const s of allSessions) {
+    if (targetUserIds.has(s.userId)) {
+      sessionIdsToDelete.add(s._id);
+    }
+  }
+  const allRefreshTokens = await ctx.db.query("authRefreshTokens").collect();
+  for (const r of allRefreshTokens) {
+    if (sessionIdsToDelete.has(r.sessionId)) {
+      await ctx.db.delete(r._id);
+      deletedRows++;
+    }
+  }
+  for (const sid of sessionIdsToDelete) {
+    await ctx.db.delete(sid);
+    deletedRows++;
+  }
+  const allAccounts = await ctx.db.query("authAccounts").collect();
+  for (const a of allAccounts) {
+    if (targetUserIds.has(a.userId)) {
+      await ctx.db.delete(a._id);
+      deletedRows++;
+    }
+  }
+
+  // 3. Groups, then users — last, so traversals above still resolve.
+  for (const g of targetGroups) await ctx.db.delete(g._id);
+  for (const u of targetUsers) await ctx.db.delete(u._id);
+
+  return {
+    deletedUsers: targetUsers.length,
+    deletedGroups: targetGroups.length,
+    deletedRows,
+  };
+}
+
 export const wipeTestData = internalMutation({
   args: {},
   handler: async (ctx) => {
     assertTestEnv();
 
-    // 1. Collect test users (single source of truth).
+    // Collect test users (single source of truth).
     const allUsers = await ctx.db.query("users").collect();
     const testUsers = allUsers.filter(isTestUser);
     const testUserIds = new Set<Id<"users">>(testUsers.map((u) => u._id));
 
-    // 2. Collect test groups: prefix AND createdBy is a test user.
+    // Test groups: prefix AND createdBy is a test user.
     const allGroups = await ctx.db.query("groups").collect();
     const testGroups = allGroups.filter(
       (g) =>
         g.name.startsWith(TEST_GROUP_PREFIX) && testUserIds.has(g.createdBy),
     );
 
-    // 3. Per-user owned rows.
-    const userOwned = [
-      "actionCompletions",
-      "specialtyCompletions",
-      "customActions",
-      "lisDeOuroCompletions",
-      "irrCompletions",
-      "plannedItems",
-    ] as const;
-    let deletedRows = 0;
-    for (const table of userOwned) {
-      for (const uid of testUserIds) {
-        const rows = await ctx.db
-          .query(table)
-          .withIndex("by_userId", (q) => q.eq("userId", uid))
-          .collect();
-        for (const r of rows) {
-          await ctx.db.delete(r._id);
-          deletedRows++;
-        }
-      }
-    }
+    return await wipeUsersCascade(ctx, testUsers, testGroups);
+  },
+});
 
-    // 4. Auth tables — any row whose userId is a test user. Sessions first
-    // so refresh tokens (which FK by sessionId) can be cleaned alongside.
-    const sessionIdsToDelete = new Set<Id<"authSessions">>();
-    const allSessions = await ctx.db.query("authSessions").collect();
-    for (const s of allSessions) {
-      if (testUserIds.has(s.userId)) {
-        sessionIdsToDelete.add(s._id);
-      }
-    }
-    const allRefreshTokens = await ctx.db.query("authRefreshTokens").collect();
-    for (const r of allRefreshTokens) {
-      if (sessionIdsToDelete.has(r.sessionId)) {
-        await ctx.db.delete(r._id);
-        deletedRows++;
-      }
-    }
-    for (const sid of sessionIdsToDelete) {
-      await ctx.db.delete(sid);
-      deletedRows++;
-    }
-    const allAccounts = await ctx.db.query("authAccounts").collect();
-    for (const a of allAccounts) {
-      if (testUserIds.has(a.userId)) {
-        await ctx.db.delete(a._id);
-        deletedRows++;
-      }
-    }
+/**
+ * Staging-only: delete every REAL user (any account whose email is not
+ * `@test.paxtools.local`) so the Google onboarding flow can be re-tested
+ * from scratch. Seeded test users and the test group are untouched.
+ *
+ * Cannot run on prod: `assertTestEnv` throws unless TEST_AUTH=1, which prod
+ * never sets. Invoke via `bun run staging:wipe-real`.
+ */
+export const wipeRealUsers = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    assertTestEnv();
 
-    // 5. Groups, then users — last, so traversals above still resolve.
-    for (const g of testGroups) await ctx.db.delete(g._id);
-    for (const u of testUsers) await ctx.db.delete(u._id);
+    const allUsers = await ctx.db.query("users").collect();
+    const realUsers = allUsers.filter((u) => !isTestUser(u));
+    const realUserIds = new Set<Id<"users">>(realUsers.map((u) => u._id));
 
-    return {
-      deletedUsers: testUsers.length,
-      deletedGroups: testGroups.length,
-      deletedRows,
-    };
+    // Any group a real user created (e.g. via onboarding) goes with them.
+    const allGroups = await ctx.db.query("groups").collect();
+    const realGroups = allGroups.filter((g) => realUserIds.has(g.createdBy));
+
+    return await wipeUsersCascade(ctx, realUsers, realGroups);
   },
 });
 
