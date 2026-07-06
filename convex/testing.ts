@@ -147,6 +147,16 @@ const CATALOG: CatalogEntry[] = [
     inGroup: false,
   },
   {
+    // Dedicated persona for the M13 onboarding e2e spec, so the readonly
+    // "forced into onboarding" persona above is never mutated. Reset back to
+    // this state via testing:resetOnboardingUser.
+    slug: "onboarding_m13",
+    email: "onboarding-m13@test.paxtools.local",
+    name: "onboarding-m13",
+    onboardingComplete: false,
+    inGroup: false,
+  },
+  {
     slug: "banned_user",
     email: "banned@test.paxtools.local",
     name: "banned",
@@ -473,6 +483,51 @@ export const seedTestUsers = internalMutation({
     }
 
     return { users: userIds, groupId };
+  },
+});
+
+/**
+ * Reset a dedicated onboarding persona to the not-onboarded state (role,
+ * ramo, group and membership cleared, onboardingComplete=false), deleting
+ * any join-request side effects. Restricted to the onboarding personas so a
+ * bad email can't strip a data-bearing user. Makes the M13 e2e spec
+ * retry-safe: it calls this before acting.
+ */
+export const resetOnboardingUser = internalMutation({
+  args: { email: v.string() },
+  handler: async (ctx, { email }): Promise<void> => {
+    assertTestEnv();
+    const allowed = new Set([
+      "onboarding@test.paxtools.local",
+      "onboarding-m13@test.paxtools.local",
+    ]);
+    if (!allowed.has(email)) {
+      throw new Error(`not an onboarding persona: ${email}`);
+    }
+    const user = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", email))
+      .unique();
+    if (!user) {
+      throw new Error(`onboarding persona missing (seed first): ${email}`);
+    }
+    await ctx.db.patch(user._id, {
+      role: undefined,
+      ramo: undefined,
+      escotistaRamos: undefined,
+      isAdmin: undefined,
+      membershipStatus: undefined,
+      onboardingComplete: false,
+      groupId: undefined,
+    });
+    // Drop any events the onboarding flow may have logged for this user so
+    // repeated runs don't accumulate feed lines.
+    const allEvents = await ctx.db.query("events").collect();
+    for (const e of allEvents) {
+      if (e.subjectUserId === user._id || e.actorUserId === user._id) {
+        await ctx.db.delete(e._id);
+      }
+    }
   },
 });
 

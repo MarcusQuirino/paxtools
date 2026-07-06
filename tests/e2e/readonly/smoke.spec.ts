@@ -10,7 +10,7 @@
  * the hidden signin form — that is expected. Do not skip it.
  */
 
-import { adminTest as test, expect } from "../fixtures/auth";
+import { adminTest as test, expect } from "../../fixtures/auth";
 
 test("admin lands on /escotista without redirect", async ({ page }) => {
   await page.goto("/escotista");
