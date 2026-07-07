@@ -116,7 +116,7 @@ export function CustomActionInput({
         );
       })}
       {!planOnly && (
-        <div className="flex gap-2 px-3 pt-2">
+        <div className="flex gap-2 px-3 py-2">
           <Input
             placeholder="Adicionar ação personalizada..."
             value={text}
