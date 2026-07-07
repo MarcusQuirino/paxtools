@@ -31,6 +31,9 @@ type EixoSectionProps = {
   blocoFilter?: (blocoId: string) => boolean;
   planOnly?: boolean;
   lockApproved?: boolean;
+  /** Target scout in the escotista impersonation view (#53) — threads to the
+   * specialty "ver" deep-link. */
+  escoteiroId?: Id<"users">;
 };
 
 export function EixoSection({
@@ -54,6 +57,7 @@ export function EixoSection({
   blocoFilter,
   planOnly,
   lockApproved,
+  escoteiroId,
 }: EixoSectionProps) {
   const visibleBlocos = blocoFilter
     ? eixo.blocos.filter((b) => blocoFilter(b.id))
@@ -113,6 +117,7 @@ export function EixoSection({
             onTogglePlanned={onTogglePlanned}
             planOnly={planOnly}
             lockApproved={lockApproved}
+            escoteiroId={escoteiroId}
           />
         ))}
       </Accordion>

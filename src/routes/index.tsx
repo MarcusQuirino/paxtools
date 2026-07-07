@@ -204,6 +204,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
             onToggleCustom={handleToggleCustom}
             onDeleteCustom={handleDeleteCustom}
             lockApproved={lockApproved}
+            escoteiroId={targetUserId}
           />
         ))
       )}

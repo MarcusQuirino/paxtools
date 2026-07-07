@@ -386,6 +386,86 @@ describe("getMySpecialtyItems", () => {
 });
 
 // ---------------------------------------------------------------------------
+// #53: escotista viewing a scout's especialidade detail — access rules for the
+// visibility-checked per-escoteiro queries wired into /especialidades.
+// ---------------------------------------------------------------------------
+
+describe("getSpecialtyItemsForEscoteiro (#53 access rules)", () => {
+  test("escotista with ramo visibility → returns the scout's items", async () => {
+    const t = convexTest(schema, modules);
+    // seedGroup's escotista is the grupo creator → admin → sees all ramos.
+    const { escoteiroId, escotistaId } = await seedGroup(t);
+
+    await as(t, escoteiroId).mutation(api.specialties.toggleSpecialtyItem, {
+      specialtyId: "administracao",
+      itemIndex: 0,
+    });
+
+    const items = await as(t, escotistaId).query(
+      api.specialties.getSpecialtyItemsForEscoteiro,
+      { escoteiroId },
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0]!.specialtyId).toBe("administracao");
+  });
+
+  test("escotista without ramo visibility → returns []", async () => {
+    const t = convexTest(schema, modules);
+    const { escoteiroId, groupId } = await seedGroup(t);
+
+    await as(t, escoteiroId).mutation(api.specialties.toggleSpecialtyItem, {
+      specialtyId: "administracao",
+      itemIndex: 0,
+    });
+
+    // A non-admin escotista in the same grupo who accompanies a different ramo
+    // than the escoteiro (escoteiro) — outside visibilidade de ramo.
+    const outsideEscotistaId = await insertUser(t, {
+      name: "Escotista Senior",
+      role: "escotista",
+      escotistaRamos: ["senior"],
+      groupId,
+      isAdmin: false,
+      membershipStatus: "approved",
+      onboardingComplete: true,
+    });
+
+    const items = await as(t, outsideEscotistaId).query(
+      api.specialties.getSpecialtyItemsForEscoteiro,
+      { escoteiroId },
+    );
+    expect(items).toHaveLength(0);
+  });
+
+  test("escoteiro passing another scout's id → returns []", async () => {
+    const t = convexTest(schema, modules);
+    const { escoteiroId, groupId } = await seedGroup(t);
+
+    await as(t, escoteiroId).mutation(api.specialties.toggleSpecialtyItem, {
+      specialtyId: "administracao",
+      itemIndex: 0,
+    });
+
+    // A peer escoteiro cannot read someone else's items — non-escotista callers
+    // resolve to no viewer.
+    const otherEscoteiroId = await insertUser(t, {
+      name: "Outro Escoteiro",
+      role: "escoteiro",
+      ramo: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+      onboardingComplete: true,
+    });
+
+    const items = await as(t, otherEscoteiroId).query(
+      api.specialties.getSpecialtyItemsForEscoteiro,
+      { escoteiroId },
+    );
+    expect(items).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Older ramoGroup — project-report steps (#43)
 // ---------------------------------------------------------------------------
 
@@ -678,6 +758,81 @@ describe("approveSpecialtyStep + rejectSpecialtyStep", () => {
     rows = await reportsFor(t, escoteiroId);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.text).toBe("Nova tentativa.");
+  });
+
+  describe("getSpecialtyReportsForEscoteiro (#53 access rules)", () => {
+    test("escotista with ramo visibility → returns the scout's reports", async () => {
+      const t = convexTest(schema, modules);
+      const { escoteiroId, escotistaId } = await seedOlderGroup(t);
+
+      await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+        specialtyId: "comunicacoes",
+        step: "conhecer",
+        text: "Relato conhecer.",
+      });
+
+      const reports = await as(t, escotistaId).query(
+        api.specialties.getSpecialtyReportsForEscoteiro,
+        { escoteiroId },
+      );
+      expect(reports).toHaveLength(1);
+      expect(reports[0]!.specialtyId).toBe("comunicacoes");
+    });
+
+    test("escotista without ramo visibility → returns []", async () => {
+      const t = convexTest(schema, modules);
+      const { escoteiroId, groupId } = await seedOlderGroup(t);
+
+      await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+        specialtyId: "comunicacoes",
+        step: "conhecer",
+        text: "Relato conhecer.",
+      });
+
+      // Non-admin escotista accompanying a different ramo (lobinho) than the
+      // senior escoteiro — outside visibilidade de ramo.
+      const outsideEscotistaId = await insertUser(t, {
+        name: "Escotista Lobinho",
+        role: "escotista",
+        escotistaRamos: ["lobinho"],
+        groupId,
+        isAdmin: false,
+        membershipStatus: "approved",
+        onboardingComplete: true,
+      });
+
+      const reports = await as(t, outsideEscotistaId).query(
+        api.specialties.getSpecialtyReportsForEscoteiro,
+        { escoteiroId },
+      );
+      expect(reports).toHaveLength(0);
+    });
+
+    test("escoteiro passing another scout's id → returns []", async () => {
+      const t = convexTest(schema, modules);
+      const { escoteiroId, groupId } = await seedOlderGroup(t);
+
+      await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+        specialtyId: "comunicacoes",
+        step: "conhecer",
+        text: "Relato conhecer.",
+      });
+
+      const otherEscoteiroId = await insertUser(t, {
+        name: "Outro Senior",
+        role: "escoteiro",
+        ramo: "senior",
+        groupId,
+        membershipStatus: "approved",
+        onboardingComplete: true,
+      });
+
+      const reports = await as(t, otherEscoteiroId).query(
+        api.specialties.getSpecialtyReportsForEscoteiro,
+        { escoteiroId },
+      );
+      expect(reports).toHaveLength(0);
+    });
   });
 
   test("getMySpecialtyReports returns only own older reports", async () => {
