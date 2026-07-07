@@ -179,8 +179,8 @@ function SpecialtyCard({
                 />
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                {approvedCount}/{totalItems} item{totalItems > 1 ? "ns" : ""}{" "}
-                aprovado{approvedCount !== 1 ? "s" : ""}
+                {approvedCount}/{totalItems}{" "}
+                {approvedCount === 1 ? "item aprovado" : "itens aprovados"}
               </p>
             </div>
             <ChevronDown

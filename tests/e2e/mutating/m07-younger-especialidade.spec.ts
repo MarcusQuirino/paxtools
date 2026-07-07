@@ -149,7 +149,7 @@ test("younger especialidade item approval levels Felipe up to Nível 1", async (
     // ── Assert: Felipe's especialidade is now Nível 1 with 4/8 aprovados ──────
     let card = await openFelipeCard(felipePage);
     await expect(card).toContainText("Nível 1", { timeout: 15_000 });
-    await expect(card).toContainText("4/8 itemns aprovados");
+    await expect(card).toContainText("4/8 itens aprovados");
 
     // ── Step 2: self-cleaning demo — mark one more item, then Marina rejects ──
     // Mark the first still-unstarted item (enabled + unchecked) → pending.
@@ -180,7 +180,7 @@ test("younger especialidade item approval levels Felipe up to Nível 1", async (
     // ── Assert: back to the clean 4/8 Nível 1 state, no pending item ──────────
     card = await openFelipeCard(felipePage);
     await expect(card).toContainText("Nível 1", { timeout: 15_000 });
-    await expect(card).toContainText("4/8 itemns aprovados");
+    await expect(card).toContainText("4/8 itens aprovados");
     await expect(card).not.toContainText("pendente");
   } finally {
     await felipeCtx.close();

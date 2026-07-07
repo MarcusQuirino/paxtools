@@ -14,7 +14,7 @@
  *      sênior is older — a different catalog. Her earned YOUNGER especialidade
  *      record is retained but NEVER shown in the older group. The older
  *      /especialidades page (three-etapa project UI) must render with NO
- *      younger-only signals at all: no "Nível 1/2" level badge and no "itemns
+ *      younger-only signals at all: no "Nível 1/2" level badge and no "itens
  *      aprovados" progress line anywhere. (A raw name-absence check is avoided
  *      on purpose — a few names, e.g. "Comunicações", exist in BOTH the younger
  *      and older catalogs, so the older catalog legitimately shows them; the
@@ -133,7 +133,7 @@ test("M19 admin advances Gabriela escoteiro→sênior: fresh progression, especi
     // Her younger record is retained but NEVER shown here: no younger card, no
     // younger level badge, no younger item-progress line.
     await expect(gabriela.getByText(/Nível [12]/)).toHaveCount(0);
-    await expect(gabriela.getByText(/itemns aprovados/)).toHaveCount(0);
+    await expect(gabriela.getByText(/itens aprovados/)).toHaveCount(0);
 
     // ── Rule 3: visibility flips escoteiro → sênior escotista ─────────────────
     await gotoPainel(talita, TALITA.email);
