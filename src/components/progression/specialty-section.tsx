@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { PlanStar } from "./plan-star";
 import { encodePlanKey } from "@/lib/plan-keys";
 import { getSpecialtyMark, toCanonicalSpecialtyId } from "@/lib/completion-logic";
+import type { Id } from "../../../convex/_generated/dataModel";
 
 type SpecialtySectionProps = {
   blocoId: string;
@@ -21,6 +22,12 @@ type SpecialtySectionProps = {
   onTogglePlanned?: (itemKey: string) => void;
   planOnly?: boolean;
   lockApproved?: boolean;
+  /**
+   * Target scout when rendered in the escotista impersonation Dashboard (#53):
+   * the "ver" deep-link carries it so /especialidades opens the scout's detail
+   * instead of bouncing the escotista.
+   */
+  escoteiroId?: Id<"users">;
 };
 
 export function SpecialtySection({
@@ -33,6 +40,7 @@ export function SpecialtySection({
   onTogglePlanned,
   planOnly,
   lockApproved,
+  escoteiroId,
 }: SpecialtySectionProps) {
   if (alternatives.length === 0) return null;
 
@@ -108,7 +116,10 @@ export function SpecialtySection({
                 {alt.type === "especialidade" && (
                   <Link
                     to="/especialidades"
-                    search={{ specialty: toCanonicalSpecialtyId(item) }}
+                    search={{
+                      specialty: toCanonicalSpecialtyId(item),
+                      ...(escoteiroId ? { escoteiroId } : {}),
+                    }}
                     onClick={(e) => e.stopPropagation()}
                     className="flex items-center gap-0.5 text-xs font-medium text-primary hover:underline shrink-0"
                   >

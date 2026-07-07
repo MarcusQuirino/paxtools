@@ -3,7 +3,7 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
-import type { Doc } from "../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { useAuthGate } from "@/hooks/use-auth-gate";
 import { AuthButton } from "@/components/auth/auth-button";
 import { PlanNav } from "@/components/progression/plan-nav";
@@ -61,13 +61,39 @@ function useDeepLinkHighlight(highlighted: boolean) {
 export const Route = createFileRoute("/especialidades")({
   // Deep-link target (#44): `?specialty=<slug>` highlights and scrolls to a
   // specialty. Bloco cards link here for their alternativeCompletions.
+  //
+  // Escotista access (#53): `?escoteiroId=<id>` opens a scout's especialidade
+  // detail read-only for an escotista with ramo visibility. The bloco "ver"
+  // link carries it when rendered inside the impersonation Dashboard.
   validateSearch: (
     search: Record<string, unknown>,
-  ): { specialty?: string } => ({
+  ): { specialty?: string; escoteiroId?: string } => ({
     specialty:
       typeof search.specialty === "string" ? search.specialty : undefined,
+    escoteiroId:
+      typeof search.escoteiroId === "string" ? search.escoteiroId : undefined,
   }),
-  loader: async ({ context }) => {
+  loaderDeps: ({ search: { escoteiroId } }) => ({ escoteiroId }),
+  loader: async ({ context, deps }) => {
+    if (deps.escoteiroId) {
+      const escoteiroId = deps.escoteiroId as Id<"users">;
+      await Promise.all([
+        context.queryClient.ensureQueryData(
+          convexQuery(api.groups.getGroupMembers, {}),
+        ),
+        context.queryClient.ensureQueryData(
+          convexQuery(api.specialties.getSpecialtyItemsForEscoteiro, {
+            escoteiroId,
+          }),
+        ),
+        context.queryClient.ensureQueryData(
+          convexQuery(api.specialties.getSpecialtyReportsForEscoteiro, {
+            escoteiroId,
+          }),
+        ),
+      ]);
+      return;
+    }
     await Promise.all([
       context.queryClient.ensureQueryData(
         convexQuery(api.specialties.getMySpecialtyItems, {}),
@@ -114,12 +140,15 @@ function SpecialtyCard({
   onToggle,
   isToggling,
   highlighted,
+  readOnly,
 }: {
   specialty: YoungSpecialty;
   items: ItemRow[];
   onToggle: (specialtyId: string, itemIndex: number) => void;
   isToggling: boolean;
   highlighted?: boolean;
+  /** Escotista read-only mode (#53): disable every checkbox. */
+  readOnly?: boolean;
 }) {
   const { ref, open, setOpen } = useDeepLinkHighlight(!!highlighted);
 
@@ -228,7 +257,7 @@ function SpecialtyCard({
                   >
                     <Checkbox
                       checked={isApproved || isPending}
-                      disabled={isApproved || isToggling}
+                      disabled={readOnly || isApproved || isToggling}
                       className={
                         isApproved
                           ? "data-[state=checked]:bg-green-600 data-[state=checked]:border-green-700 mt-0.5"
@@ -237,7 +266,7 @@ function SpecialtyCard({
                             : "mt-0.5"
                       }
                       onCheckedChange={() => {
-                        if (!isApproved) {
+                        if (!isApproved && !readOnly) {
                           onToggle(specialty.id, index);
                         }
                       }}
@@ -298,6 +327,7 @@ function EixoSection({
   onToggle,
   isToggling,
   highlightId,
+  readOnly,
 }: {
   eixoId: string;
   specialties: YoungSpecialty[];
@@ -305,6 +335,7 @@ function EixoSection({
   onToggle: (specialtyId: string, itemIndex: number) => void;
   isToggling: boolean;
   highlightId?: string;
+  readOnly?: boolean;
 }) {
   const [open, setOpen] = useAutoOpen(
     specialties.some((s) => s.id === highlightId),
@@ -355,6 +386,7 @@ function EixoSection({
               onToggle={onToggle}
               isToggling={isToggling}
               highlighted={s.id === highlightId}
+              readOnly={readOnly}
             />
           ))}
         </div>
@@ -368,8 +400,13 @@ function EixoSection({
 // ---------------------------------------------------------------------------
 
 function EspecialidadesPage() {
-  const { ready, user } = useAuthGate("escoteiro");
-  const { specialty: highlightId } = Route.useSearch();
+  const { specialty: highlightId, escoteiroId: escoteiroIdRaw } =
+    Route.useSearch();
+  const escoteiroId = escoteiroIdRaw as Id<"users"> | undefined;
+  // With an escoteiroId the viewer is an escotista inspecting a scout's
+  // detail (#53); without it this is the escoteiro self-service page. The gate
+  // requires the matching role so the escotista is no longer bounced.
+  const { ready, user } = useAuthGate(escoteiroId ? "escotista" : "escoteiro");
 
   if (!ready) {
     return (
@@ -390,6 +427,17 @@ function EspecialidadesPage() {
     );
   }
 
+  // Escotista inspecting a scout's especialidade detail (#53): render that
+  // scout's data read-only, keyed by the scout's ramo — not the adult's.
+  if (escoteiroId) {
+    return (
+      <EscotistaEspecialidadesContent
+        escoteiroId={escoteiroId}
+        highlightId={highlightId}
+      />
+    );
+  }
+
   const ramo = user?.ramo;
 
   // Older group (sênior + pioneiro): project-step UI. Younger: item checklist.
@@ -400,6 +448,42 @@ function EspecialidadesPage() {
   return <YoungerEspecialidadesContent highlightId={highlightId} />;
 }
 
+/**
+ * Escotista read-only view of a scout's especialidades (#53). The scout's ramo
+ * (resolved via the visibility-scoped getGroupMembers) decides younger vs older
+ * UI. Data comes from the visibility-checked per-escoteiro queries; the backend
+ * returns [] when the viewer lacks ramo visibility, so no data can leak here.
+ */
+function EscotistaEspecialidadesContent({
+  escoteiroId,
+  highlightId,
+}: {
+  escoteiroId: Id<"users">;
+  highlightId?: string;
+}) {
+  const { data: members } = useSuspenseQuery(
+    convexQuery(api.groups.getGroupMembers, {}),
+  );
+  const ramo = members.find((m) => m._id === escoteiroId)?.ramo;
+
+  if (ramo === "senior" || ramo === "pioneiro") {
+    return (
+      <OlderEscoteiroContent
+        highlightId={highlightId}
+        escoteiroId={escoteiroId}
+      />
+    );
+  }
+
+  return (
+    <YoungerEscoteiroContent
+      highlightId={highlightId}
+      escoteiroId={escoteiroId}
+    />
+  );
+}
+
+// Self-service fetcher: the escoteiro's own items (editable).
 function YoungerEspecialidadesContent({
   highlightId,
 }: {
@@ -408,7 +492,38 @@ function YoungerEspecialidadesContent({
   const { data: myItems } = useSuspenseQuery(
     convexQuery(api.specialties.getMySpecialtyItems, {}),
   );
+  return (
+    <YoungerEspecialidadesView items={myItems} highlightId={highlightId} />
+  );
+}
 
+// Escotista fetcher (#53): a scout's items via the visibility-checked query,
+// rendered read-only.
+function YoungerEscoteiroContent({
+  highlightId,
+  escoteiroId,
+}: {
+  highlightId?: string;
+  escoteiroId: Id<"users">;
+}) {
+  const { data: items } = useSuspenseQuery(
+    convexQuery(api.specialties.getSpecialtyItemsForEscoteiro, { escoteiroId }),
+  );
+  return (
+    <YoungerEspecialidadesView items={items} highlightId={highlightId} readOnly />
+  );
+}
+
+function YoungerEspecialidadesView({
+  items: myItems,
+  highlightId,
+  readOnly,
+}: {
+  items: Doc<"specialtyItemCompletions">[];
+  highlightId?: string;
+  /** Escotista read-only mode (#53): disable self-service controls. */
+  readOnly?: boolean;
+}) {
   const toggleItemFn = useConvexMutation(api.specialties.toggleSpecialtyItem);
   const { mutate: toggleItem, isPending: isToggling } = useMutation({
     mutationFn: toggleItemFn,
@@ -426,7 +541,10 @@ function YoungerEspecialidadesContent({
     return m;
   }, [myItems]);
 
+  // In escotista read-only mode, self-service toggling must not fire as the
+  // adult — the controls are disabled and the handler is a no-op (#53).
   const handleToggle = (specialtyId: string, itemIndex: number) => {
+    if (readOnly) return;
     toggleItem({ specialtyId, itemIndex });
   };
 
@@ -456,6 +574,7 @@ function YoungerEspecialidadesContent({
                 onToggle={handleToggle}
                 isToggling={isToggling}
                 highlightId={highlightId}
+                readOnly={readOnly}
               />
             );
           })}
@@ -489,6 +608,7 @@ function StepCard({
   row,
   onSubmit,
   isSubmitting,
+  readOnly,
 }: {
   specialtyId: string;
   step: Step;
@@ -496,6 +616,8 @@ function StepCard({
   row: ReportRow | undefined;
   onSubmit: (specialtyId: string, step: Step, text: string) => void;
   isSubmitting: boolean;
+  /** Escotista read-only mode (#53): lock the textarea, hide the submit. */
+  readOnly?: boolean;
 }) {
   const status = row?.status ?? null;
   const isApproved = status === "approved";
@@ -507,7 +629,7 @@ function StepCard({
     setText(row?.text ?? "");
   }, [row?._id, row?.text]);
 
-  const canEdit = !isApproved;
+  const canEdit = !isApproved && !readOnly;
   const dirty = text.trim() !== (row?.text ?? "").trim();
 
   return (
@@ -593,12 +715,14 @@ function OlderSpecialtyCard({
   onSubmit,
   isSubmitting,
   highlighted,
+  readOnly,
 }: {
   specialty: OlderSpecialty;
   reports: Map<Step, ReportRow>;
   onSubmit: (specialtyId: string, step: Step, text: string) => void;
   isSubmitting: boolean;
   highlighted?: boolean;
+  readOnly?: boolean;
 }) {
   const { ref, open, setOpen } = useDeepLinkHighlight(!!highlighted);
 
@@ -661,6 +785,7 @@ function OlderSpecialtyCard({
                 row={reports.get(step)}
                 onSubmit={onSubmit}
                 isSubmitting={isSubmitting}
+                readOnly={readOnly}
               />
             ))}
           </div>
@@ -677,6 +802,7 @@ function OlderEixoSection({
   onSubmit,
   isSubmitting,
   highlightId,
+  readOnly,
 }: {
   eixoId: string;
   specialties: OlderSpecialty[];
@@ -684,6 +810,7 @@ function OlderEixoSection({
   onSubmit: (specialtyId: string, step: Step, text: string) => void;
   isSubmitting: boolean;
   highlightId?: string;
+  readOnly?: boolean;
 }) {
   const [open, setOpen] = useAutoOpen(
     specialties.some((s) => s.id === highlightId),
@@ -731,6 +858,7 @@ function OlderEixoSection({
               onSubmit={onSubmit}
               isSubmitting={isSubmitting}
               highlighted={s.id === highlightId}
+              readOnly={readOnly}
             />
           ))}
         </div>
@@ -739,11 +867,49 @@ function OlderEixoSection({
   );
 }
 
+// Self-service fetcher: the escoteiro's own reports (editable).
 function OlderEspecialidadesContent({ highlightId }: { highlightId?: string }) {
   const { data: myReports } = useSuspenseQuery(
     convexQuery(api.specialties.getMySpecialtyReports, {}),
   );
+  return (
+    <OlderEspecialidadesView reports={myReports} highlightId={highlightId} />
+  );
+}
 
+// Escotista fetcher (#53): a scout's reports via the visibility-checked query,
+// rendered read-only.
+function OlderEscoteiroContent({
+  highlightId,
+  escoteiroId,
+}: {
+  highlightId?: string;
+  escoteiroId: Id<"users">;
+}) {
+  const { data: reports } = useSuspenseQuery(
+    convexQuery(api.specialties.getSpecialtyReportsForEscoteiro, {
+      escoteiroId,
+    }),
+  );
+  return (
+    <OlderEspecialidadesView
+      reports={reports}
+      highlightId={highlightId}
+      readOnly
+    />
+  );
+}
+
+function OlderEspecialidadesView({
+  reports: myReports,
+  highlightId,
+  readOnly,
+}: {
+  reports: Doc<"specialtyProjectReports">[];
+  highlightId?: string;
+  /** Escotista read-only mode (#53): disable self-service controls. */
+  readOnly?: boolean;
+}) {
   // Submitting a step never earns the specialty (that happens on escotista
   // approval of the compartilhar step), so no level-up toast is expected here.
   const submitStepFn = useConvexMutation(api.specialties.submitSpecialtyStep);
@@ -763,7 +929,10 @@ function OlderEspecialidadesContent({ highlightId }: { highlightId?: string }) {
     return m;
   }, [myReports]);
 
+  // In escotista read-only mode, submitting as the scout must not fire as the
+  // adult — the textareas are disabled and the handler is a no-op (#53).
   const handleSubmit = (specialtyId: string, step: Step, text: string) => {
+    if (readOnly) return;
     submitStep({ specialtyId, step, text });
   };
 
@@ -797,6 +966,7 @@ function OlderEspecialidadesContent({ highlightId }: { highlightId?: string }) {
               onSubmit={handleSubmit}
               isSubmitting={isSubmitting}
               highlightId={highlightId}
+              readOnly={readOnly}
             />
           ))}
         </div>

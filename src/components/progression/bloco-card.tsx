@@ -38,6 +38,9 @@ type BlocoCardProps = {
   onTogglePlanned?: (itemKey: string) => void;
   planOnly?: boolean;
   lockApproved?: boolean;
+  /** Target scout in the escotista impersonation view (#53) — threads to the
+   * specialty "ver" deep-link. */
+  escoteiroId?: Id<"users">;
 };
 
 export function BlocoCard({
@@ -60,6 +63,7 @@ export function BlocoCard({
   onTogglePlanned,
   planOnly,
   lockApproved,
+  escoteiroId,
 }: BlocoCardProps) {
   const approvedCustomCompleted = customActions.filter(
     (c) => c.blocoId === bloco.id && c.completed && c.status !== "pending",
@@ -186,6 +190,7 @@ export function BlocoCard({
           onTogglePlanned={onTogglePlanned}
           planOnly={planOnly}
           lockApproved={lockApproved}
+          escoteiroId={escoteiroId}
         />
       </AccordionContent>
     </AccordionItem>
