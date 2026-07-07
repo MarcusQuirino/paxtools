@@ -49,7 +49,7 @@ An escoteiro-authored ação standing in for a bloco's variable ação.
 _Avoid_: custom action (in prose)
 
 **Especialidade**:
-A specialty an escoteiro can complete as a bloco's alternative path. How it is earned differs by ramo group: a **younger** especialidade (lobinho/escoteiro) is earned by completing enough of its checklist items and can reach multiple levels; an **older** especialidade (sênior/pioneiro) is a single three-[[etapa-de-especialidade]] project and is earned *binarily* — all three reports approved, or not earned. Earning one completes any bloco that names it as an alternative completion, regardless of ramo group.
+A specialty an escoteiro can complete as a bloco's alternative path. How it is earned differs by ramo group: a **younger** especialidade (lobinho/escoteiro) is earned by completing enough of its checklist items and can reach multiple levels; an **older** especialidade (sênior/pioneiro) is a single three-[[etapa-de-especialidade]] project and is earned *binarily* — all three reports approved, or not earned. Earning one completes any bloco that names it as an alternative completion, regardless of ramo group. Unlike progression, especialidades **carry over** when an escoteiro advances ramo *within* the same ramo group (lobinho→escoteiro, sênior→pioneiro — the group shares one catalog); crossing the group boundary (escoteiro→sênior) starts especialidades fresh — the younger record is retained but never shown in, or merged into, the older group.
 _Avoid_: badge, skill
 
 **Etapa de especialidade**:

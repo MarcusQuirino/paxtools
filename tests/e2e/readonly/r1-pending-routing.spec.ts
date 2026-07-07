@@ -12,6 +12,7 @@
  */
 
 import { escotistaPendingTest as test, expect } from "../../fixtures/auth";
+import { pendingTest } from "../../fixtures/auth";
 
 test("pending escotista sees waiting screen, no nav tabs, no password leak", async ({
   page,
@@ -38,4 +39,25 @@ test("pending escotista sees waiting screen, no nav tabs, no password leak", asy
   // where `getMyGroup` stops nulling password for pending status.
   const bodyText = await page.locator("body").innerText();
   expect(bodyText).not.toContain("TESTQA");
+});
+
+/**
+ * Asymmetry lock: unlike a pending *escotista* (parked above), a pending
+ * *escoteiro* is NOT parked — the escoteiro guard (`useAuthGate("escoteiro")`)
+ * has no membership gate, so a not-yet-approved escoteiro still reaches their
+ * own dashboard and can self-track progression (their conclusões simply have
+ * no approver yet). This documents the intended behavior so a future "park
+ * pending escoteiros too" change is a conscious one.
+ */
+pendingTest("pending escoteiro reaches their dashboard (not parked)", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("link", { name: "Plano" })).toBeVisible();
+  await expect(page.getByText("ETAPA ATUAL")).toBeVisible();
+  // No escotista waiting screen bleeds into the escoteiro surface.
+  await expect(
+    page.getByRole("heading", { name: "Aguardando aprovação" }),
+  ).toHaveCount(0);
 });

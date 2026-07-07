@@ -140,6 +140,20 @@ export const CATALOG = [
     hasGroup: false,
     bannedAt: true,
   },
+  {
+    // Dedicated persona owned by the M13 onboarding spec (mutating phase);
+    // `escoteiro-onboarding-incomplete` above stays readonly-only.
+    slug: "onboarding-m13",
+    email: "onboarding-m13@test.paxtools.local",
+    role: null,
+    membershipStatus: null,
+    ramo: null,
+    isAdmin: false,
+    escotistaRamos: [],
+    onboardingComplete: false,
+    hasGroup: false,
+    bannedAt: false,
+  },
 ] as const satisfies readonly TestUserCatalogEntry[];
 
 export type CatalogSlug = (typeof CATALOG)[number]["slug"];

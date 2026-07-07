@@ -147,6 +147,16 @@ const CATALOG: CatalogEntry[] = [
     inGroup: false,
   },
   {
+    // Dedicated persona for the M13 onboarding e2e spec, so the readonly
+    // "forced into onboarding" persona above is never mutated. Reset back to
+    // this state via testing:resetOnboardingUser.
+    slug: "onboarding_m13",
+    email: "onboarding-m13@test.paxtools.local",
+    name: "onboarding-m13",
+    onboardingComplete: false,
+    inGroup: false,
+  },
+  {
     slug: "banned_user",
     email: "banned@test.paxtools.local",
     name: "banned",
@@ -242,24 +252,155 @@ async function wipeUsersCascade(
   };
 }
 
-export const wipeTestData = internalMutation({
-  args: {},
-  handler: async (ctx) => {
+const USER_OWNED_TABLES = [
+  "actionCompletions",
+  "specialtyCompletions",
+  "specialtyItemCompletions",
+  "specialtyProjectReports",
+  "customActions",
+  "lisDeOuroCompletions",
+  "irrCompletions",
+  "plannedItems",
+] as const;
+
+/**
+ * Delete up to ~BUDGET rows of test-user data (owned rows, auth rows,
+ * test-group events; groups + user docs once everything is drained).
+ * Returns done=false while more remains — the `wipeTestData` action loops it.
+ *
+ * Chunked because the full dataset (sim troop ≈ 5k rows plus accumulated
+ * sessions/events) exceeds Convex's per-mutation read ceiling; the old
+ * single-shot cascade started failing with "Too many reads (limit: 4096)".
+ * Everything reads through selective indexes; no full scans of unbounded
+ * tables.
+ *
+ * simOnly=true restricts the wipe to `sim-*` personas (the seedSimulatedTroop
+ * pre-pass) and keeps the group + catalog users. Test-group events are always
+ * drained: a sim reseed recreates the synthetic feed, and pristine events are
+ * what the timeline specs assert against.
+ */
+export const wipeTestBatch = internalMutation({
+  args: { simOnly: v.optional(v.boolean()) },
+  handler: async (
+    ctx,
+    { simOnly },
+  ): Promise<{ deleted: number; done: boolean }> => {
     assertTestEnv();
+    const BUDGET = 500;
+    let deleted = 0;
+    const remaining = () => BUDGET - deleted;
 
-    // Collect test users (single source of truth).
     const allUsers = await ctx.db.query("users").collect();
-    const testUsers = allUsers.filter(isTestUser);
-    const testUserIds = new Set<Id<"users">>(testUsers.map((u) => u._id));
-
-    // Test groups: prefix AND createdBy is a test user.
+    const allTestUsers = allUsers.filter(isTestUser);
+    const targetUsers = simOnly
+      ? allTestUsers.filter((u) => u.email?.startsWith(SIM_EMAIL_PREFIX))
+      : allTestUsers;
+    const allTestUserIds = new Set<Id<"users">>(allTestUsers.map((u) => u._id));
     const allGroups = await ctx.db.query("groups").collect();
     const testGroups = allGroups.filter(
       (g) =>
-        g.name.startsWith(TEST_GROUP_PREFIX) && testUserIds.has(g.createdBy),
+        g.name.startsWith(TEST_GROUP_PREFIX) && allTestUserIds.has(g.createdBy),
     );
 
-    return await wipeUsersCascade(ctx, testUsers, testGroups);
+    // 1. Per-user owned rows (selective by_userId index).
+    for (const table of USER_OWNED_TABLES) {
+      for (const u of targetUsers) {
+        if (remaining() <= 0) return { deleted, done: false };
+        const rows = await ctx.db
+          .query(table)
+          .withIndex("by_userId", (q) => q.eq("userId", u._id))
+          .take(remaining());
+        for (const r of rows) {
+          await ctx.db.delete(r._id);
+          deleted++;
+        }
+      }
+    }
+
+    // 2. Auth rows: sessions (userId index) with their refresh tokens
+    //    (sessionId index), then accounts (userIdAndProvider index).
+    for (const u of targetUsers) {
+      if (remaining() <= 0) return { deleted, done: false };
+      const sessions = await ctx.db
+        .query("authSessions")
+        .withIndex("userId", (q) => q.eq("userId", u._id))
+        .take(Math.max(1, Math.ceil(remaining() / 4)));
+      for (const s of sessions) {
+        const tokens = await ctx.db
+          .query("authRefreshTokens")
+          .withIndex("sessionId", (q) => q.eq("sessionId", s._id))
+          .collect();
+        for (const tkn of tokens) {
+          await ctx.db.delete(tkn._id);
+          deleted++;
+        }
+        await ctx.db.delete(s._id);
+        deleted++;
+      }
+    }
+    for (const u of targetUsers) {
+      if (remaining() <= 0) return { deleted, done: false };
+      const accounts = await ctx.db
+        .query("authAccounts")
+        .withIndex("userIdAndProvider", (q) => q.eq("userId", u._id))
+        .take(remaining());
+      for (const a of accounts) {
+        await ctx.db.delete(a._id);
+        deleted++;
+      }
+    }
+
+    // 3. Events in test groups (by_group index). Test users belong only to
+    //    the test group, so this covers every event they subject/actor.
+    for (const g of testGroups) {
+      if (remaining() <= 0) return { deleted, done: false };
+      const rows = await ctx.db
+        .query("events")
+        .withIndex("by_group", (q) => q.eq("groupId", g._id))
+        .take(remaining());
+      for (const r of rows) {
+        await ctx.db.delete(r._id);
+        deleted++;
+      }
+    }
+
+    if (remaining() <= 0) return { deleted, done: false };
+
+    // 4. Group rows (full wipe only), then user docs — after everything above
+    //    drained, so index traversals stayed resolvable throughout.
+    if (!simOnly) {
+      for (const g of testGroups) {
+        await ctx.db.delete(g._id);
+        deleted++;
+      }
+    }
+    for (const u of targetUsers) {
+      await ctx.db.delete(u._id);
+      deleted++;
+    }
+    return { deleted, done: true };
+  },
+});
+
+/** Wipe every test user (canonical + sim) and all rows they own. The public
+ * entry point (`bun run test:e2e:wipe`, e2e global setup/teardown). */
+export const wipeTestData = internalAction({
+  args: {},
+  handler: async (
+    ctx,
+  ): Promise<{ deletedRows: number; iterations: number }> => {
+    assertTestEnv();
+    let total = 0;
+    // 200 × 500-row batches ≈ 100k rows — far beyond any test dataset.
+    for (let i = 1; i <= 200; i++) {
+      const res: { deleted: number; done: boolean } = await ctx.runMutation(
+        internal.testing.wipeTestBatch,
+        {},
+      );
+      total += res.deleted;
+      if (res.done) return { deletedRows: total, iterations: i };
+    }
+    throw new Error("wipeTestData did not converge after 200 batches");
   },
 });
 
@@ -473,6 +614,51 @@ export const seedTestUsers = internalMutation({
     }
 
     return { users: userIds, groupId };
+  },
+});
+
+/**
+ * Reset a dedicated onboarding persona to the not-onboarded state (role,
+ * ramo, group and membership cleared, onboardingComplete=false), deleting
+ * any join-request side effects. Restricted to the onboarding personas so a
+ * bad email can't strip a data-bearing user. Makes the M13 e2e spec
+ * retry-safe: it calls this before acting.
+ */
+export const resetOnboardingUser = internalMutation({
+  args: { email: v.string() },
+  handler: async (ctx, { email }): Promise<void> => {
+    assertTestEnv();
+    const allowed = new Set([
+      "onboarding@test.paxtools.local",
+      "onboarding-m13@test.paxtools.local",
+    ]);
+    if (!allowed.has(email)) {
+      throw new Error(`not an onboarding persona: ${email}`);
+    }
+    const user = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", email))
+      .unique();
+    if (!user) {
+      throw new Error(`onboarding persona missing (seed first): ${email}`);
+    }
+    await ctx.db.patch(user._id, {
+      role: undefined,
+      ramo: undefined,
+      escotistaRamos: undefined,
+      isAdmin: undefined,
+      membershipStatus: undefined,
+      onboardingComplete: false,
+      groupId: undefined,
+    });
+    // Drop any events the onboarding flow may have logged for this user so
+    // repeated runs don't accumulate feed lines.
+    const allEvents = await ctx.db.query("events").collect();
+    for (const e of allEvents) {
+      if (e.subjectUserId === user._id || e.actorUserId === user._id) {
+        await ctx.db.delete(e._id);
+      }
+    }
   },
 });
 
@@ -900,27 +1086,7 @@ export type SimRamoSummary = {
   events: number;
 };
 
-/** Wipe every simulated persona (email `sim-*@test.paxtools.local`) and all
- * rows they own, including their events. Legacy `sim-troop-N` emails match. */
-export const wipeSimUsers = internalMutation({
-  args: {},
-  handler: async (
-    ctx,
-  ): Promise<{ deletedUsers: number; deletedRows: number }> => {
-    assertTestEnv();
-    const allUsers = await ctx.db.query("users").collect();
-    const simUsers = allUsers.filter(
-      (u) =>
-        typeof u.email === "string" &&
-        u.email.startsWith(SIM_EMAIL_PREFIX) &&
-        u.email.endsWith(TEST_EMAIL_SUFFIX),
-    );
-    const res = await wipeUsersCascade(ctx, simUsers, []);
-    return { deletedUsers: res.deletedUsers, deletedRows: res.deletedRows };
-  },
-});
-
-/** Seed one ramo's slice of the simulated troop. Assumes wipeSimUsers ran.
+/** Seed one ramo's slice of the simulated troop. Assumes the sim wipe ran.
  * Split per ramo to stay far from Convex's per-mutation write limits. */
 export const seedSimRamo = internalMutation({
   args: { ramo: simRamoArg },
@@ -1253,14 +1419,23 @@ export const seedSimulatedTroop = internalAction({
     perRamo: Record<string, SimRamoSummary>;
   }> => {
     assertTestEnv();
-    const wiped: { deletedUsers: number; deletedRows: number } =
-      await ctx.runMutation(internal.testing.wipeSimUsers, {});
+    // Chunked sim wipe (same batch primitive as wipeTestData; the sim troop
+    // alone exceeds the single-mutation read ceiling).
+    let wipedRows = 0;
+    for (let i = 0; i < 200; i++) {
+      const res: { deleted: number; done: boolean } = await ctx.runMutation(
+        internal.testing.wipeTestBatch,
+        { simOnly: true },
+      );
+      wipedRows += res.deleted;
+      if (res.done) break;
+    }
     const perRamo: Record<string, SimRamoSummary> = {};
     for (const ramo of RAMOS) {
       perRamo[ramo] = await ctx.runMutation(internal.testing.seedSimRamo, {
         ramo,
       });
     }
-    return { wipedUsers: wiped.deletedUsers, perRamo };
+    return { wipedUsers: wipedRows, perRamo };
   },
 });
