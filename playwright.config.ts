@@ -22,11 +22,14 @@ import { BASE_URL, IS_STAGING, LOCAL_PORT, LOCAL_URL } from "./tests/utils/targe
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
-  workers: 8,
+  // GitHub's hosted runners have 2 cores; 8 workers oversubscribes them badly
+  // enough that page hydration blows the expect timeout (staging tests are
+  // network-bound, so modest oversubscription is still worthwhile).
+  workers: process.env.CI ? 4 : 8,
   retries: IS_STAGING ? 1 : 0,
   reporter: [["list"], ["html", { open: "never" }]],
   timeout: IS_STAGING ? 60_000 : 30_000,
-  expect: { timeout: IS_STAGING ? 10_000 : 5_000 },
+  expect: { timeout: IS_STAGING ? 15_000 : 5_000 },
   globalTeardown: "./tests/e2e/global.teardown.ts",
   use: {
     baseURL: BASE_URL,
