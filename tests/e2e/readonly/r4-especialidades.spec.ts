@@ -5,7 +5,7 @@
  * The page (src/routes/especialidades.tsx) renders one of two UIs by ramo:
  *   - younger (lobinho/escoteiro): eixo sections → SpecialtyCard, whose header
  *     shows a Nível 1 / Nível 2 badge, an "N pendente(s)" badge, and
- *     "{approved}/{total} itemns aprovados" (the "itemns" spelling is the app's
+ *     "{approved}/{total} itens aprovados" (the "itens" spelling is the app's
  *     own — see the SUSPECTED PRODUCT BUG note below).
  *   - older (sênior/pioneiro): eixo sections → OlderSpecialtyCard, whose header
  *     shows "{n}/3 etapas aprovadas" and a "Conquistada" trophy badge once all
@@ -19,7 +19,7 @@
  * observed seed values (verified against the dev deployment).
  *
  * SUSPECTED PRODUCT BUG: the younger progress line concatenates
- * `item{totalItems > 1 ? "ns" : ""}` → the app renders "itemns aprovados"
+ * `item{totalItems > 1 ? "ns" : ""}` → the app renders "itens aprovados"
  * (should be "itens"). Assertions match the actual rendered text.
  *
  * Seed state (SIM_SPECS + insertYoungerSpecialty/insertOlderSpecialty):
@@ -92,7 +92,7 @@ testAs("sim-troop-lobinho-8")(
     await openCard(page, testInfo, "brasilidades", card);
     await expect(card).toContainText("Nível 1");
     await expect(card).not.toContainText("Nível 2");
-    await expect(card).toContainText("3/6 itemns aprovados");
+    await expect(card).toContainText("3/6 itens aprovados");
   },
 );
 
@@ -102,7 +102,7 @@ testAs("sim-troop-lobinho-11")(
     const card = page.getByRole("button", { name: /Nutrição/ });
     await openCard(page, testInfo, "nutricao", card);
     await expect(card).toContainText("Nível 2");
-    await expect(card).toContainText("6/6 itemns aprovados");
+    await expect(card).toContainText("6/6 itens aprovados");
   },
 );
 
@@ -113,7 +113,7 @@ testAs("sim-troop-lobinho-6")(
     await openCard(page, testInfo, "acampamento", card);
     // 3/8 approved: below the 4-item Nível 1 threshold → no level badge yet.
     await expect(card).not.toContainText("Nível");
-    await expect(card).toContainText("3/8 itemns aprovados");
+    await expect(card).toContainText("3/8 itens aprovados");
     await expect(card).toContainText("1 pendente");
   },
 );
@@ -124,7 +124,7 @@ testAs("sim-troop-lobinho-3")(
     const card = page.getByRole("button", { name: /Meteorologia/ });
     await openCard(page, testInfo, "meteorologia", card);
     await expect(card).not.toContainText("Nível");
-    await expect(card).toContainText("0/6 itemns aprovados");
+    await expect(card).toContainText("0/6 itens aprovados");
     await expect(card).toContainText("2 pendentes");
   },
 );

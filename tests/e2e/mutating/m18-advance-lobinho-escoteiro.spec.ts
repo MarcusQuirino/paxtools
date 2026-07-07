@@ -133,7 +133,7 @@ test("M18 admin advances Helena lobinho→escoteiro: fresh progression, younger 
     const card = helena.getByRole("button", { name: /Brasilidades/ });
     await gotoReady(helena, "/especialidades?specialty=brasilidades", card, HELENA.email);
     await expect(card).toContainText("Nível 1");
-    await expect(card).toContainText("3/6 itemns aprovados");
+    await expect(card).toContainText("3/6 itens aprovados");
 
     // ── Rule 3: visibility flips lobinho → escoteiro escotista ────────────────
     await gotoPainel(renata, RENATA.email);

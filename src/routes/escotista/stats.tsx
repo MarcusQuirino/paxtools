@@ -120,7 +120,7 @@ function StatsBody({ ramo }: { ramo: Ramo }) {
   if (coverage.scoutCount === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground" data-testid="stats-empty">
-        Nenhum escoteiro neste ramo ainda.
+        Nenhum {RAMO_LABELS[ramo].toLowerCase()} neste ramo ainda.
       </p>
     );
   }
