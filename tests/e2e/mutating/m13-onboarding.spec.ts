@@ -68,5 +68,6 @@ test("escoteiro completes onboarding via role → ramo → join group", async ({
   // we assert that ACTUAL behavior rather than an aspirational waiting page.
   await expect(page).not.toHaveURL(/\/onboarding/, { timeout: 15_000 });
   await expect(page).not.toHaveURL(/\/signin/);
-  await expect(page).toHaveURL(/localhost:3000\/$/);
+  // Root path on whichever origin the target env uses (local or staging).
+  await expect(page).toHaveURL(/^https?:\/\/[^/]+\/$/);
 });
