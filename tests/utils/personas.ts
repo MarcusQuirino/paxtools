@@ -153,6 +153,38 @@ export const MANIFEST: readonly ManifestEntry[] = [
     ownedBy: M("m11-membership.spec.ts"), notes: "approved by M11" },
   { slug: "sim-pending-escoteiro-1", email: `sim-pending-escoteiro-1${SUFFIX}`, name: "Manu Setúbal",
     ownedBy: M("m11-membership.spec.ts"), notes: "rejected by M11" },
+
+  // ── Session aliases for shared logins (one per mutating spec) ────────────
+  // Convex Auth's refresh token is single-use and rotates per session. Two
+  // concurrent browser contexts booting from the SAME storageState file
+  // double-spend the token; reuse detection then revokes the session and
+  // strands both specs on /signin (bit m09/m17/m20 in full parallel runs).
+  // "Sharing a login is safe" therefore means sharing the EMAIL, not the
+  // session file: every mutating spec that drives a shared login gets its
+  // own captured session below. Readonly specs keep the base slugs (their
+  // phase is short-lived and read-only, empirically unaffected).
+  ...(["m11", "m12", "m17", "m18", "m19", "m20"] as const).map((tag) => ({
+    slug: `admin--${tag}`, email: `admin${SUFFIX}`, name: "admin",
+    ownedBy: null, notes: `dedicated admin session for ${tag}`,
+  })),
+  ...(["m02", "m03", "m18", "m19"] as const).map((tag) => ({
+    slug: `sim-escotista-escoteiro-1--${tag}`, email: `sim-escotista-escoteiro-1${SUFFIX}`, name: "Renata Peçanha",
+    ownedBy: null, notes: `dedicated Renata session for ${tag}`,
+  })),
+  ...(["m02m", "m07", "m09", "m16", "m18"] as const).map((tag) => ({
+    slug: `sim-escotista-lobinho-1--${tag}`, email: `sim-escotista-lobinho-1${SUFFIX}`, name: "Marina Solano",
+    ownedBy: null, notes: `dedicated Marina session for ${tag}`,
+  })),
+  ...(["m04", "m08", "m19", "m20"] as const).map((tag) => ({
+    slug: `sim-escotista-senior-1--${tag}`, email: `sim-escotista-senior-1${SUFFIX}`, name: "Talita Novaes",
+    ownedBy: null, notes: `dedicated Talita session for ${tag}`,
+  })),
+  ...(["m10", "m20"] as const).map((tag) => ({
+    slug: `sim-escotista-pioneiro-1--${tag}`, email: `sim-escotista-pioneiro-1${SUFFIX}`, name: "Vera Lacerda",
+    ownedBy: null, notes: `dedicated Vera session for ${tag}`,
+  })),
+  { slug: "escoteiro-approved--m17", email: `approved${SUFFIX}`, name: "approved",
+    ownedBy: null, notes: "dedicated member session for m17's propagation check" },
 ] as const;
 
 /** Personas that need a captured storageState (everything in the manifest). */

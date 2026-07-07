@@ -1,45 +1,24 @@
 /**
- * P0 — Escoteiro self-marks a progression action (pending) and can unmark it.
+ * M1 (PRD #58 story 27) — desktop. Ana Lima (sim-troop-escoteiro-1) is an
+ * escoteiro with 0 completed blocos, so the first fixed ação of her frontier
+ * bloco ("Aprendizagem Contínua") starts unchecked. She marks it → a PENDING
+ * completion (clock, checked, still enabled) → then unmarks it.
  *
- * `escoteiro-approved` is an approved group member with NO seeded completions,
- * so the first fixed action of "Aprendizagem Contínua" starts unchecked. An
- * escoteiro marking their own item creates a PENDING completion (it needs an
- * escotista's approval), and — because it is not yet approved — they can still
- * uncheck it. This spec is self-cleaning: it ends by unmarking, and tolerates
- * leftover state from a previous interrupted run by resetting at the start.
- *
- * Server contract: toggleAction inserts a `status:"pending"` row for an
- * escoteiro acting on themselves; toggling again deletes it (no approval lock
- * while pending).
+ * Ownership: this spec owns Ana Lima's data (tests/utils/personas.ts). The
+ * flow lives in tests/e2e/shared/mark-unmark-flow.ts; the mobile variant
+ * (Alice Prado, lobinho) wraps the same helper.
  */
 
-import { approvedTest as test, expect } from "../../fixtures/auth";
+import { testAs } from "../../fixtures/auth";
+import { runMarkUnmarkFlow } from "../shared/mark-unmark-flow";
 
-const ACTION_ID = "escoteiro:aprendizagem-continua:fixed:0";
-const BLOCO_TRIGGER = /Aprendizagem Contínua/i;
+const test = testAs("sim-troop-escoteiro-1");
 
-test("escoteiro marks an action as pending and can unmark it", async ({
+test("escoteiro marks an ação as pending and can unmark it", async ({
   page,
 }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: BLOCO_TRIGGER }).first().click();
-
-  const checkbox = page.locator(`[id="${ACTION_ID}"]`);
-  await expect(checkbox).toBeVisible();
-
-  // Reset any leftover state so the test is repeatable.
-  if ((await checkbox.getAttribute("data-state")) === "checked") {
-    await checkbox.click();
-    await expect(checkbox).toHaveAttribute("data-state", "unchecked");
-  }
-
-  // Mark it → checked. As a self-marking escoteiro this is a PENDING completion,
-  // which (unlike an approved one) is NOT locked — the checkbox stays enabled.
-  await checkbox.click();
-  await expect(checkbox).toHaveAttribute("data-state", "checked");
-  await expect(checkbox).toBeEnabled();
-
-  // Unmark it → back to unchecked. Self-cleaning.
-  await checkbox.click();
-  await expect(checkbox).toHaveAttribute("data-state", "unchecked");
+  await runMarkUnmarkFlow(page, {
+    actionId: "escoteiro:aprendizagem-continua:fixed:0",
+    blocoTrigger: /Aprendizagem Contínua/i,
+  });
 });

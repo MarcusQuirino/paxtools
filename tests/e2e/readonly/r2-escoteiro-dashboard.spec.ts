@@ -271,21 +271,27 @@ escoteiroEmpty("bloco especialidade 'ver' link deep-links into the matching card
   await page.goto("/");
 
   // "Autonomia e Liderança" lists especialidades (incl. Empreendedorismo) as an
-  // alternative completion. Expand it to reveal the "ver" deep-link.
-  await page
-    .getByRole("button", { name: /Autonomia e Liderança/i })
-    .first()
-    .click();
-
+  // alternative completion. Expand it to reveal the "ver" deep-link, then click
+  // it. Wrapped in toPass: under parallel load the Radix accordion's expand
+  // animation can detach/re-render the row mid-click, swallowing the
+  // navigation — re-drive the expand+click until the URL actually changes.
   const empreendedorismoRow = page.locator("label", {
     hasText: "Empreendedorismo",
   });
-  await expect(empreendedorismoRow).toBeVisible();
-
-  await empreendedorismoRow.getByRole("link", { name: /ver/i }).click();
-
-  // Landed on the especialidades page, deep-linked to Empreendedorismo.
-  await expect(page).toHaveURL(/\/especialidades\?.*specialty=empreendedorismo/);
+  await expect(async () => {
+    if (!(await empreendedorismoRow.isVisible())) {
+      await page
+        .getByRole("button", { name: /Autonomia e Liderança/i })
+        .first()
+        .click();
+      await expect(empreendedorismoRow).toBeVisible({ timeout: 2_000 });
+    }
+    await empreendedorismoRow.getByRole("link", { name: /ver/i }).click();
+    await expect(page).toHaveURL(
+      /\/especialidades\?.*specialty=empreendedorismo/,
+      { timeout: 2_000 },
+    );
+  }).toPass();
   await expect(
     page.getByRole("heading", { name: "Especialidades", exact: true }),
   ).toBeVisible();

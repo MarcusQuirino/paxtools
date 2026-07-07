@@ -47,7 +47,7 @@ test("wipeTestData removes only @test.paxtools.local users", async () => {
       return real;
     });
 
-    await t.mutation(internal.testing.wipeTestData, {});
+    await t.action(internal.testing.wipeTestData, {});
 
     const survivors = await t.run(async (ctx) => ctx.db.query("users").collect());
 

@@ -1,80 +1,117 @@
 /**
- * P0 — Approval queue workflow: escoteiro marks an action → it appears in the
- * escotista's pending queue → the escotista rejects it → it disappears for the
- * escoteiro. Exercises the escotista progression-approval UI
- * (`getPendingForGroup` + `bulkAction` reject), which the read-only specs do
- * not cover.
+ * M3 (PRD #58 story 36, reject side) — approval-queue reject workflow across
+ * two roles. Bruno Sá (sim-troop-escoteiro-2) self-marks a NEW ação → it shows
+ * up in Renata Peçanha's (sim-escotista-escoteiro-1) pending queue on Bruno's
+ * card → Renata rejects ONLY that row → it disappears for Bruno.
  *
- * Reject (not approve) is used deliberately: rejecting DELETES the pending row,
- * so the test leaves no approved/locked state behind and is fully repeatable.
- * The complementary locked-after-approval state is covered by
- * `escoteiro/approved-locked.spec.ts`.
+ * Reject deletes the pending row (bulkAction reject), so the flow leaves no
+ * approved/locked state and is repeatable.
  *
- * Uses two browser contexts (escoteiro + admin) since the flow spans two roles.
+ * Care with Bruno's seed: he carries 2 seeded PENDING ações on his frontier
+ * bloco (Consumo Responsável → fixed:0 + fixed:1) that other read specs assert
+ * on. We mark a DIFFERENT unchecked ação (variable:0) and reject only that one
+ * (deselect-all, then re-select just our row) so the seeded queue material
+ * stays intact.
+ *
+ * Renata is a SHARED approver login (M2 also drives her queue concurrently), so
+ * every queue assertion is scoped to Bruno's card — never a global count.
  */
 
 import { test, expect } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
-const ACTION_ID = "escoteiro:aprendizagem-continua:fixed:1";
-const BLOCO_TRIGGER = /Aprendizagem Contínua/i;
-const ESCOTEIRO_STATE = "tests/.auth/escoteiro-approved.json";
-const ADMIN_STATE = "tests/.auth/admin.json";
-const ESCOTEIRO_NAME = "approved";
+const NEW_ACTION_ID = "escoteiro:consumo-responsavel:variable:0";
+// The visible label of NEW_ACTION_ID — its accessible name in the queue card.
+const NEW_ACTION_LABEL =
+  /Registrar e analisar o consumo de água e energia da sua residência/i;
+const BLOCO_TRIGGER = /Consumo Responsável/i;
+// A seeded pending row we must NOT touch (proof the seed stays intact).
+const SEEDED_ACTION_ID = "escoteiro:consumo-responsavel:fixed:0";
 
-test("escoteiro mark → appears in escotista queue → escotista reject removes it", async ({
+const BRUNO_STATE = "tests/.auth/sim-troop-escoteiro-2.json";
+const RENATA_STATE = "tests/.auth/sim-escotista-escoteiro-1--m03.json";
+const BRUNO_NAME = /Bruno Sá/i;
+
+const expandBloco = (p: Page) =>
+  p.getByRole("button", { name: BLOCO_TRIGGER }).first().click();
+
+/** Bruno's card in Renata's queue, scoped to its bordered container. */
+function brunoCard(page: Page): Locator {
+  return page
+    .getByRole("button", { name: BRUNO_NAME })
+    .locator('xpath=ancestor::div[contains(@class,"bg-card")][1]');
+}
+
+test("escoteiro marks a new ação → escotista rejects it → row removed, seed intact", async ({
   browser,
 }) => {
   test.setTimeout(60_000);
 
-  const escCtx = await browser.newContext({ storageState: ESCOTEIRO_STATE });
-  const adminCtx = await browser.newContext({ storageState: ADMIN_STATE });
-  const escPage = await escCtx.newPage();
-  const adminPage = await adminCtx.newPage();
-  const escCheckbox = escPage.locator(`[id="${ACTION_ID}"]`);
-
-  const expandBloco = (p: typeof escPage) =>
-    p.getByRole("button", { name: BLOCO_TRIGGER }).first().click();
+  const brunoCtx = await browser.newContext({ storageState: BRUNO_STATE });
+  const renataCtx = await browser.newContext({ storageState: RENATA_STATE });
+  const brunoPage = await brunoCtx.newPage();
+  const renataPage = await renataCtx.newPage();
+  const newCheckbox = brunoPage.locator(`[id="${NEW_ACTION_ID}"]`);
 
   try {
-    // 1. Escoteiro marks the action → pending (a self-marked item, never locked).
-    await escPage.goto("/");
-    await expandBloco(escPage);
-    await expect(escCheckbox).toBeVisible();
-    if ((await escCheckbox.getAttribute("data-state")) === "checked") {
-      await escCheckbox.click();
-      await expect(escCheckbox).toHaveAttribute("data-state", "unchecked");
+    // 1. Bruno marks a NEW ação → pending (self-marked, never locked).
+    await brunoPage.goto("/");
+    await expandBloco(brunoPage);
+    await expect(newCheckbox).toBeVisible();
+    if ((await newCheckbox.getAttribute("data-state")) === "checked") {
+      await newCheckbox.click();
+      await expect(newCheckbox).toHaveAttribute("data-state", "unchecked");
     }
-    await escCheckbox.click();
-    await expect(escCheckbox).toHaveAttribute("data-state", "checked");
+    await newCheckbox.click();
+    await expect(newCheckbox).toHaveAttribute("data-state", "checked");
 
-    // 2. Admin sees the escoteiro's pending card in the queue and rejects it.
-    await adminPage.goto("/escotista");
-    await adminPage.getByRole("link", { name: "Pendentes" }).click();
-    const card = adminPage.getByRole("button", {
-      name: new RegExp(ESCOTEIRO_NAME, "i"),
-    });
-    await expect(card).toBeVisible({ timeout: 15_000 });
-    await card.click(); // expand
-    await adminPage.getByRole("button", { name: /^Rejeitar/ }).click();
-    await expect(card).toHaveCount(0, { timeout: 15_000 });
+    // 2. Renata sees Bruno's card; reject ONLY the new row.
+    await renataPage.goto("/escotista/pending");
+    const card = brunoCard(renataPage);
+    const trigger = renataPage.getByRole("button", { name: BRUNO_NAME });
+    await expect(trigger).toBeVisible({ timeout: 15_000 });
+    await trigger.click(); // expand
 
-    // 3. The action is gone for the escoteiro (fresh query via reload).
-    await escPage.reload();
-    await expandBloco(escPage);
-    await expect(escCheckbox).toHaveAttribute("data-state", "unchecked");
+    const newItem = card.getByRole("checkbox", { name: NEW_ACTION_LABEL });
+    await expect(newItem).toBeVisible();
+
+    // All items start selected — deselect all (first checkbox = select-all),
+    // then re-select just our new row so the reject touches only it.
+    await card.getByRole("checkbox").first().click();
+    await expect(newItem).not.toBeChecked();
+    await newItem.click();
+    await expect(newItem).toBeChecked();
+
+    await card.getByRole("button", { name: /^Rejeitar/ }).click();
+
+    // The new row is gone from Bruno's card; the card survives (seed remains).
+    await expect(
+      card.getByRole("checkbox", { name: NEW_ACTION_LABEL }),
+    ).toHaveCount(0, { timeout: 15_000 });
+    await expect(
+      renataPage.getByRole("button", { name: BRUNO_NAME }),
+    ).toBeVisible();
+
+    // 3. Gone for Bruno on a fresh read; the seeded pending stays checked.
+    await brunoPage.reload();
+    await expandBloco(brunoPage);
+    await expect(newCheckbox).toHaveAttribute("data-state", "unchecked");
+    await expect(
+      brunoPage.locator(`[id="${SEEDED_ACTION_ID}"]`),
+    ).toHaveAttribute("data-state", "checked");
   } finally {
-    // Safety net: if something failed mid-flow, unmark the (always-unlockable)
-    // pending item so the next run starts clean.
+    // Safety net: if we failed after marking but before the reject landed,
+    // unmark the (always-unlockable) new pending row so the next run is clean.
     try {
-      await escPage.goto("/");
-      await expandBloco(escPage);
-      if ((await escCheckbox.getAttribute("data-state")) === "checked") {
-        await escCheckbox.click();
+      await brunoPage.goto("/");
+      await expandBloco(brunoPage);
+      if ((await newCheckbox.getAttribute("data-state")) === "checked") {
+        await newCheckbox.click();
       }
     } catch {
-      // context may already be tearing down; ignore.
+      // context tearing down; ignore.
     }
-    await escCtx.close();
-    await adminCtx.close();
+    await brunoCtx.close();
+    await renataCtx.close();
   }
 });
