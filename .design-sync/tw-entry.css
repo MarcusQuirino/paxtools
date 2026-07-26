@@ -1,0 +1,16 @@
+/* design-sync Tailwind entry.
+   styles/globals.css is Tailwind v4 SOURCE (@import "tailwindcss", @theme, @apply),
+   not compiled CSS. The converter needs real compiled CSS, so this file is compiled
+   by @tailwindcss/cli into .design-sync/.cache/compiled.css (cfg.cssEntry).
+   Authored previews are an explicit @source so their layout utilities are emitted too. */
+@import "../styles/globals.css";
+@source "../src/components/**/*.{ts,tsx}";
+@source "./previews/**/*.tsx";
+
+/* Designs built with this DS are NOT run through Tailwind — they consume the
+   compiled _ds_bundle.css as-is. Without a safelist the only utilities that
+   exist are the ones paxtools' own components happen to use, so a design agent
+   writing `bg-accent` would get silently unstyled output. Emit the whole
+   semantic-token palette so the documented vocabulary actually resolves. */
+@source inline("{bg,text,border,ring}-{background,foreground,card,card-foreground,popover,popover-foreground,primary,primary-foreground,secondary,secondary-foreground,muted,muted-foreground,accent,accent-foreground,destructive,border,input,ring}");
+@source inline("hover:{bg,text,border}-{primary,secondary,muted,accent,destructive}");
