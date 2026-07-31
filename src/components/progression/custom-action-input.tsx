@@ -7,6 +7,7 @@ import type { CustomAction } from "@/data/types";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { PlanStar } from "./plan-star";
 import { encodePlanKey } from "@/lib/plan-keys";
+import { rowTint } from "@/lib/row-tint";
 
 type CustomActionInputProps = {
   blocoId: string;
@@ -61,10 +62,12 @@ export function CustomActionInput({
           kind: "custom",
           customActionId: action._id,
         });
+        const tint = rowTint(color, !isLocked);
         return (
           <div
             key={action._id}
-            className="flex items-start gap-3 rounded-lg p-3 min-h-[44px] group"
+            className={`flex items-start gap-3 rounded-lg p-3 min-h-[44px] group transition-colors ${tint.className}`}
+            style={tint.style}
           >
             <Checkbox
               checked={action.completed}

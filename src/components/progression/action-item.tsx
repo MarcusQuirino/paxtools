@@ -2,6 +2,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Clock } from "lucide-react";
 import type { CompletionStatus } from "@/data/types";
 import { PlanStar } from "./plan-star";
+import { rowTint } from "@/lib/row-tint";
 
 type ActionItemProps = {
   id: string;
@@ -28,15 +29,15 @@ export function ActionItem({
 }: ActionItemProps) {
   const isPending = checked && status === "pending";
   const isLocked = lockApproved && checked && status === "approved";
+  const tint = rowTint(color, !isLocked);
 
   return (
     <label
       htmlFor={id}
       className={`flex items-start gap-3 p-3 min-h-[44px] transition-colors ${
-        isLocked
-          ? "cursor-not-allowed"
-          : "cursor-pointer hover:bg-accent/40 active:bg-accent/70"
+        isLocked ? "cursor-not-allowed" : `cursor-pointer ${tint.className}`
       }`}
+      style={tint.style}
     >
       <Checkbox
         id={id}
