@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as PrototypeTintRouteImport } from './routes/prototype-tint'
 import { Route as PlanRouteImport } from './routes/plan'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as EspecialidadesRouteImport } from './routes/especialidades'
@@ -31,6 +32,11 @@ const SigninRoute = SigninRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrototypeTintRoute = PrototypeTintRouteImport.update({
+  id: '/prototype-tint',
+  path: '/prototype-tint',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlanRoute = PlanRouteImport.update({
@@ -96,6 +102,7 @@ export interface FileRoutesByFullPath {
   '/especialidades': typeof EspecialidadesRoute
   '/onboarding': typeof OnboardingRoute
   '/plan': typeof PlanRoute
+  '/prototype-tint': typeof PrototypeTintRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
   '/escotista/admin': typeof EscotistaAdminRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByTo {
   '/especialidades': typeof EspecialidadesRoute
   '/onboarding': typeof OnboardingRoute
   '/plan': typeof PlanRoute
+  '/prototype-tint': typeof PrototypeTintRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
   '/escotista/admin': typeof EscotistaAdminRoute
@@ -126,6 +134,7 @@ export interface FileRoutesById {
   '/especialidades': typeof EspecialidadesRoute
   '/onboarding': typeof OnboardingRoute
   '/plan': typeof PlanRoute
+  '/prototype-tint': typeof PrototypeTintRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
   '/escotista/admin': typeof EscotistaAdminRoute
@@ -143,6 +152,7 @@ export interface FileRouteTypes {
     | '/especialidades'
     | '/onboarding'
     | '/plan'
+    | '/prototype-tint'
     | '/settings'
     | '/signin'
     | '/escotista/admin'
@@ -157,6 +167,7 @@ export interface FileRouteTypes {
     | '/especialidades'
     | '/onboarding'
     | '/plan'
+    | '/prototype-tint'
     | '/settings'
     | '/signin'
     | '/escotista/admin'
@@ -172,6 +183,7 @@ export interface FileRouteTypes {
     | '/especialidades'
     | '/onboarding'
     | '/plan'
+    | '/prototype-tint'
     | '/settings'
     | '/signin'
     | '/escotista/admin'
@@ -188,6 +200,7 @@ export interface RootRouteChildren {
   EspecialidadesRoute: typeof EspecialidadesRoute
   OnboardingRoute: typeof OnboardingRoute
   PlanRoute: typeof PlanRoute
+  PrototypeTintRoute: typeof PrototypeTintRoute
   SettingsRoute: typeof SettingsRoute
   SigninRoute: typeof SigninRoute
 }
@@ -206,6 +219,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/prototype-tint': {
+      id: '/prototype-tint'
+      path: '/prototype-tint'
+      fullPath: '/prototype-tint'
+      preLoaderRoute: typeof PrototypeTintRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/plan': {
@@ -316,6 +336,7 @@ const rootRouteChildren: RootRouteChildren = {
   EspecialidadesRoute: EspecialidadesRoute,
   OnboardingRoute: OnboardingRoute,
   PlanRoute: PlanRoute,
+  PrototypeTintRoute: PrototypeTintRoute,
   SettingsRoute: SettingsRoute,
   SigninRoute: SigninRoute,
 }
