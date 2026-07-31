@@ -3,6 +3,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import type { Irr } from "@/data/progression-rules";
 import { Check, Clock, Lock, Trophy } from "lucide-react";
+import { rowTint } from "@/lib/row-tint";
 
 type RecognitionSectionProps = {
   irr: Irr;
@@ -82,6 +83,7 @@ export function RecognitionSection({
           const isChecked = isApproved || isPending;
           const isLocked = !!lockApproved && isApproved && !isAutoItem;
           const isDisabled = !blocksComplete || isLocked;
+          const tint = rowTint(irr.color, !isDisabled);
 
           return (
             <label
@@ -90,8 +92,9 @@ export function RecognitionSection({
               className={`flex items-start gap-3 p-3 min-h-[44px] transition-colors ${
                 isDisabled
                   ? "cursor-not-allowed opacity-50"
-                  : "cursor-pointer hover:bg-accent/40 active:bg-accent/70"
+                  : `cursor-pointer ${tint.className}`
               }`}
+              style={tint.style}
             >
               <Checkbox
                 id={item.id}
