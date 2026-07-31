@@ -148,13 +148,8 @@ export const actionStatusMap = new Map<string, CompletionStatus>([
   [`escoteiro:${B}:variable:1`, "pending"],
 ]);
 
-export const completedSpecialties = [
-  {
-    blocoId: "autonomia-lideranca",
-    specialtyName: "Campismo",
-    status: "approved" as CompletionStatus,
-  },
-];
+/** Especialidades earned via approved items (#44) — the only way one is marked. */
+export const earnedSpecialtyIds = new Set(["campismo"]);
 
 /** The real escoteiro IRR ("Lis de Ouro") shape. */
 export const irr = {

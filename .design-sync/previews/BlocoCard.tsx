@@ -8,7 +8,7 @@ import {
   pendingActionIds,
   actionStatusMap,
   customActions,
-  completedSpecialties,
+  earnedSpecialtyIds,
   noop,
 } from "./_fixtures";
 
@@ -18,7 +18,6 @@ import {
  */
 const shared = {
   onToggleAction: noop,
-  onToggleSpecialty: noop,
   onAddCustom: noop,
   onToggleCustom: noop,
   onDeleteCustom: noop,
@@ -35,7 +34,6 @@ export const EmProgresso = () => (
       pendingActionIds={pendingActionIds}
       actionStatusMap={actionStatusMap}
       customActions={customActions}
-      completedSpecialties={[]}
     />
   </Accordion>
 );
@@ -49,7 +47,6 @@ export const Fechado = () => (
       pendingActionIds={pendingActionIds}
       actionStatusMap={actionStatusMap}
       customActions={[]}
-      completedSpecialties={[]}
     />
   </Accordion>
 );
@@ -66,9 +63,8 @@ export const ConcluidoViaEspecialidade = () => (
         new Map([["escoteiro:autonomia-lideranca:fixed:0", "approved" as const]])
       }
       customActions={[]}
-      completedSpecialties={completedSpecialties}
       earnedViaSpecialty
-      earnedSpecialtyIds={new Set(["campismo"])}
+      earnedSpecialtyIds={earnedSpecialtyIds}
     />
   </Accordion>
 );

@@ -181,6 +181,10 @@ async function wipeUsersCascade(
   // 1. Per-user owned rows.
   const userOwned = [
     "actionCompletions",
+    // Deprecated tables still in the schema (specialtyCompletions until #47's
+    // drain migration has run everywhere) stay listed: while a table exists, a
+    // wipe that skips it leaves rows dangling on a deleted user.
+    "specialtyCompletions",
     "specialtyItemCompletions",
     "specialtyProjectReports",
     "customActions",
@@ -253,6 +257,7 @@ async function wipeUsersCascade(
 
 const USER_OWNED_TABLES = [
   "actionCompletions",
+  "specialtyCompletions",
   "specialtyItemCompletions",
   "specialtyProjectReports",
   "customActions",

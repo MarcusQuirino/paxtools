@@ -6,13 +6,12 @@ import {
   pendingActionIds,
   actionStatusMap,
   customActions,
-  completedSpecialties,
+  earnedSpecialtyIds,
   noop,
 } from "./_fixtures";
 
 const handlers = {
   onToggleAction: noop,
-  onToggleSpecialty: noop,
   onAddCustom: noop,
   onToggleCustom: noop,
   onDeleteCustom: noop,
@@ -29,7 +28,6 @@ export const EmProgresso = () => (
     completedBlockIds={new Set()}
     pendingBlockIds={new Set()}
     customActions={customActions}
-    completedSpecialties={completedSpecialties}
   />
 );
 
@@ -43,9 +41,8 @@ export const ComBlocoConcluido = () => (
     completedBlockIds={new Set(["autonomia-lideranca"])}
     pendingBlockIds={new Set(["aprendizagem-continua"])}
     earnedSpecialtyBlocoIds={new Set(["autonomia-lideranca"])}
-    earnedSpecialtyIds={new Set(["campismo"])}
+    earnedSpecialtyIds={earnedSpecialtyIds}
     customActions={[]}
-    completedSpecialties={completedSpecialties}
   />
 );
 
@@ -60,6 +57,5 @@ export const OutroEixo = () => (
     completedBlockIds={new Set()}
     pendingBlockIds={new Set()}
     customActions={[]}
-    completedSpecialties={[]}
   />
 );

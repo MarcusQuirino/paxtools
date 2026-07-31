@@ -1,5 +1,5 @@
 import { SpecialtySection } from "paxtools";
-import { blocoComEspecialidade, completedSpecialties, noop } from "./_fixtures";
+import { blocoComEspecialidade, earnedSpecialtyIds } from "./_fixtures";
 
 const alternatives = blocoComEspecialidade.alternativeCompletions;
 
@@ -9,36 +9,30 @@ export const Especialidades = () => (
     <SpecialtySection
       blocoId={blocoComEspecialidade.id}
       alternatives={alternatives}
-      completedSpecialties={[]}
-      onToggle={noop}
     />
   </div>
 );
 
+/**
+ * An earned especialidade (#44): the box is checked and read-only — since #47
+ * marking happens on /especialidades, never from the bloco.
+ */
 export const ComEspecialidadeConcluida = () => (
   <div className="max-w-2xl">
     <SpecialtySection
       blocoId={blocoComEspecialidade.id}
       alternatives={alternatives}
-      completedSpecialties={completedSpecialties}
-      onToggle={noop}
+      earnedSpecialtyIds={earnedSpecialtyIds}
     />
   </div>
 );
 
-// `earnedSpecialtyIds` (earned via approved items, #44) is deliberately not a
-// story: it marks the same box as `completedSpecialties`, so its static render
-// is identical to ComEspecialidadeConcluida. The difference is that the box is
-// read-only — behaviour a screenshot cannot show.
-
-/** Insígnia alternatives render alongside especialidades. */
+/** Insígnias render alongside especialidades — listed, never boxed (#47). */
 export const Insignia = () => (
   <div className="max-w-2xl">
     <SpecialtySection
       blocoId="aprendizagem-continua"
       alternatives={[{ type: "insignia", items: ["Insígnia do Aprender"] }]}
-      completedSpecialties={[]}
-      onToggle={noop}
     />
   </div>
 );
