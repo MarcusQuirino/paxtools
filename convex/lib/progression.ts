@@ -60,27 +60,6 @@ export async function readCurrentRamoIrrItems(
     .take(10);
 }
 
-/**
- * @deprecated Use specialtyItemCompletions / specialtyProjectReports instead.
- * Still called by `getMyCompletions` / `getCompletionsForUser` to serve the
- * legacy specialty display until #42–44 replace it. Also used by
- * `migrations:migrateSpecialtyCompletions` to read rows for conversion.
- * Will be removed once the new specialty UI (#42–44) ships and migration
- * is confirmed on prod.
- */
-export async function readCurrentRamoSpecialties(
-  ctx: QueryCtx | MutationCtx,
-  userId: Id<"users">,
-  ramo: Ramo | null | undefined,
-): Promise<Doc<"specialtyCompletions">[]> {
-  return ctx.db
-    .query("specialtyCompletions")
-    .withIndex("by_userId_and_ramo_and_blocoId_and_specialtyName", (q) =>
-      q.eq("userId", userId).eq("ramo", ramo ?? DEFAULT_RAMO),
-    )
-    .take(500);
-}
-
 /** Read a user's ações personalizadas for their CURRENT ramo (#37). */
 export async function readCurrentRamoCustomActions(
   ctx: QueryCtx | MutationCtx,

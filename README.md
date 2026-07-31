@@ -165,17 +165,34 @@ Cada linha representa uma acao concluida por um usuario.
 
 Indices: `by_userId`, `by_userId_and_actionId`
 
-### `specialtyCompletions`
-Especialidades ou insignias conquistadas que substituem acoes variaveis.
+### `specialtyItemCompletions`
+Itens de especialidade concluidos no grupo mais novo (lobinho + escoteiro). O
+nivel (0/1/2) e calculado na leitura a partir da contagem de itens aprovados.
 
 | Campo | Tipo | Descricao |
 |-------|------|-----------|
 | userId | Id\<users\> | Referencia ao usuario |
-| blocoId | string | ID do bloco (ex: `"comunidade"`) |
-| specialtyName | string | Nome da especialidade/insignia |
+| ramoGroup | "younger" \| "older" | Grupo de ramos |
+| specialtyId | string | ID da especialidade no catalogo |
+| itemIndex | number | Indice do item dentro da especialidade |
 | completedAt | number | Timestamp |
 
-Indices: `by_userId`, `by_userId_and_blocoId`
+Indices: `by_userId`, `by_userId_and_ramoGroup_and_specialtyId`, `by_userId_and_status`
+
+### `specialtyProjectReports`
+Relatos das tres etapas de projeto (conhecer/fazer/compartilhar) do grupo mais
+velho (senior + pioneiro). A especialidade e conquistada com as tres aprovadas.
+
+| Campo | Tipo | Descricao |
+|-------|------|-----------|
+| userId | Id\<users\> | Referencia ao usuario |
+| ramoGroup | "younger" \| "older" | Grupo de ramos |
+| specialtyId | string | ID da especialidade no catalogo |
+| step | "conhecer" \| "fazer" \| "compartilhar" | Etapa do projeto |
+| text | string | Relato enviado pelo escoteiro |
+| completedAt | number | Timestamp |
+
+Indices: `by_userId`, `by_userId_and_ramoGroup_and_specialtyId`, `by_userId_and_status`
 
 ### `customActions`
 Acoes personalizadas criadas pelo usuario.
@@ -195,14 +212,17 @@ Indices: `by_userId`, `by_userId_and_blocoId`
 ### Queries
 | Funcao | Descricao |
 |--------|-----------|
-| `progression.getMyCompletions` | Retorna todas as conclusoes (acoes, especialidades, acoes customizadas) do usuario autenticado |
+| `progression.getMyCompletions` | Retorna todas as conclusoes (acoes, acoes customizadas, IRR) do usuario autenticado |
+| `specialties.getMySpecialtyItems` | Retorna os itens de especialidade do usuario autenticado |
+| `specialties.getMySpecialtyReports` | Retorna os relatos de projeto de especialidade do usuario autenticado |
 | `users.viewer` | Retorna o perfil do usuario autenticado |
 
 ### Mutations
 | Funcao | Args | Descricao |
 |--------|------|-----------|
 | `progression.toggleAction` | `actionId: string` | Marca/desmarca uma acao |
-| `progression.toggleSpecialty` | `blocoId: string, specialtyName: string` | Marca/desmarca uma especialidade |
+| `specialties.toggleSpecialtyItem` | `specialtyId: string, itemIndex: number` | Marca/desmarca um item de especialidade |
+| `specialties.submitSpecialtyStep` | `specialtyId: string, step: string, text: string` | Envia o relato de uma etapa de projeto |
 | `progression.addCustomAction` | `blocoId: string, text: string` | Cria acao personalizada |
 | `progression.toggleCustomAction` | `customActionId: Id` | Marca/desmarca acao personalizada |
 | `progression.deleteCustomAction` | `customActionId: Id` | Remove acao personalizada |

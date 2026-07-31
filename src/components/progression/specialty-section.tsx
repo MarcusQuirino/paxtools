@@ -1,27 +1,26 @@
-import type { AlternativeCompletion, CompletionStatus } from "@/data/types";
+import type { AlternativeCompletion } from "@/data/types";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Award, Clock, ArrowRight } from "lucide-react";
+import { Award, ArrowRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { PlanStar } from "./plan-star";
 import { encodePlanKey } from "@/lib/plan-keys";
-import { getSpecialtyMark, toCanonicalSpecialtyId } from "@/lib/completion-logic";
+import { isSpecialtyEarned, toCanonicalSpecialtyId } from "@/lib/completion-logic";
 import type { Id } from "../../../convex/_generated/dataModel";
 
+/**
+ * The especialidades/insígnias a bloco can be completed with, listed as a
+ * read-only "ou" alternative. Since #47 a box is checked only when the
+ * especialidade is earned via its items/steps — the legacy manual toggle is
+ * gone, so the escoteiro marks work on /especialidades (the "ver" link).
+ */
 type SpecialtySectionProps = {
   blocoId: string;
   alternatives: AlternativeCompletion[];
-  completedSpecialties: {
-    blocoId: string;
-    specialtyName: string;
-    status: CompletionStatus;
-  }[];
-  /** Canonical ids of specialties earned via items (#44) — mark those boxes read-only. */
+  /** Canonical ids of specialties earned via items (#44) — those boxes render checked. */
   earnedSpecialtyIds?: Set<string>;
-  onToggle: (blocoId: string, specialtyName: string) => void;
   plannedKeys?: Set<string>;
   onTogglePlanned?: (itemKey: string) => void;
   planOnly?: boolean;
-  lockApproved?: boolean;
   /**
    * Target scout when rendered in the escotista impersonation Dashboard (#53):
    * the "ver" deep-link carries it so /especialidades opens the scout's detail
@@ -33,13 +32,10 @@ type SpecialtySectionProps = {
 export function SpecialtySection({
   blocoId,
   alternatives,
-  completedSpecialties,
   earnedSpecialtyIds,
-  onToggle,
   plannedKeys,
   onTogglePlanned,
   planOnly,
-  lockApproved,
   escoteiroId,
 }: SpecialtySectionProps) {
   if (alternatives.length === 0) return null;
@@ -73,46 +69,26 @@ export function SpecialtySection({
             {alt.type === "especialidade" ? "Especialidades" : "Insígnias"}
           </div>
           {alt.items.map((item) => {
-            const { checked: isChecked, pending: isPending, locked: isLocked } =
-              getSpecialtyMark(
-                item,
-                blocoId,
-                completedSpecialties,
-                earned,
-                !!lockApproved,
-              );
             const planKey = encodePlanKey({
               kind: "specialty",
               blocoId,
               specialtyName: item,
             });
             return (
-              <label
+              <div
                 key={item}
-                className={`flex items-center gap-3 min-h-[44px] px-1 ${
-                  isLocked ? "cursor-not-allowed" : "cursor-pointer"
-                }`}
+                className="flex items-center gap-3 min-h-[44px] px-1"
               >
-                <Checkbox
-                  checked={isChecked}
-                  onCheckedChange={() => onToggle(blocoId, item)}
-                  disabled={isLocked}
-                  className="size-5"
-                  style={
-                    isChecked ? { opacity: isPending ? 0.4 : 1 } : undefined
-                  }
-                />
-                <span
-                  className={`text-sm flex-1 ${
-                    isChecked
-                      ? isPending
-                        ? "text-muted-foreground/60"
-                        : ""
-                      : ""
-                  }`}
-                >
-                  {item}
-                </span>
+                {/* Insígnias have no catalog and are not tracked (#47), so only
+                    especialidades get a (read-only) earned box. */}
+                {alt.type === "especialidade" && (
+                  <Checkbox
+                    checked={isSpecialtyEarned(item, earned)}
+                    disabled
+                    className="size-5"
+                  />
+                )}
+                <span className="text-sm flex-1">{item}</span>
                 {alt.type === "especialidade" && (
                   <Link
                     to="/especialidades"
@@ -120,15 +96,14 @@ export function SpecialtySection({
                       specialty: toCanonicalSpecialtyId(item),
                       ...(escoteiroId ? { escoteiroId } : {}),
                     }}
-                    onClick={(e) => e.stopPropagation()}
+                    // A bloco lists several "ver" links; name each one so it is
+                    // distinguishable to assistive tech (and to tests).
+                    aria-label={`ver ${item}`}
                     className="flex items-center gap-0.5 text-xs font-medium text-primary hover:underline shrink-0"
                   >
                     ver
                     <ArrowRight className="size-3" />
                   </Link>
-                )}
-                {isPending && (
-                  <Clock className="size-3.5 text-slate-400 shrink-0" />
                 )}
                 {onTogglePlanned && (
                   <PlanStar
@@ -136,7 +111,7 @@ export function SpecialtySection({
                     onToggle={() => onTogglePlanned(planKey)}
                   />
                 )}
-              </label>
+              </div>
             );
           })}
         </div>

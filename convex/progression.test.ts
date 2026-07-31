@@ -239,165 +239,6 @@ describe("toggleAction", () => {
 
 // ---------------------------------------------------------------------------
 
-describe("toggleSpecialty", () => {
-  const BLOCO = "vida-ao-ar-livre";
-  const SPEC = "Acampador";
-
-  test("invalid blocoId throws", async () => {
-    const t = convexTest(schema, modules);
-    const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
-    await expect(
-      as(t, escoteiro).mutation(api.progression.toggleSpecialty, {
-        blocoId: "Invalid Bloco!",
-        specialtyName: SPEC,
-      }),
-    ).rejects.toThrow("ID de bloco inválido");
-  });
-
-  test("empty specialtyName throws", async () => {
-    const t = convexTest(schema, modules);
-    const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
-    await expect(
-      as(t, escoteiro).mutation(api.progression.toggleSpecialty, {
-        blocoId: BLOCO,
-        specialtyName: "   ",
-      }),
-    ).rejects.toThrow("Nome de especialidade inválido");
-  });
-
-  test("specialtyName >200 chars throws", async () => {
-    const t = convexTest(schema, modules);
-    const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
-    await expect(
-      as(t, escoteiro).mutation(api.progression.toggleSpecialty, {
-        blocoId: BLOCO,
-        specialtyName: "x".repeat(201),
-      }),
-    ).rejects.toThrow("Nome de especialidade inválido");
-  });
-
-  test("escoteiro (self) inserts status=pending", async () => {
-    const t = convexTest(schema, modules);
-    const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
-    await as(t, escoteiro).mutation(api.progression.toggleSpecialty, {
-      blocoId: BLOCO,
-      specialtyName: SPEC,
-    });
-    const rows = await t.run(async (ctx) =>
-      ctx.db
-        .query("specialtyCompletions")
-        .withIndex("by_userId", (q) => q.eq("userId", escoteiro))
-        .collect(),
-    );
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.status).toBe("pending");
-    expect(rows[0]!.blocoId).toBe(BLOCO);
-    expect(rows[0]!.specialtyName).toBe(SPEC);
-  });
-
-  test("escotista (self) inserts status=approved", async () => {
-    const t = convexTest(schema, modules);
-    const escotista = await insertUser(t, {
-      role: "escotista",
-      escotistaRamos: ["escoteiro"],
-    });
-    await as(t, escotista).mutation(api.progression.toggleSpecialty, {
-      blocoId: BLOCO,
-      specialtyName: SPEC,
-    });
-    const rows = await t.run(async (ctx) =>
-      ctx.db
-        .query("specialtyCompletions")
-        .withIndex("by_userId", (q) => q.eq("userId", escotista))
-        .collect(),
-    );
-    expect(rows[0]!.status).toBe("approved");
-  });
-
-  test("escoteiro toggling existing pending deletes it", async () => {
-    const t = convexTest(schema, modules);
-    const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
-    await t.run(async (ctx) =>
-      ctx.db.insert("specialtyCompletions", {
-        userId: escoteiro,
-        ramo: "escoteiro",
-        blocoId: BLOCO,
-        specialtyName: SPEC,
-        completedAt: 1,
-        status: "pending",
-      }),
-    );
-    await as(t, escoteiro).mutation(api.progression.toggleSpecialty, {
-      blocoId: BLOCO,
-      specialtyName: SPEC,
-    });
-    const rows = await t.run(async (ctx) =>
-      ctx.db
-        .query("specialtyCompletions")
-        .withIndex("by_userId", (q) => q.eq("userId", escoteiro))
-        .collect(),
-    );
-    expect(rows).toHaveLength(0);
-  });
-
-  test("escoteiro toggling existing approved throws (approval lock)", async () => {
-    const t = convexTest(schema, modules);
-    const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
-    await t.run(async (ctx) =>
-      ctx.db.insert("specialtyCompletions", {
-        userId: escoteiro,
-        ramo: "escoteiro",
-        blocoId: BLOCO,
-        specialtyName: SPEC,
-        completedAt: 1,
-        status: "approved",
-      }),
-    );
-    await expect(
-      as(t, escoteiro).mutation(api.progression.toggleSpecialty, {
-        blocoId: BLOCO,
-        specialtyName: SPEC,
-      }),
-    ).rejects.toThrow("Apenas um escotista pode desfazer");
-  });
-
-  test("escotista with targetUserId patches pending → approved with approvedBy", async () => {
-    const t = convexTest(schema, modules);
-    const { adminId, groupId } = await seedGroup(t);
-    const escoteiro = await insertUser(t, {
-      role: "escoteiro",
-      ramo: "escoteiro",
-      groupId,
-      membershipStatus: "approved",
-    });
-    await t.run(async (ctx) =>
-      ctx.db.insert("specialtyCompletions", {
-        userId: escoteiro,
-        ramo: "escoteiro",
-        blocoId: BLOCO,
-        specialtyName: SPEC,
-        completedAt: 1,
-        status: "pending",
-      }),
-    );
-    await as(t, adminId).mutation(api.progression.toggleSpecialty, {
-      blocoId: BLOCO,
-      specialtyName: SPEC,
-      targetUserId: escoteiro,
-    });
-    const rows = await t.run(async (ctx) =>
-      ctx.db
-        .query("specialtyCompletions")
-        .withIndex("by_userId", (q) => q.eq("userId", escoteiro))
-        .collect(),
-    );
-    expect(rows[0]!.status).toBe("approved");
-    expect(rows[0]!.approvedBy).toBe(adminId);
-  });
-});
-
-// ---------------------------------------------------------------------------
-
 describe("addCustomAction", () => {
   const BLOCO = "servir";
 
@@ -729,7 +570,6 @@ describe("getMyCompletions", () => {
     expect(res).toEqual({
       ramo: null,
       actions: [],
-      specialties: [],
       customActions: [],
       irrItems: [],
       earnedSpecialtyBlocoIds: [],
@@ -752,7 +592,6 @@ describe("getMyCompletions", () => {
     expect(res.ramo).toBe("senior");
     expect(res.actions).toHaveLength(1);
     expect(res.actions[0]!.actionId).toBe(VALID_ACTION_ID);
-    expect(res.specialties).toEqual([]);
     expect(res.customActions).toEqual([]);
     expect(res.irrItems).toEqual([]);
   });
@@ -889,19 +728,11 @@ describe("getCompletionsForUser", () => {
 // ---------------------------------------------------------------------------
 
 describe("ramo-scoped completions (#37)", () => {
-  test("reads return only the current ramo's especialidades and ações personalizadas", async () => {
+  test("reads return only the current ramo's ações personalizadas", async () => {
     const t = convexTest(schema, modules);
     const userId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     // Same user, same blocoId (blocoIds are shared across ramos) under two ramos.
     await t.run(async (ctx) => {
-      await ctx.db.insert("specialtyCompletions", {
-        userId, ramo: "escoteiro", blocoId: "meio-ambiente",
-        specialtyName: "Esc", completedAt: 1, status: "approved",
-      });
-      await ctx.db.insert("specialtyCompletions", {
-        userId, ramo: "lobinho", blocoId: "meio-ambiente",
-        specialtyName: "Lob", completedAt: 1, status: "approved",
-      });
       await ctx.db.insert("customActions", {
         userId, ramo: "escoteiro", blocoId: "meio-ambiente",
         text: "esc custom", completed: true, createdAt: 1, status: "approved",
@@ -913,33 +744,7 @@ describe("ramo-scoped completions (#37)", () => {
     });
 
     const res = await as(t, userId).query(api.progression.getMyCompletions, {});
-    expect(res.specialties.map((s) => s.specialtyName)).toEqual(["Esc"]);
     expect(res.customActions.map((c) => c.text)).toEqual(["esc custom"]);
-  });
-
-  test("prior ramo's rows are retained and reappear after switching ramo back", async () => {
-    const t = convexTest(schema, modules);
-    const userId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
-    await t.run(async (ctx) => {
-      await ctx.db.insert("specialtyCompletions", {
-        userId, ramo: "lobinho", blocoId: "meio-ambiente",
-        specialtyName: "Lob", completedAt: 1, status: "approved",
-      });
-    });
-
-    // As an escoteiro the lobinho row is hidden...
-    const asEsc = await as(t, userId).query(api.progression.getMyCompletions, {});
-    expect(asEsc.specialties).toEqual([]);
-
-    // ...but retained in the DB, and visible again once the ramo is switched back.
-    await t.run(async (ctx) => ctx.db.patch(userId, { ramo: "lobinho" }));
-    const asLob = await as(t, userId).query(api.progression.getMyCompletions, {});
-    expect(asLob.specialties.map((s) => s.specialtyName)).toEqual(["Lob"]);
-
-    const total = await t.run(async (ctx) =>
-      (await ctx.db.query("specialtyCompletions").collect()).length,
-    );
-    expect(total).toBe(1); // nothing was deleted on the ramo change
   });
 
   test("ações personalizadas are retained across a ramo change and reappear on switch back", async () => {
@@ -965,15 +770,15 @@ describe("ramo-scoped completions (#37)", () => {
     expect(total).toBe(1); // retained across the ramo change
   });
 
-  test("a self-toggle stamps the acting escoteiro's ramo on the new row", async () => {
+  test("a self-write stamps the acting escoteiro's ramo on the new row", async () => {
     const t = convexTest(schema, modules);
     const userId = await insertUser(t, { role: "escoteiro", ramo: "lobinho" });
-    await as(t, userId).mutation(api.progression.toggleSpecialty, {
+    await as(t, userId).mutation(api.progression.addCustomAction, {
       blocoId: "meio-ambiente",
-      specialtyName: "Jardinagem",
+      text: "Plantar uma árvore",
     });
     const rows = await t.run(async (ctx) =>
-      ctx.db.query("specialtyCompletions").collect(),
+      ctx.db.query("customActions").collect(),
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]!.ramo).toBe("lobinho");

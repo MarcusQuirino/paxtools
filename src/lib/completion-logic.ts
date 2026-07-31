@@ -20,7 +20,6 @@ export function getBlocoProgress(
   approvedCustomCompleted: number,
   pendingCustomCompleted: number,
   hasApprovedSpecialty: boolean,
-  hasPendingSpecialty: boolean,
 ): BlocoProgress {
   const fixedDone = bloco.fixedActions.filter((a) =>
     approvedActionIds.has(a.id),
@@ -43,9 +42,10 @@ export function getBlocoProgress(
     hasApprovedSpecialty || variableDone >= bloco.variableRequired;
 
   const allFixedDoneOrPending = fixedDone + fixedPending === fixedTotal;
+  // No "pending especialidade" term: a specialty's level is computed on read
+  // from APPROVED item counts only, so it either satisfies the bloco or not.
   const variablePendingSatisfied =
     hasApprovedSpecialty ||
-    hasPendingSpecialty ||
     variableDone + variablePending >= bloco.variableRequired;
 
   return {
@@ -68,8 +68,8 @@ export function getBlocoProgress(
  * Removes diacritics, lowercases, replaces spaces/underscores with hyphens,
  * and strips non-alphanumeric characters except hyphens.
  *
- * Must agree with `migrations:migrateSpecialtyCompletions` and any future
- * mutation that writes a `specialtyId` derived from user input.
+ * Must agree with any mutation that writes a `specialtyId` derived from user
+ * input.
  */
 export function toSpecialtySlug(name: string): string {
   return name
@@ -86,13 +86,13 @@ export function toSpecialtySlug(name: string): string {
 }
 
 /**
- * Legacy specialty names (stored in old `specialtyCompletions` rows and still
- * present in the progression catalog's `alternativeCompletions`) whose slug
- * does not match the 2025 guide's catalog id. Maps legacy slug → canonical
- * catalog id so old data and old names resolve to the current catalog entry.
+ * Legacy specialty names still present in the progression catalog's
+ * `alternativeCompletions` whose slug does not match the 2025 guide's catalog
+ * id. Maps legacy slug → canonical catalog id so old names resolve to the
+ * current catalog entry.
  *
- * Known legacy names with NO canonical counterpart (left unmapped on purpose;
- * the migration reports them instead of guessing):
+ * Known legacy names with NO canonical counterpart (left unmapped on purpose,
+ * rather than guessed at):
  *   - "Noções Desportivas" — dropped from the 2025 guide
  *   - "Informações Turísticas" — in the 2025 guide but missing from our catalog
  */
@@ -200,50 +200,19 @@ export function getEarnedSpecialtyBlocoIds(
 }
 
 /**
- * Whether a specialty listed under a bloco should render as marked, and how.
+ * Whether a specialty listed under a bloco renders as marked.
  *
- * A specialty can be satisfied two ways:
- *  - *Earned via items* (#44): the escoteiro completed enough of its catalog
- *    items to reach level ≥ 1. This is computed from `specialtyItemCompletions`
- *    (surfaced as `earnedSpecialtyIds`), always counts as approved, and cannot
- *    be un-toggled from the bloco view — so it renders checked and locked.
- *  - *Legacy manual toggle*: a `specialtyCompletions` row written by
- *    `toggleSpecialty`, which may be pending or approved.
- *
- * Earned-via-items wins: it forces checked+approved+locked regardless of any
- * legacy row. Without it, the bloco could show 100% (satisfied via items) while
- * its specialty box stayed empty — the escoteiro had to re-mark it by hand.
+ * Since #47 there is exactly one way to mark one: *earned via items* — the
+ * escoteiro completed enough of its catalog items (younger) or all three
+ * project steps (older) to reach level ≥ 1, computed on read and surfaced as
+ * `earnedSpecialtyIds`. It is therefore always approved and always read-only
+ * from the bloco view; marking happens on /especialidades.
  */
-export type SpecialtyMark = {
-  checked: boolean;
-  pending: boolean;
-  locked: boolean;
-  earnedViaItems: boolean;
-};
-
-export function getSpecialtyMark(
+export function isSpecialtyEarned(
   specialtyName: string,
-  blocoId: string,
-  completedSpecialties: {
-    blocoId: string;
-    specialtyName: string;
-    status: "pending" | "approved";
-  }[],
   earnedSpecialtyIds: Set<string>,
-  lockApproved: boolean,
-): SpecialtyMark {
-  const earnedViaItems = earnedSpecialtyIds.has(
-    toCanonicalSpecialtyId(specialtyName),
-  );
-  const completion = completedSpecialties.find(
-    (s) => s.blocoId === blocoId && s.specialtyName === specialtyName,
-  );
-  const checked = earnedViaItems || !!completion;
-  const pending = !earnedViaItems && completion?.status === "pending";
-  const locked =
-    earnedViaItems ||
-    (lockApproved && completion?.status === "approved");
-  return { checked, pending, locked: !!locked, earnedViaItems };
+): boolean {
+  return earnedSpecialtyIds.has(toCanonicalSpecialtyId(specialtyName));
 }
 
 export function getCompletedBlockIds(
@@ -253,8 +222,7 @@ export function getCompletedBlockIds(
   customActions: { blocoId: string; completed: boolean; status?: string }[],
   // Pre-computed set of blocoIds whose linked specialty is earned at level ≥ 1.
   // Callers compute this from specialtyItemCompletions counts + the catalog's
-  // alternativeCompletions map. Previously accepted raw specialtyCompletions
-  // rows; migrated to this shape in feat/especialidades-schema-logic (#41).
+  // alternativeCompletions map.
   earnedSpecialtyBlocoIds: Set<string>,
 ): { approved: Set<string>; pending: Set<string> } {
   const approved = new Set<string>();
@@ -288,9 +256,6 @@ export function getCompletedBlockIds(
         approvedCustomByBloco.get(bloco.id) ?? 0,
         pendingCustomByBloco.get(bloco.id) ?? 0,
         hasEarnedSpecialty,
-        // Pending specialty satisfaction removed: specialty level is computed on
-        // read from approved item counts only — there is no "pending level".
-        false,
       );
       if (progress.isComplete) {
         approved.add(bloco.id);

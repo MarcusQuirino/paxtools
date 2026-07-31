@@ -181,7 +181,6 @@ async function wipeUsersCascade(
   // 1. Per-user owned rows.
   const userOwned = [
     "actionCompletions",
-    "specialtyCompletions",
     "specialtyItemCompletions",
     "specialtyProjectReports",
     "customActions",
@@ -254,7 +253,6 @@ async function wipeUsersCascade(
 
 const USER_OWNED_TABLES = [
   "actionCompletions",
-  "specialtyCompletions",
   "specialtyItemCompletions",
   "specialtyProjectReports",
   "customActions",

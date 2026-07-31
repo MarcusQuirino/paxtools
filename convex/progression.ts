@@ -7,7 +7,6 @@ import {
   snapshotProgression,
   detectLevelUps,
   readCurrentRamoIrrItems,
-  readCurrentRamoSpecialties,
   readCurrentRamoCustomActions,
   readEarnedSpecialtyBlocoIds,
   currentRamo,
@@ -90,7 +89,7 @@ async function finishApproval(
     before: ProgressionSnapshot | null;
     approved: boolean;
     kind: CompletionKind;
-    ref: { actionId?: string; specialtyName?: string; itemId?: string; text?: string };
+    ref: { actionId?: string; itemId?: string; text?: string };
   },
 ): Promise<LevelUpToast[]> {
   if (!opts.targetUserId || !opts.approved || !opts.before) return [];
@@ -122,7 +121,6 @@ export const getMyCompletions = query({
     const empty = {
       ramo: null,
       actions: [],
-      specialties: [],
       customActions: [],
       irrItems: [],
       earnedSpecialtyBlocoIds: [] as string[],
@@ -141,10 +139,9 @@ export const getMyCompletions = query({
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .take(500);
 
-    // Especialidades, ações personalizadas and IRR items are ramo-scoped:
-    // only the current ramo's rows (blocoIds are shared, so isolation is at
-    // the read). Actions self-isolate via their ramo-prefixed ids.
-    const specialties = await readCurrentRamoSpecialties(ctx, userId, user.ramo);
+    // Ações personalizadas and IRR items are ramo-scoped: only the current
+    // ramo's rows (blocoIds are shared, so isolation is at the read). Actions
+    // self-isolate via their ramo-prefixed ids.
     const customActions = await readCurrentRamoCustomActions(
       ctx,
       userId,
@@ -160,7 +157,6 @@ export const getMyCompletions = query({
     return {
       ramo: user?.ramo ?? null,
       actions,
-      specialties,
       customActions,
       irrItems,
       earnedSpecialtyBlocoIds: [...blocoIds],
@@ -182,11 +178,6 @@ export const getCompletionsForUser = query({
       .take(500);
 
     // Ramo-scoped to the target's current ramo (see getMyCompletions).
-    const specialties = await readCurrentRamoSpecialties(
-      ctx,
-      args.targetUserId,
-      target?.ramo,
-    );
     const customActions = await readCurrentRamoCustomActions(
       ctx,
       args.targetUserId,
@@ -206,7 +197,6 @@ export const getCompletionsForUser = query({
     return {
       ramo: target?.ramo ?? null,
       actions,
-      specialties,
       customActions,
       irrItems,
       earnedSpecialtyBlocoIds: [...blocoIds],
@@ -272,78 +262,6 @@ export const toggleAction = mutation({
       approved,
       kind: "action",
       ref: { actionId: args.actionId },
-    });
-  },
-});
-
-export const toggleSpecialty = mutation({
-  args: {
-    blocoId: v.string(),
-    specialtyName: v.string(),
-    targetUserId: v.optional(v.id("users")),
-  },
-  handler: async (ctx, args): Promise<LevelUpToast[]> => {
-    const { effectiveUserId, status, approvedBy, callerIsEscotista, caller } =
-      await resolveTargetAndStatus(ctx, args.targetUserId);
-
-    if (!BLOCO_ID_PATTERN.test(args.blocoId))
-      throw new Error("ID de bloco inválido");
-    if (!args.specialtyName.trim() || args.specialtyName.length > 200)
-      throw new Error("Nome de especialidade inválido");
-
-    // Stamp/scope by the acting escoteiro's current ramo.
-    const ramo = currentRamo(await ctx.db.get(effectiveUserId));
-
-    const existing = await ctx.db
-      .query("specialtyCompletions")
-      .withIndex("by_userId_and_ramo_and_blocoId_and_specialtyName", (q) =>
-        q
-          .eq("userId", effectiveUserId)
-          .eq("ramo", ramo)
-          .eq("blocoId", args.blocoId)
-          .eq("specialtyName", args.specialtyName),
-      )
-      .unique();
-
-    const before = args.targetUserId
-      ? await snapshotProgression(ctx, effectiveUserId)
-      : null;
-    let approved = false;
-
-    if (existing) {
-      if (existing.status === "pending" && status === "approved") {
-        await ctx.db.patch(existing._id, {
-          status: "approved",
-          approvedBy,
-          approvedAt: Date.now(),
-        });
-        approved = true;
-      } else {
-        assertCanRemoveApproved(existing.status, callerIsEscotista);
-        await ctx.db.delete(existing._id);
-      }
-    } else {
-      await ctx.db.insert("specialtyCompletions", {
-        userId: effectiveUserId,
-        ramo,
-        blocoId: args.blocoId,
-        specialtyName: args.specialtyName,
-        completedAt: Date.now(),
-        status,
-        approvedBy,
-        approvedAt: approvedBy ? Date.now() : undefined,
-      });
-      if (status === "approved") approved = true;
-    }
-
-    return finishApproval(ctx, {
-      targetUserId: args.targetUserId,
-      caller,
-      subjectId: effectiveUserId,
-      before,
-      approved,
-      kind: "specialty",
-      ref: { specialtyName: args.specialtyName },
     });
   },
 });
