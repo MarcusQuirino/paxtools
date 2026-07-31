@@ -74,7 +74,11 @@ export function getBlocoProgress(
 export function toSpecialtySlug(name: string): string {
   return name
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    // U+0300-U+036F = combining diacritical marks. Written as escapes, not as
+    // literal characters: esbuild cannot ASCII-escape inside a regex literal,
+    // so raw combining marks survive into bundle output and any consumer that
+    // serves the JS without `charset=utf-8` fails to parse the whole file.
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, "")
     .trim()

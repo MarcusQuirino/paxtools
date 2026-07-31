@@ -26,7 +26,7 @@
     "typeCheck": true
   },
   "globals": {},
-  "ignorePatterns": [".agents/skills", ".claude/skills"],
+  "ignorePatterns": [".agents/skills", ".claude/skills", ".design-sync", ".ds-sync", "ds-bundle"],
   "overrides": [
     {
       "files": ["**/*.test.ts", "**/*.test.tsx"],

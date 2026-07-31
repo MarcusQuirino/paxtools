@@ -4,6 +4,7 @@
   "description": "Rastreador de Progressao Pessoal para escoteiros brasileiros do Ramo Escoteiro",
   "license": "MIT",
   "type": "module",
+  "types": ".design-sync/.cache/dts/.design-sync/entry.d.ts",
   "repository": {
     "type": "git",
     "url": "https://github.com/MarcusQuirino/paxtools.git"

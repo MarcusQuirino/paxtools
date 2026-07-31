@@ -1,0 +1,21 @@
+{
+  // Declaration-only emit for design-sync.
+  //
+  // paxtools ships no library build, so there is no .d.ts tree for the
+  // converter's prop extractor to read — without this every <Name>.d.ts comes
+  // out as an empty `[key: string]: unknown` stub, and the design agent gets no
+  // API contract at all. This emits real declarations into the gitignored
+  // cache; cfg.buildCmd (.design-sync/prepare.sh) runs it before the converter.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "allowImportingTsExtensions": false,
+    "skipLibCheck": true,
+    "rootDir": "..",
+    "outDir": ".cache/dts"
+  },
+  "include": ["../src/**/*.ts", "../src/**/*.tsx", "./entry.tsx", "./ds-provider.tsx"],
+  "exclude": ["../node_modules", "../dist"]
+}
