@@ -11,8 +11,12 @@ A scout group; the top-level community every member belongs to.
 _Avoid_: organization, team
 
 **Ramo**:
-An age-based section of the movement (lobinho, escoteiro, sênior, pioneiro). An escoteiro belongs to exactly one ramo *at a time*, but moves up through the ramos over the years (lobinho → escoteiro → sênior → pioneiro); each ramo has its own separate progression, and a past ramo's record is retained — never lost or merged — when the escoteiro advances. An escotista accompanies one or more ramos.
-_Avoid_: section, unit
+An age-based branch of the movement (lobinho, escoteiro, sênior, pioneiro). An escoteiro belongs to exactly one ramo *at a time*, but moves up through the ramos over the years (lobinho → escoteiro → sênior → pioneiro); each ramo has its own separate progression, and a past ramo's record is retained — never lost or merged — when the escoteiro advances. An escotista accompanies one or more ramos. A grupo realises a ramo locally as one or more [[secao]]s — the ramo is the movement-wide branch, a seção is this grupo's concrete unit of it.
+_Avoid_: section (that is a distinct concept — see [[secao]]), branch
+
+**Seção**:
+A named local unit within a grupo that belongs to exactly one [[ramo]] — the grupo's concrete alcateia, tropa, or clã (e.g. "Alcateia Norte"). A grupo has zero or more; normally one per ramo, but it may run several of the same ramo (two alcateias). Seções only organise and filter *which* escoteiros an escotista works with; they never affect progression, which stays keyed to the [[ramo]]. An escoteiro is placed in a seção by an escotista; an unplaced escoteiro falls back to plain ramo visibility. Optional per grupo — a grupo that creates no seções behaves exactly as if the concept did not exist.
+_Avoid_: unidade, unit, alcateia/tropa/clã (those are specific seções, not the general term)
 
 **Escoteiro**:
 A youth member whose progression is tracked. This is the role name regardless of ramo — a lobinho-aged member is still an escoteiro in the model.
