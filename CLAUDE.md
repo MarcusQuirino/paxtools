@@ -21,6 +21,7 @@ Always use the `gh` CLI to interface with GitHub (PRs, issues, releases, etc.). 
 1. Create a new branch with a descriptive name.
 2. Commit the changes to that branch.
 3. Open a PR targeting `master` using `gh pr create`.
+4. Verify the change on the PR's Vercel preview — the `test-preview` skill; process in `docs/agents/preview-testing.md`.
 
 ## Quality Checks
 
