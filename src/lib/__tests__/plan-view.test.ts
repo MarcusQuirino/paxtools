@@ -5,6 +5,8 @@ import {
   sortForLinearView,
   isResolvedChecked,
   isResolvedComplete,
+  buildCatalogIndex,
+  resolvePlanItems,
   type PlanItemResolved,
 } from "@/lib/plan-view";
 import { encodePlanKey, decodePlanKey } from "@/lib/plan-keys";
@@ -150,6 +152,51 @@ describe("isResolvedChecked vs isResolvedComplete", () => {
 
     expect(isResolvedChecked(untouched)).toBe(false);
     expect(isResolvedComplete(untouched)).toBe(false);
+  });
+});
+
+describe("resolvePlanItems: especialidades (#47)", () => {
+  const catalog = buildCatalogIndex([fakeEixo]);
+  const planned = [
+    {
+      _id: "p1" as Id<"plannedItems">,
+      _creationTime: 0,
+      userId: "u1" as Id<"users">,
+      itemKey: encodePlanKey({
+        kind: "specialty",
+        blocoId: "b1",
+        specialtyName: "Acampamento",
+      }),
+      position: 0,
+    },
+  ];
+  const input = (earnedSpecialtyIds?: Set<string>) => ({
+    catalog,
+    approvedActionIds: new Set<string>(),
+    pendingActionIds: new Set<string>(),
+    actionStatusMap: new Map<string, "pending" | "approved">(),
+    earnedSpecialtyIds,
+    customActions: [],
+  });
+
+  function resolveOne(earned: Set<string>) {
+    const [item] = resolvePlanItems(planned, input(earned));
+    if (item?.kind !== "specialty") throw new Error("expected a specialty item");
+    return item;
+  }
+
+  it("marks an earned especialidade checked and approved", () => {
+    const item = resolveOne(new Set(["acampamento"]));
+    expect(item.checked).toBe(true);
+    expect(item.status).toBe("approved");
+    expect(isResolvedComplete(item)).toBe(true);
+  });
+
+  it("leaves an unearned especialidade unchecked with no status — nothing is 'pendente' anymore", () => {
+    const item = resolveOne(new Set());
+    expect(item.checked).toBe(false);
+    expect(item.status).toBeUndefined();
+    expect(isResolvedChecked(item)).toBe(false);
   });
 });
 

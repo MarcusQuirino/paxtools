@@ -90,7 +90,6 @@ function PlanDashboard() {
     approvedActionIds,
     pendingActionIds,
     actionStatusMap,
-    completedSpecialties,
     customActions,
     completedBlockIds,
     pendingBlockIds,
@@ -107,7 +106,6 @@ function PlanDashboard() {
         approvedActionIds,
         pendingActionIds,
         actionStatusMap,
-        completedSpecialties,
         earnedSpecialtyIds,
         customActions,
       }),
@@ -117,7 +115,6 @@ function PlanDashboard() {
       approvedActionIds,
       pendingActionIds,
       actionStatusMap,
-      completedSpecialties,
       earnedSpecialtyIds,
       customActions,
     ],
@@ -125,10 +122,6 @@ function PlanDashboard() {
 
   const toggleActionFn = useConvexMutation(api.progression.toggleAction);
   const { mutate: toggleAction } = useMutation({ mutationFn: toggleActionFn });
-  const toggleSpecialtyFn = useConvexMutation(api.progression.toggleSpecialty);
-  const { mutate: toggleSpecialty } = useMutation({
-    mutationFn: toggleSpecialtyFn,
-  });
   const toggleCustomFn = useConvexMutation(api.progression.toggleCustomAction);
   const { mutate: toggleCustom } = useMutation({ mutationFn: toggleCustomFn });
   const deleteCustomFn = useConvexMutation(api.progression.deleteCustomAction);
@@ -163,11 +156,7 @@ function PlanDashboard() {
             earnedSpecialtyBlocoIds={earnedSpecialtyBlocoIds}
             earnedSpecialtyIds={earnedSpecialtyIds}
             customActions={customActions}
-            completedSpecialties={completedSpecialties}
             onToggleAction={(actionId) => toggleAction({ actionId })}
-            onToggleSpecialty={(blocoId, specialtyName) =>
-              toggleSpecialty({ blocoId, specialtyName })
-            }
             onAddCustom={(blocoId, text) => addCustom({ blocoId, text })}
             onToggleCustom={(id) => toggleCustom({ customActionId: id })}
             onDeleteCustom={(id) => deleteCustom({ customActionId: id })}
@@ -182,9 +171,6 @@ function PlanDashboard() {
         <OrderedListView
           resolved={resolved}
           onToggleAction={(actionId) => toggleAction({ actionId })}
-          onToggleSpecialty={(blocoId, specialtyName) =>
-            toggleSpecialty({ blocoId, specialtyName })
-          }
           onToggleCustom={(id) => toggleCustom({ customActionId: id })}
           onDeleteCustom={(id) => deleteCustom({ customActionId: id })}
           onTogglePlanned={(itemKey) => togglePlanned({ itemKey })}
@@ -244,7 +230,6 @@ function EmptyState() {
 type OrderedListViewProps = {
   resolved: PlanItemResolved[];
   onToggleAction: (actionId: string) => void;
-  onToggleSpecialty: (blocoId: string, specialtyName: string) => void;
   onToggleCustom: (id: Id<"customActions">) => void;
   onDeleteCustom: (id: Id<"customActions">) => void;
   onTogglePlanned: (itemKey: string) => void;
@@ -258,7 +243,6 @@ type OrderedListViewProps = {
 function OrderedListView({
   resolved,
   onToggleAction,
-  onToggleSpecialty,
   onToggleCustom,
   onDeleteCustom,
   onTogglePlanned,
@@ -300,7 +284,6 @@ function OrderedListView({
               key={item.itemKey}
               item={item}
               onToggleAction={onToggleAction}
-              onToggleSpecialty={onToggleSpecialty}
               onToggleCustom={onToggleCustom}
               onDeleteCustom={onDeleteCustom}
               onTogglePlanned={onTogglePlanned}
@@ -315,7 +298,6 @@ function OrderedListView({
 type SortableRowProps = {
   item: PlanItemResolved;
   onToggleAction: (actionId: string) => void;
-  onToggleSpecialty: (blocoId: string, specialtyName: string) => void;
   onToggleCustom: (id: Id<"customActions">) => void;
   onDeleteCustom: (id: Id<"customActions">) => void;
   onTogglePlanned: (itemKey: string) => void;
@@ -324,7 +306,6 @@ type SortableRowProps = {
 function SortableRow({
   item,
   onToggleAction,
-  onToggleSpecialty,
   onToggleCustom,
   onDeleteCustom,
   onTogglePlanned,
@@ -381,7 +362,6 @@ function SortableRow({
         <RowBody
           item={item}
           onToggleAction={onToggleAction}
-          onToggleSpecialty={onToggleSpecialty}
           onToggleCustom={onToggleCustom}
           onDeleteCustom={onDeleteCustom}
           onTogglePlanned={onTogglePlanned}
@@ -394,7 +374,6 @@ function SortableRow({
 function RowBody({
   item,
   onToggleAction,
-  onToggleSpecialty,
   onToggleCustom,
   onDeleteCustom,
   onTogglePlanned,
@@ -415,39 +394,20 @@ function RowBody({
     );
   }
   if (item.kind === "specialty") {
-    const isPending = item.checked && item.status === "pending";
-    const isLocked = item.checked && item.status === "approved";
+    // Read-only since #47: an especialidade is earned on /especialidades, never
+    // ticked from the plano.
     return (
-      <label
-        className={`flex items-center gap-3 min-h-[44px] px-3 py-2 ${
-          isLocked ? "cursor-not-allowed" : "cursor-pointer"
-        }`}
-      >
-        <Checkbox
-          checked={item.checked}
-          onCheckedChange={() =>
-            onToggleSpecialty(item.bloco.id, item.specialtyName)
-          }
-          disabled={isLocked}
-          className="size-5"
-          style={item.checked ? { opacity: isPending ? 0.4 : 1 } : undefined}
-        />
+      <div className="flex items-center gap-3 min-h-[44px] px-3 py-2">
+        <Checkbox checked={item.checked} disabled className="size-5" />
         <Award className="size-3.5 text-muted-foreground shrink-0" />
         <span
           className={`text-sm flex-1 ${
-            item.checked
-              ? isPending
-                ? "text-muted-foreground/60"
-                : "line-through text-muted-foreground"
-              : ""
+            item.checked ? "line-through text-muted-foreground" : ""
           }`}
         >
           {item.specialtyName}
         </span>
-        {isPending && (
-          <Clock className="size-3.5 text-amber-500 shrink-0" />
-        )}
-      </label>
+      </div>
     );
   }
   // custom

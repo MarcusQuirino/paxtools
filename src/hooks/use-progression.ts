@@ -22,7 +22,6 @@ export function useProgression(targetUserId?: Id<"users">) {
   const { data } = useSuspenseQuery<{
     ramo: Ramo | null;
     actions: { actionId: string; status?: string }[];
-    specialties: { blocoId: string; specialtyName: string; status?: string }[];
     customActions: {
       _id: Id<"customActions">;
       blocoId: string;
@@ -65,15 +64,6 @@ export function useProgression(targetUserId?: Id<"users">) {
     }
     return map;
   }, [data.actions]);
-
-  const specialtiesWithStatus = useMemo(
-    () =>
-      data.specialties.map((s) => ({
-        ...s,
-        status: (s.status ?? "approved") as "pending" | "approved",
-      })),
-    [data.specialties],
-  );
 
   const customActionsWithStatus = useMemo(
     () =>
@@ -154,7 +144,6 @@ export function useProgression(targetUserId?: Id<"users">) {
     approvedActionIds,
     pendingActionIds,
     actionStatusMap,
-    completedSpecialties: specialtiesWithStatus,
     customActions: customActionsWithStatus,
     completedBlockIds,
     pendingBlockIds,

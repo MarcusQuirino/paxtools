@@ -29,12 +29,9 @@ import {
   type CompletionKind,
 } from "./lib/events";
 
-// The three "simple" completion tables share the userId/status shape, so a
-// single union id type lets one helper drive all of them.
-type CompletionId =
-  | Id<"actionCompletions">
-  | Id<"specialtyCompletions">
-  | Id<"irrCompletions">;
+// The two "simple" completion tables share the userId/status shape, so a
+// single union id type lets one helper drive both of them.
+type CompletionId = Id<"actionCompletions"> | Id<"irrCompletions">;
 
 /**
  * Approve a single pending completion. Authenticates FIRST (before fetching the
@@ -144,13 +141,6 @@ export const getPendingForGroup = query({
         )
         .take(100);
 
-      const pendingSpecialties = await ctx.db
-        .query("specialtyCompletions")
-        .withIndex("by_userId_and_status", (q) =>
-          q.eq("userId", escoteiro._id).eq("status", "pending"),
-        )
-        .take(100);
-
       // Pending reads stay by (userId, status), NOT ramo-scoped: pending IRR
       // rows are always the escoteiro's current ramo (writes stamp it), and a
       // stale other-ramo pending row is only reachable post-transition, which
@@ -193,7 +183,6 @@ export const getPendingForGroup = query({
 
       const totalPending =
         pendingActions.length +
-        pendingSpecialties.length +
         pendingIrrItems.length +
         pendingCustomActions.length +
         pendingSpecialtyItems.length +
@@ -208,7 +197,6 @@ export const getPendingForGroup = query({
             ramo: escoteiro.ramo ?? null,
           },
           pendingActions,
-          pendingSpecialties,
           pendingIrrItems,
           pendingCustomActions,
           pendingSpecialtyItems,
@@ -329,12 +317,6 @@ export const approveAction = mutation({
     approvePendingCompletion(ctx, args.completionId, "action"),
 });
 
-export const approveSpecialty = mutation({
-  args: { completionId: v.id("specialtyCompletions") },
-  handler: async (ctx, args) =>
-    approvePendingCompletion(ctx, args.completionId, "specialty"),
-});
-
 export const approveIrrItem = mutation({
   args: { completionId: v.id("irrCompletions") },
   handler: async (ctx, args) =>
@@ -400,13 +382,6 @@ export const rejectAction = mutation({
   },
 });
 
-export const rejectSpecialty = mutation({
-  args: { completionId: v.id("specialtyCompletions") },
-  handler: async (ctx, args) => {
-    await rejectPendingCompletion(ctx, args.completionId, "specialty");
-  },
-});
-
 export const rejectIrrItem = mutation({
   args: { completionId: v.id("irrCompletions") },
   handler: async (ctx, args) => {
@@ -418,7 +393,6 @@ export const bulkAction = mutation({
   args: {
     action: v.union(v.literal("approve"), v.literal("reject")),
     actionIds: v.array(v.id("actionCompletions")),
-    specialtyIds: v.array(v.id("specialtyCompletions")),
     irrIds: v.array(v.id("irrCompletions")),
     customActionIds: v.optional(v.array(v.id("customActions"))),
   },
@@ -428,7 +402,6 @@ export const bulkAction = mutation({
 
     const hits = [
       ...(await collectPending(ctx, args.actionIds, "action", false)),
-      ...(await collectPending(ctx, args.specialtyIds, "specialty", false)),
       ...(await collectPending(ctx, args.irrIds, "irr", false)),
       ...(await collectPending(ctx, args.customActionIds ?? [], "custom", true)),
     ];
@@ -510,16 +483,10 @@ export const approveAllForEscoteiro = mutation({
     const now = Date.now();
     const before = await snapshotProgression(ctx, args.escoteiroId);
 
-    // The per-table .take() limits differ (100/100/10/100) and custom filters
+    // The per-table .take() limits differ (100/10/100) and custom filters
     // on `completed`, so the queries stay inline.
     const pendingActions = await ctx.db
       .query("actionCompletions")
-      .withIndex("by_userId_and_status", (q) =>
-        q.eq("userId", args.escoteiroId).eq("status", "pending"),
-      )
-      .take(100);
-    const pendingSpecialties = await ctx.db
-      .query("specialtyCompletions")
       .withIndex("by_userId_and_status", (q) =>
         q.eq("userId", args.escoteiroId).eq("status", "pending"),
       )
@@ -555,7 +522,6 @@ export const approveAllForEscoteiro = mutation({
       }
     };
     await approveAndLog(pendingActions, "action");
-    await approveAndLog(pendingSpecialties, "specialty");
     await approveAndLog(pendingIrr, "irr");
     await approveAndLog(pendingCustomActions, "custom");
 

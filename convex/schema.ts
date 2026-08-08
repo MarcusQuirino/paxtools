@@ -145,20 +145,17 @@ export default defineSchema({
     ])
     .index("by_userId_and_status", ["userId", "status"]),
 
-  // ── Legacy specialty system (deprecated, still live until #42–44 ship) ──────
-  // DEPRECATED (#41): replaced by specialtyItemCompletions / specialtyProjectReports.
-  // Still written by `toggleSpecialty` and read by `getMyCompletions` /
-  // `getCompletionsForUser` — kept live so the existing specialty UI keeps working
-  // during the migration window. The earned-set contribution to bloco completion is
-  // already disabled (earnedSpecialtyBlocoIds=∅ in #41; wired in #44).
-  // Full purge (toggleSpecialty + reads + UI) deferred to #42–44.
-  // Drop the table definition once #42–44 land and migration is confirmed on prod.
+  // ── Legacy specialty system (purged, awaiting table drop) ──────────────────
+  // DEPRECATED (#41), code purged (#47): replaced by specialtyItemCompletions /
+  // specialtyProjectReports. NOTHING reads or writes this table anymore —
+  // `toggleSpecialty`, its approval path and the bloco-card checkbox are gone.
+  // `migrations:dropLegacySpecialtyCompletions` deletes every remaining row
+  // (the insígnia leftovers the conversion migration could not resolve).
   //
-  // Ramo-scoped (#37): a completion's identity is (userId, ramo, blocoId,
-  // specialtyName). `ramo` is optional (backfilled in place by
-  // `migrations:backfillRamoOnCompletions`); reads filter to the subject's
-  // current ramo so a past ramo's especialidades don't bleed into it. blocoIds
-  // are shared across ramos, so ramo MUST be in the write-uniqueness lookup.
+  // The definition survives one release on purpose: Convex rejects a push that
+  // removes a table still holding documents, so the drop can only land after
+  // the drain migration has run on staging AND prod. Delete this block (and its
+  // indexes) in the follow-up — same lifecycle as lisDeOuroCompletions below.
   specialtyCompletions: defineTable({
     userId: v.id("users"),
     ramo: v.optional(ramoValidator),
@@ -171,10 +168,6 @@ export default defineSchema({
   })
     .index("by_userId", ["userId"])
     .index("by_userId_and_status", ["userId", "status"])
-    // Serves both the (userId, ramo) current-ramo reads (prefix) and the
-    // (userId, ramo, blocoId, specialtyName) .unique() toggle/backfill lookups.
-    // The pre-#37 non-ramo blocoId/specialtyName lookup indexes are gone —
-    // ramo is now part of a completion's identity.
     .index("by_userId_and_ramo_and_blocoId_and_specialtyName", [
       "userId",
       "ramo",

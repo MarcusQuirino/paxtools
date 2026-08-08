@@ -6,7 +6,7 @@ import {
   getEarnedSpecialtyIds,
   getEarnedSpecialtyBlocoIds,
   getSpecialtyLevel,
-  getSpecialtyMark,
+  isSpecialtyEarned,
   toSpecialtySlug,
   toCanonicalSpecialtyId,
   getCurrentStage,
@@ -62,7 +62,7 @@ describe("getBlocoProgress", () => {
   const bloco = makeBloco();
 
   it("returns zeros when nothing is completed", () => {
-    const result = getBlocoProgress(bloco, new Set(), emptyPending, 0, 0, false, false);
+    const result = getBlocoProgress(bloco, new Set(), emptyPending, 0, 0, false);
 
     expect(result.fixedDone).toBe(0);
     expect(result.fixedTotal).toBe(2);
@@ -73,7 +73,7 @@ describe("getBlocoProgress", () => {
 
   it("tracks fixed action completion count", () => {
     const completed = new Set(["test-bloco:fixed:0"]);
-    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false);
 
     expect(result.fixedDone).toBe(1);
     expect(result.fixedTotal).toBe(2);
@@ -85,7 +85,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:variable:0",
       "test-bloco:variable:1",
     ]);
-    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false);
 
     expect(result.variableDone).toBe(2);
   });
@@ -97,7 +97,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:variable:0",
       "test-bloco:variable:1",
     ]);
-    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false);
 
     expect(result.isComplete).toBe(true);
   });
@@ -108,7 +108,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:fixed:1",
       "test-bloco:variable:0",
     ]);
-    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false);
 
     expect(result.isComplete).toBe(false);
   });
@@ -119,7 +119,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:variable:0",
       "test-bloco:variable:1",
     ]);
-    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false);
 
     expect(result.isComplete).toBe(false);
   });
@@ -131,7 +131,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:variable:0",
     ]);
     // 1 variable action + 1 custom = 2, meets threshold of 2
-    const result = getBlocoProgress(bloco, completed, emptyPending, 1, 0, false, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 1, 0, false);
 
     expect(result.variableDone).toBe(2);
     expect(result.isComplete).toBe(true);
@@ -143,7 +143,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:fixed:1",
     ]);
     // 0 variable done, but specialty alternative = true
-    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, true, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, true);
 
     expect(result.variableDone).toBe(0);
     expect(result.isComplete).toBe(true);
@@ -151,7 +151,7 @@ describe("getBlocoProgress", () => {
 
   it("specialty alternative does NOT bypass fixed requirement", () => {
     const completed = new Set(["test-bloco:fixed:0"]);
-    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, true, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, true);
 
     expect(result.isComplete).toBe(false);
   });
@@ -162,7 +162,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:fixed:0",
       "test-bloco:fixed:1",
     ]);
-    const result = getBlocoProgress(noVarBloco, completed, emptyPending, 0, 0, false, false);
+    const result = getBlocoProgress(noVarBloco, completed, emptyPending, 0, 0, false);
 
     expect(result.isComplete).toBe(true);
   });
@@ -173,7 +173,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:variable:0",
       "test-bloco:variable:1",
     ]);
-    const result = getBlocoProgress(noFixedBloco, completed, emptyPending, 0, 0, false, false);
+    const result = getBlocoProgress(noFixedBloco, completed, emptyPending, 0, 0, false);
 
     expect(result.isComplete).toBe(true);
   });
@@ -183,7 +183,7 @@ describe("getBlocoProgress", () => {
       "other-bloco:fixed:0",
       "other-bloco:variable:0",
     ]);
-    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false);
 
     expect(result.fixedDone).toBe(0);
     expect(result.variableDone).toBe(0);
@@ -196,7 +196,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:variable:0",
       "test-bloco:variable:1",
     ]);
-    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false, false);
+    const result = getBlocoProgress(bloco, completed, emptyPending, 0, 0, false);
 
     expect(result.variableDone).toBe(2);
     expect(result.variableRequired).toBe(2);
@@ -206,7 +206,7 @@ describe("getBlocoProgress", () => {
   it("pending items track separately", () => {
     const approved = new Set(["test-bloco:fixed:0"]);
     const pending = new Set(["test-bloco:fixed:1"]);
-    const result = getBlocoProgress(bloco, approved, pending, 0, 0, false, false);
+    const result = getBlocoProgress(bloco, approved, pending, 0, 0, false);
 
     expect(result.fixedDone).toBe(1);
     expect(result.fixedPending).toBe(1);
@@ -221,7 +221,7 @@ describe("getBlocoProgress", () => {
       "test-bloco:variable:0",
       "test-bloco:variable:1",
     ]);
-    const result = getBlocoProgress(bloco, approved, pending, 0, 0, false, false);
+    const result = getBlocoProgress(bloco, approved, pending, 0, 0, false);
 
     expect(result.isComplete).toBe(false);
     expect(result.isPendingComplete).toBe(true);
@@ -678,92 +678,27 @@ describe("toSpecialtySlug", () => {
   });
 });
 
-// ── getSpecialtyMark ───────────────────────────────────────────
+// ── isSpecialtyEarned ──────────────────────────────────────────
 
-describe("getSpecialtyMark", () => {
+describe("isSpecialtyEarned", () => {
   const NONE = new Set<string>();
 
-  it("marks an item-earned specialty checked+locked even with no legacy row", () => {
+  it("marks an item-earned specialty as earned", () => {
     // The reported bug: bloco shows 100% via items but the box was empty.
-    const mark = getSpecialtyMark(
-      "Acampamento",
-      "b1",
-      [],
-      new Set(["acampamento"]),
-      false,
-    );
-    expect(mark.checked).toBe(true);
-    expect(mark.earnedViaItems).toBe(true);
-    expect(mark.locked).toBe(true);
-    expect(mark.pending).toBe(false);
-  });
-
-  it("resolves legacy renamed names to their canonical earned id", () => {
-    // "Ciências da Terra" → geologia (2025-guide rename).
-    const mark = getSpecialtyMark(
-      "Ciências da Terra",
-      "b1",
-      [],
-      new Set(["geologia"]),
-      false,
-    );
-    expect(mark.checked).toBe(true);
-    expect(mark.earnedViaItems).toBe(true);
-  });
-
-  it("leaves an unearned specialty unchecked", () => {
-    const mark = getSpecialtyMark("Acampamento", "b1", [], NONE, false);
-    expect(mark.checked).toBe(false);
-    expect(mark.locked).toBe(false);
-  });
-
-  it("reflects a pending legacy toggle as checked+pending", () => {
-    const mark = getSpecialtyMark(
-      "Acampamento",
-      "b1",
-      [{ blocoId: "b1", specialtyName: "Acampamento", status: "pending" }],
-      NONE,
-      false,
-    );
-    expect(mark.checked).toBe(true);
-    expect(mark.pending).toBe(true);
-    expect(mark.locked).toBe(false);
-  });
-
-  it("item-earned overrides a pending legacy row (approved, not pending)", () => {
-    const mark = getSpecialtyMark(
-      "Acampamento",
-      "b1",
-      [{ blocoId: "b1", specialtyName: "Acampamento", status: "pending" }],
-      new Set(["acampamento"]),
-      false,
-    );
-    expect(mark.checked).toBe(true);
-    expect(mark.pending).toBe(false);
-    expect(mark.locked).toBe(true);
-  });
-
-  it("locks an approved legacy row only when lockApproved is set", () => {
-    const row = [
-      { blocoId: "b1", specialtyName: "Acampamento", status: "approved" as const },
-    ];
-    expect(getSpecialtyMark("Acampamento", "b1", row, NONE, false).locked).toBe(
-      false,
-    );
-    expect(getSpecialtyMark("Acampamento", "b1", row, NONE, true).locked).toBe(
+    expect(isSpecialtyEarned("Acampamento", new Set(["acampamento"]))).toBe(
       true,
     );
   });
 
-  it("scopes the legacy row lookup to the same bloco", () => {
-    const mark = getSpecialtyMark(
-      "Acampamento",
-      "b1",
-      [{ blocoId: "b2", specialtyName: "Acampamento", status: "approved" }],
-      NONE,
-      false,
+  it("resolves legacy renamed names to their canonical earned id", () => {
+    // "Ciências da Terra" → geologia (2025-guide rename).
+    expect(isSpecialtyEarned("Ciências da Terra", new Set(["geologia"]))).toBe(
+      true,
     );
-    expect(mark.checked).toBe(false);
+  });
+
+  it("leaves an unearned specialty unmarked", () => {
+    expect(isSpecialtyEarned("Acampamento", NONE)).toBe(false);
   });
 });
 

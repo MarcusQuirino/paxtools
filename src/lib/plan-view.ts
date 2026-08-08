@@ -1,7 +1,7 @@
 import type { Bloco, CustomAction, Eixo } from "../data/types";
 import type { Doc } from "../../convex/_generated/dataModel";
 import { decodePlanKey } from "./plan-keys";
-import { getSpecialtyMark } from "./completion-logic";
+import { isSpecialtyEarned } from "./completion-logic";
 
 export type PlanItemResolved =
   | {
@@ -88,12 +88,7 @@ export type ResolverInput = {
   approvedActionIds: Set<string>;
   pendingActionIds: Set<string>;
   actionStatusMap: Map<string, "pending" | "approved">;
-  completedSpecialties: {
-    blocoId: string;
-    specialtyName: string;
-    status: "pending" | "approved";
-  }[];
-  /** Canonical ids of specialties earned via items (#44) — count as approved. */
+  /** Canonical ids of specialties earned via items (#44) — always approved. */
   earnedSpecialtyIds?: Set<string>;
   customActions: CustomAction[];
 };
@@ -103,12 +98,6 @@ export function resolvePlanItems(
   input: ResolverInput,
 ): PlanItemResolved[] {
   const customById = new Map(input.customActions.map((c) => [c._id, c]));
-  const specialtyByKey = new Map(
-    input.completedSpecialties.map((s) => [
-      `${s.blocoId}:${s.specialtyName}`,
-      s,
-    ]),
-  );
 
   const sorted = [...planned].sort((a, b) => a.position - b.position);
   const resolved: PlanItemResolved[] = [];
@@ -138,12 +127,9 @@ export function resolvePlanItems(
     } else if (decoded.kind === "specialty") {
       const hit = input.catalog.blocosById.get(decoded.blocoId);
       if (!hit) continue;
-      const mark = getSpecialtyMark(
+      const earned = isSpecialtyEarned(
         decoded.specialtyName,
-        decoded.blocoId,
-        input.completedSpecialties,
         input.earnedSpecialtyIds ?? new Set(),
-        false,
       );
       resolved.push({
         itemKey: p.itemKey,
@@ -152,11 +138,8 @@ export function resolvePlanItems(
         eixo: hit.eixo,
         bloco: hit.bloco,
         specialtyName: decoded.specialtyName,
-        checked: mark.checked,
-        status: mark.earnedViaItems
-          ? "approved"
-          : specialtyByKey.get(`${decoded.blocoId}:${decoded.specialtyName}`)
-              ?.status,
+        checked: earned,
+        status: earned ? "approved" : undefined,
       });
     } else if (decoded.kind === "custom") {
       const custom = customById.get(decoded.customActionId);

@@ -20,6 +20,7 @@ import type * as lib_aiPrompt from "../lib/aiPrompt.js";
 import type * as lib_authHelpers from "../lib/authHelpers.js";
 import type * as lib_coverage from "../lib/coverage.js";
 import type * as lib_events from "../lib/events.js";
+import type * as lib_legacySpecialty from "../lib/legacySpecialty.js";
 import type * as lib_progression from "../lib/progression.js";
 import type * as lib_ramoVisibility from "../lib/ramoVisibility.js";
 import type * as lib_sections from "../lib/sections.js";
@@ -51,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   "lib/authHelpers": typeof lib_authHelpers;
   "lib/coverage": typeof lib_coverage;
   "lib/events": typeof lib_events;
+  "lib/legacySpecialty": typeof lib_legacySpecialty;
   "lib/progression": typeof lib_progression;
   "lib/ramoVisibility": typeof lib_ramoVisibility;
   "lib/sections": typeof lib_sections;

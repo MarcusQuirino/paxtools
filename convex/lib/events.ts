@@ -7,12 +7,15 @@ import {
 } from "../../src/data/progression-data";
 import { getRamoRules } from "../../src/data/progression-rules";
 
-/** Completion kinds that produce an approval/rejection audit line. */
-export type CompletionKind = "action" | "specialty" | "custom" | "irr";
+/**
+ * Completion kinds that produce an approval/rejection audit line. Especialidades
+ * are absent on purpose: since #47 they live in specialtyItemCompletions /
+ * specialtyProjectReports, whose mutations write their own audit summaries.
+ */
+export type CompletionKind = "action" | "custom" | "irr";
 
 export type CompletionDoc =
   | Doc<"actionCompletions">
-  | Doc<"specialtyCompletions">
   | Doc<"irrCompletions">
   | Doc<"customActions">;
 
@@ -20,12 +23,10 @@ export type CompletionDoc =
 export function completionRef(
   doc: CompletionDoc,
   kind: CompletionKind,
-): { actionId?: string; specialtyName?: string; itemId?: string; text?: string } {
+): { actionId?: string; itemId?: string; text?: string } {
   switch (kind) {
     case "action":
       return { actionId: (doc as Doc<"actionCompletions">).actionId };
-    case "specialty":
-      return { specialtyName: (doc as Doc<"specialtyCompletions">).specialtyName };
     case "custom":
       return { text: (doc as Doc<"customActions">).text };
     case "irr":
@@ -48,7 +49,7 @@ const IRR_ITEM_LABELS: Record<string, string> = {
 export function describeCompletion(
   ramo: Ramo | null | undefined,
   kind: CompletionKind,
-  ref: { actionId?: string; specialtyName?: string; itemId?: string; text?: string },
+  ref: { actionId?: string; itemId?: string; text?: string },
 ): string {
   switch (kind) {
     case "action": {
@@ -66,8 +67,6 @@ export function describeCompletion(
       }
       return id;
     }
-    case "specialty":
-      return ref.specialtyName ?? "Especialidade";
     case "custom":
       return ref.text ?? "Ação personalizada";
     case "irr": {

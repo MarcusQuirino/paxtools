@@ -71,7 +71,6 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
     approvedActionIds,
     pendingActionIds,
     actionStatusMap,
-    completedSpecialties,
     customActions,
     completedBlockIds,
     pendingBlockIds,
@@ -99,12 +98,6 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
     onSuccess: notifyLevelUps,
   });
 
-  const toggleSpecialtyFn = useConvexMutation(api.progression.toggleSpecialty);
-  const { mutate: toggleSpecialty } = useMutation({
-    mutationFn: toggleSpecialtyFn,
-    onSuccess: notifyLevelUps,
-  });
-
   const addCustomFn = useConvexMutation(api.progression.addCustomAction);
   const { mutate: addCustom } = useMutation({ mutationFn: addCustomFn });
 
@@ -125,10 +118,6 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
 
   const handleToggleAction = (actionId: string) => {
     toggleAction({ actionId, targetUserId });
-  };
-
-  const handleToggleSpecialty = (blocoId: string, specialtyName: string) => {
-    toggleSpecialty({ blocoId, specialtyName, targetUserId });
   };
 
   const handleAddCustom = (blocoId: string, text: string) => {
@@ -176,9 +165,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
           earnedSpecialtyBlocoIds={earnedSpecialtyBlocoIds}
           earnedSpecialtyIds={earnedSpecialtyIds}
           customActions={customActions}
-          completedSpecialties={completedSpecialties}
           onToggleAction={handleToggleAction}
-          onToggleSpecialty={handleToggleSpecialty}
           onAddCustom={handleAddCustom}
           onToggleCustom={handleToggleCustom}
           onDeleteCustom={handleDeleteCustom}
@@ -197,9 +184,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
             earnedSpecialtyBlocoIds={earnedSpecialtyBlocoIds}
             earnedSpecialtyIds={earnedSpecialtyIds}
             customActions={customActions}
-            completedSpecialties={completedSpecialties}
             onToggleAction={handleToggleAction}
-            onToggleSpecialty={handleToggleSpecialty}
             onAddCustom={handleAddCustom}
             onToggleCustom={handleToggleCustom}
             onDeleteCustom={handleDeleteCustom}
@@ -232,11 +217,7 @@ type DashboardEixosWithPlanProps = {
   earnedSpecialtyBlocoIds?: Set<string>;
   earnedSpecialtyIds?: Set<string>;
   customActions: React.ComponentProps<typeof EixoSection>["customActions"];
-  completedSpecialties: React.ComponentProps<
-    typeof EixoSection
-  >["completedSpecialties"];
   onToggleAction: (actionId: string) => void;
-  onToggleSpecialty: (blocoId: string, specialtyName: string) => void;
   onAddCustom: (blocoId: string, text: string) => void;
   onToggleCustom: (id: Id<"customActions">) => void;
   onDeleteCustom: (id: Id<"customActions">) => void;

@@ -86,7 +86,7 @@ bun dev
 ### Estrutura de dados
 
 - Dados estaticos da progressao ficam em `src/data/` (nao no banco de dados)
-- Progresso do usuario fica no Convex (tabelas `actionCompletions`, `specialtyCompletions`, `customActions`)
+- Progresso do usuario fica no Convex (tabelas `actionCompletions`, `specialtyItemCompletions`, `specialtyProjectReports`, `customActions`)
 - Logica de conclusao fica em `src/lib/completion-logic.ts` como funcoes puras
 
 ### Commits

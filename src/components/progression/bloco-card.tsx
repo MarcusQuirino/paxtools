@@ -18,15 +18,9 @@ type BlocoCardProps = {
   pendingActionIds: Set<string>;
   actionStatusMap: Map<string, CompletionStatus>;
   customActions: CustomAction[];
-  completedSpecialties: {
-    blocoId: string;
-    specialtyName: string;
-    status: CompletionStatus;
-  }[];
   color: string;
   colorLight: string;
   onToggleAction: (actionId: string) => void;
-  onToggleSpecialty: (blocoId: string, specialtyName: string) => void;
   onAddCustom: (blocoId: string, text: string) => void;
   onToggleCustom: (id: Id<"customActions">) => void;
   onDeleteCustom: (id: Id<"customActions">) => void;
@@ -49,11 +43,9 @@ export function BlocoCard({
   pendingActionIds,
   actionStatusMap,
   customActions,
-  completedSpecialties,
   color,
   colorLight,
   onToggleAction,
-  onToggleSpecialty,
   onAddCustom,
   onToggleCustom,
   onDeleteCustom,
@@ -71,14 +63,7 @@ export function BlocoCard({
   const pendingCustomCompleted = customActions.filter(
     (c) => c.blocoId === bloco.id && c.completed && c.status === "pending",
   ).length;
-  const hasApprovedSpecialty =
-    !!earnedViaSpecialty ||
-    completedSpecialties.some(
-      (s) => s.blocoId === bloco.id && s.status !== "pending",
-    );
-  const hasPendingSpecialty = completedSpecialties.some(
-    (s) => s.blocoId === bloco.id && s.status === "pending",
-  );
+  const hasApprovedSpecialty = !!earnedViaSpecialty;
 
   const progress = getBlocoProgress(
     bloco,
@@ -87,7 +72,6 @@ export function BlocoCard({
     approvedCustomCompleted,
     pendingCustomCompleted,
     hasApprovedSpecialty,
-    hasPendingSpecialty,
   );
 
   const totalActions = bloco.fixedActions.length + bloco.variableRequired;
@@ -102,13 +86,12 @@ export function BlocoCard({
   const approvedPercent =
     totalActions > 0 ? (approvedDone / totalActions) * 100 : 0;
 
-  const pendingVariableCredit =
-    hasApprovedSpecialty || hasPendingSpecialty
-      ? bloco.variableRequired - approvedVariableCredit
-      : Math.min(
-          progress.variablePending,
-          bloco.variableRequired - approvedVariableCredit,
-        );
+  const pendingVariableCredit = hasApprovedSpecialty
+    ? bloco.variableRequired - approvedVariableCredit
+    : Math.min(
+        progress.variablePending,
+        bloco.variableRequired - approvedVariableCredit,
+      );
   const pendingDone = Math.min(
     progress.fixedPending + Math.max(0, pendingVariableCredit),
     totalActions - approvedDone,
@@ -168,7 +151,7 @@ export function BlocoCard({
           completedActionIds={allCompletedActionIds}
           actionStatusMap={actionStatusMap}
           customActions={customActions}
-          hasSpecialtyAlternative={hasApprovedSpecialty || hasPendingSpecialty}
+          hasSpecialtyAlternative={hasApprovedSpecialty}
           color={color}
           colorLight={colorLight}
           onToggleAction={onToggleAction}
@@ -183,13 +166,10 @@ export function BlocoCard({
         <SpecialtySection
           blocoId={bloco.id}
           alternatives={bloco.alternativeCompletions}
-          completedSpecialties={completedSpecialties}
           earnedSpecialtyIds={earnedSpecialtyIds}
-          onToggle={onToggleSpecialty}
           plannedKeys={plannedKeys}
           onTogglePlanned={onTogglePlanned}
           planOnly={planOnly}
-          lockApproved={lockApproved}
           escoteiroId={escoteiroId}
         />
       </AccordionContent>

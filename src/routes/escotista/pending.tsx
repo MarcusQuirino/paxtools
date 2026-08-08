@@ -70,7 +70,7 @@ function getEixoForBloco(blocoId: string, ramo: Ramo | null) {
 
 type PendingItem = {
   key: string;
-  type: "action" | "specialty" | "irr" | "custom";
+  type: "action" | "irr" | "custom";
   id: string;
   text: string;
   blocoId?: string;
@@ -124,11 +124,6 @@ type PendingEntry = {
   pendingActions: {
     _id: Id<"actionCompletions">;
     actionId: string;
-  }[];
-  pendingSpecialties: {
-    _id: Id<"specialtyCompletions">;
-    blocoId: string;
-    specialtyName: string;
   }[];
   pendingIrrItems: {
     _id: Id<"irrCompletions">;
@@ -306,7 +301,6 @@ function EscoteiroPendingCard({
   onBulkAction: (args: {
     action: "approve" | "reject";
     actionIds: Id<"actionCompletions">[];
-    specialtyIds: Id<"specialtyCompletions">[];
     irrIds: Id<"irrCompletions">[];
     customActionIds: Id<"customActions">[];
   }) => void;
@@ -328,16 +322,6 @@ function EscoteiroPendingCard({
         text: getActionLabel(action.actionId),
         blocoId,
         eixoColor: getEixoForBloco(blocoId, ramo)?.color,
-      });
-    }
-
-    for (const s of entry.pendingSpecialties) {
-      items.push({
-        key: `specialty:${s._id}`,
-        type: "specialty",
-        id: s._id,
-        text: `${s.specialtyName} (${getBlocoName(s.blocoId, ramo)})`,
-        blocoId: s.blocoId,
       });
     }
 
@@ -396,7 +380,6 @@ function EscoteiroPendingCard({
 
   const getSelectedIds = useCallback(() => {
     const actionIds: Id<"actionCompletions">[] = [];
-    const specialtyIds: Id<"specialtyCompletions">[] = [];
     const irrIds: Id<"irrCompletions">[] = [];
     const customActionIds: Id<"customActions">[] = [];
 
@@ -404,15 +387,13 @@ function EscoteiroPendingCard({
       if (deselected.has(item.key)) continue;
       if (item.type === "action")
         actionIds.push(item.id as Id<"actionCompletions">);
-      else if (item.type === "specialty")
-        specialtyIds.push(item.id as Id<"specialtyCompletions">);
       else if (item.type === "irr")
         irrIds.push(item.id as Id<"irrCompletions">);
       else if (item.type === "custom")
         customActionIds.push(item.id as Id<"customActions">);
     }
 
-    return { actionIds, specialtyIds, irrIds, customActionIds };
+    return { actionIds, irrIds, customActionIds };
   }, [allItems, deselected]);
 
   const handleBulk = useCallback(
@@ -442,7 +423,6 @@ function EscoteiroPendingCard({
     return map;
   }, [allItems]);
 
-  const specialties = allItems.filter((i) => i.type === "specialty");
   const irrItems = allItems.filter((i) => i.type === "irr");
 
   // New specialty items grouped by (ramoGroup, specialtyId)
@@ -525,23 +505,6 @@ function EscoteiroPendingCard({
               ),
             )}
 
-            {/* Specialties */}
-            {specialties.length > 0 && (
-              <div className="space-y-0.5">
-                <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-                  Especialidades
-                </p>
-                {specialties.map((item) => (
-                  <SelectableItem
-                    key={item.key}
-                    text={item.text}
-                    selected={!deselected.has(item.key)}
-                    onToggle={() => toggleItem(item.key)}
-                  />
-                ))}
-              </div>
-            )}
-
             {/* IRR (recognition) items — named for the escoteiro's ramo */}
             {irrItems.length > 0 && (
               <div className="space-y-0.5">
@@ -595,7 +558,7 @@ function EscoteiroPendingCard({
               </div>
             )}
 
-            {/* Bulk action buttons — only for legacy items */}
+            {/* Bulk action buttons — ações, IRR and ações personalizadas */}
             <div className="pt-2 border-t-2 border-black flex gap-2">
               <Button
                 variant="outline"

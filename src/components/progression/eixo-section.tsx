@@ -16,13 +16,7 @@ type EixoSectionProps = {
   /** Canonical ids of specialties earned via items (#44), for marking the exact checkbox. */
   earnedSpecialtyIds?: Set<string>;
   customActions: CustomAction[];
-  completedSpecialties: {
-    blocoId: string;
-    specialtyName: string;
-    status: CompletionStatus;
-  }[];
   onToggleAction: (actionId: string) => void;
-  onToggleSpecialty: (blocoId: string, specialtyName: string) => void;
   onAddCustom: (blocoId: string, text: string) => void;
   onToggleCustom: (id: Id<"customActions">) => void;
   onDeleteCustom: (id: Id<"customActions">) => void;
@@ -46,9 +40,7 @@ export function EixoSection({
   earnedSpecialtyBlocoIds,
   earnedSpecialtyIds,
   customActions,
-  completedSpecialties,
   onToggleAction,
-  onToggleSpecialty,
   onAddCustom,
   onToggleCustom,
   onDeleteCustom,
@@ -103,13 +95,11 @@ export function EixoSection({
             pendingActionIds={pendingActionIds}
             actionStatusMap={actionStatusMap}
             customActions={customActions}
-            completedSpecialties={completedSpecialties}
             earnedViaSpecialty={earnedSpecialtyBlocoIds?.has(bloco.id)}
             earnedSpecialtyIds={earnedSpecialtyIds}
             color={eixo.color}
             colorLight={eixo.colorLight}
             onToggleAction={onToggleAction}
-            onToggleSpecialty={onToggleSpecialty}
             onAddCustom={onAddCustom}
             onToggleCustom={onToggleCustom}
             onDeleteCustom={onDeleteCustom}
