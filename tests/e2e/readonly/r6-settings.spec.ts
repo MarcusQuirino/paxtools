@@ -8,15 +8,15 @@
  * What /settings actually renders (src/routes/settings.tsx), per role:
  *   - "Seu nome"  → name <input> whose value is the viewer's current name.
  *   - "Seu papel" → a badge reading "Escoteiro" or "Escotista".
- *   - "Grupo"     → the group name text. For an escotista (non-pending) it also
- *                   shows the invite password + "Compartilhe a senha…" helper;
- *                   an escoteiro sees neither.
+ *   - "Grupo"     → the group name text, followed by its identity — numeral and
+ *                   região escoteira, "99999/RS" for the seed group. For an
+ *                   escotista (non-pending) it also shows the invite password +
+ *                   "Compartilhe a senha…" helper; an escoteiro sees neither.
  *   - "Gerenciar grupo" → admin-only management section, gated by
  *                   `getMyGroup().isAdmin`. Present only for the admin persona.
  *
  * NOT asserted (product facts, see report):
  *   - The viewer's EMAIL is never displayed on this page.
- *   - The group NUMBER (99999) is returned by getMyGroup but never rendered.
  */
 
 import { approvedTest, escotistaTest, adminTest, expect } from "../../fixtures/auth";

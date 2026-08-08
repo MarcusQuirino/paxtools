@@ -11,8 +11,14 @@ import {
 import { logGroupEvent } from "./lib/events";
 import {
   filterVisibleEscoteiros,
+  resolveRamoViewer,
   tryResolveRamoViewer,
 } from "./lib/ramoVisibility";
+import {
+  createSectionsFromRamoNames,
+  listSectionsOfGroup,
+  sanitizeSectionName,
+} from "./lib/sections";
 import { ramoValidator } from "./schema";
 
 /**
@@ -68,6 +74,27 @@ function normalizeNumber(raw: string): string {
   return raw.trim().replace(/^0+(?=\d)/, "");
 }
 
+// Regiões escoteiras are named after the UF they cover, plus the DF.
+const REGIOES = new Set([
+  "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS",
+  "MT", "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC",
+  "SE", "SP", "TO",
+]);
+
+/**
+ * Normalize a região to its uppercase UF. Returns undefined for a blank value
+ * — a grupo may legitimately have no região, and is then identified by its
+ * numeral alone. Throws in Portuguese for anything that is not a UF.
+ */
+function normalizeRegiao(raw: string): string | undefined {
+  const regiao = raw.trim().toUpperCase();
+  if (!regiao) return undefined;
+  if (!REGIOES.has(regiao)) {
+    throw new Error("Região escoteira inválida");
+  }
+  return regiao;
+}
+
 const ramoNamesValidator = v.object({
   lobinho: v.optional(v.string()),
   escoteiro: v.optional(v.string()),
@@ -105,6 +132,7 @@ export const createGroup = mutation({
   args: {
     name: v.string(),
     number: v.string(),
+    regiao: v.optional(v.string()),
     ramoNames: v.optional(ramoNamesValidator),
   },
   handler: async (ctx, args) => {
@@ -127,6 +155,8 @@ export const createGroup = mutation({
     if (!number || !/^\d{1,6}$/.test(number)) {
       throw new Error("Número do grupo inválido");
     }
+
+    const regiao = normalizeRegiao(args.regiao ?? "");
 
     const ramoNames = sanitizeRamoNames(args.ramoNames);
 
@@ -157,16 +187,24 @@ export const createGroup = mutation({
     const groupId = await ctx.db.insert("groups", {
       name,
       number,
+      regiao,
       password,
       createdBy: user._id,
       createdAt: Date.now(),
       ramoNames,
     });
 
+    // The creation forms still collect one unit name per ramo; turn them into
+    // seções right away so a brand-new grupo starts out like a migrated one.
+    await createSectionsFromRamoNames(ctx, groupId, ramoNames);
+
     await ctx.db.patch(user._id, {
       groupId,
       isAdmin: true,
       membershipStatus: "approved",
+      // Moving grupo: a seção of the old one must not follow them here.
+      sectionId: undefined,
+      observedSectionId: undefined,
     });
 
     return { groupId, password };
@@ -205,6 +243,9 @@ export const joinGroup = mutation({
       groupId: group._id,
       membershipStatus: "pending",
       isAdmin: false,
+      // Moving grupo: a seção of the old one must not follow them here.
+      sectionId: undefined,
+      observedSectionId: undefined,
     });
     return { groupId: group._id, groupName: group.name };
   },
@@ -238,6 +279,8 @@ export const leaveGroup = mutation({
       groupId: undefined,
       isAdmin: false,
       membershipStatus: undefined,
+      sectionId: undefined,
+      observedSectionId: undefined,
     });
   },
 });
@@ -259,6 +302,7 @@ export const getMyGroup = query({
       _id: group._id,
       name: group.name,
       number: group.number ?? null,
+      regiao: group.regiao ?? null,
       password:
         user.role === "escotista" && user.membershipStatus !== "pending"
           ? group.password
@@ -291,6 +335,7 @@ export const getGroupMembers = query({
       ramo: m.ramo,
       escotistaRamos: m.escotistaRamos,
       isAdmin: m.isAdmin === true,
+      sectionId: m.sectionId ?? null,
     }));
   },
 });
@@ -355,6 +400,8 @@ export const rejectMembership = mutation({
       groupId: undefined,
       membershipStatus: undefined,
       isAdmin: false,
+      sectionId: undefined,
+      observedSectionId: undefined,
     });
   },
 });
@@ -387,6 +434,8 @@ export const banMember = mutation({
       groupId: undefined,
       isAdmin: false,
       membershipStatus: undefined,
+      sectionId: undefined,
+      observedSectionId: undefined,
       bannedAt: Date.now(),
       bannedBy: admin._id,
     });
@@ -416,8 +465,12 @@ export const changeMemberRole = mutation({
     if (args.role === "escoteiro") {
       patch.isAdmin = false;
       patch.escotistaRamos = undefined;
+      // Only escotistas observe a seção.
+      patch.observedSectionId = undefined;
     } else {
       patch.ramo = undefined;
+      // Seções hold escoteiros; an escotista has no place in one.
+      patch.sectionId = undefined;
     }
     await ctx.db.patch(target._id, patch);
     await logGroupEvent(ctx, {
@@ -505,7 +558,11 @@ export const setMemberRamo = mutation({
       throw new Error("Apenas escoteiros têm um ramo único");
     }
     if (target.ramo === args.ramo) return; // no-op: don't log a phantom change
-    await ctx.db.patch(target._id, { ramo: args.ramo });
+    // A seção belongs to exactly one ramo and `setMemberSection` refuses a
+    // mismatch, so the seção an escoteiro is in is always of the ramo they are
+    // leaving: advancing (lobinho → escoteiro) leaves it behind rather than
+    // dragging the escoteiro into a unit of a ramo they no longer belong to.
+    await ctx.db.patch(target._id, { ramo: args.ramo, sectionId: undefined });
     await logGroupEvent(ctx, {
       type: "ramoChange",
       actor: admin,
@@ -519,6 +576,7 @@ export const setMemberRamo = mutation({
 export const updateGroup = mutation({
   args: {
     name: v.optional(v.string()),
+    regiao: v.optional(v.string()),
     ramoNames: v.optional(ramoNamesValidator),
   },
   handler: async (ctx, args) => {
@@ -537,12 +595,161 @@ export const updateGroup = mutation({
       patch.name = name;
     }
 
+    if (args.regiao !== undefined) {
+      patch.regiao = normalizeRegiao(args.regiao);
+    }
+
     if (args.ramoNames !== undefined) {
       patch.ramoNames = sanitizeRamoNames(args.ramoNames);
     }
 
     if (Object.keys(patch).length === 0) return;
     await ctx.db.patch(group._id, patch);
+  },
+});
+
+/**
+ * Load a seção the calling admin is allowed to manage: admin of a grupo, and
+ * the seção belongs to that same grupo.
+ */
+async function loadOwnSection(ctx: MutationCtx, sectionId: Id<"sections">) {
+  const admin = await assertAdmin(ctx);
+  const section = await ctx.db.get(sectionId);
+  if (!section || section.groupId !== admin.groupId) {
+    throw new Error("Seção não pertence ao seu grupo");
+  }
+  return { admin, section };
+}
+
+/** The seções of the caller's grupo, oldest first. Empty when they have none. */
+export const listSections = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const user = await ctx.db.get(userId);
+    const groupId = user?.groupId;
+    if (!groupId) return [];
+    const sections = await listSectionsOfGroup(ctx, groupId);
+    return sections.map((s) => ({ _id: s._id, name: s.name, ramo: s.ramo }));
+  },
+});
+
+export const addSection = mutation({
+  args: { name: v.string(), ramo: ramoValidator },
+  handler: async (ctx, args) => {
+    const admin = await assertAdmin(ctx);
+    const name = sanitizeSectionName(args.name);
+    // Two seções may share a ramo (a grupo can run two alcateias), so there is
+    // nothing to deduplicate here.
+    return await ctx.db.insert("sections", {
+      groupId: admin.groupId!,
+      name,
+      ramo: args.ramo,
+    });
+  },
+});
+
+export const renameSection = mutation({
+  args: { sectionId: v.id("sections"), name: v.string() },
+  handler: async (ctx, args) => {
+    const { section } = await loadOwnSection(ctx, args.sectionId);
+    const name = sanitizeSectionName(args.name);
+    if (name === section.name) return;
+    await ctx.db.patch(section._id, { name });
+  },
+});
+
+export const removeSection = mutation({
+  args: { sectionId: v.id("sections") },
+  handler: async (ctx, args) => {
+    const { section } = await loadOwnSection(ctx, args.sectionId);
+    // Refuse rather than silently unassign: an escoteiro losing their seção is
+    // the admin's call to make explicitly. Only current members count — a row
+    // written before leaving/being banned cleared `sectionId` may still point
+    // here, and must not block the admin.
+    const assigned = await ctx.db
+      .query("users")
+      .withIndex("by_sectionId", (q) => q.eq("sectionId", section._id))
+      .filter((q) => q.eq(q.field("groupId"), section.groupId))
+      .first();
+    if (assigned) {
+      throw new Error(
+        "Esta seção ainda tem escoteiros. Mova-os para outra seção antes de removê-la.",
+      );
+    }
+    // Nobody is in it, so anything still pointing here is such a leftover:
+    // clear it, or deleting the row would leave a dangling reference that
+    // resurfaces if that person ever rejoins the grupo.
+    const stale = await ctx.db
+      .query("users")
+      .withIndex("by_sectionId", (q) => q.eq("sectionId", section._id))
+      .take(500);
+    for (const user of stale) {
+      await ctx.db.patch(user._id, { sectionId: undefined });
+    }
+    await ctx.db.delete(section._id);
+  },
+});
+
+/**
+ * Place an escoteiro in one of the grupo's seções, or take them out of it
+ * (`sectionId: null`). Managed from the same admin surface as ramo and papel.
+ */
+export const setMemberSection = mutation({
+  args: {
+    userId: v.id("users"),
+    sectionId: v.union(v.id("sections"), v.null()),
+  },
+  handler: async (ctx, args) => {
+    const { admin, target } = await loadGroupMember(ctx, args.userId);
+    if (target.role !== "escoteiro") {
+      throw new Error("Apenas escoteiros pertencem a uma seção");
+    }
+    if (args.sectionId === null) {
+      await ctx.db.patch(target._id, { sectionId: undefined });
+      return;
+    }
+    const section = await ctx.db.get(args.sectionId);
+    if (!section || section.groupId !== admin.groupId) {
+      throw new Error("Seção não pertence ao seu grupo");
+    }
+    // A ramo mismatch is PREVENTED, not reconciled: a seção belongs to exactly
+    // one ramo, and progression stays keyed to the escoteiro's own ramo, so an
+    // escoteiro sitting in another ramo's seção would be listed to escotistas
+    // who do not accompany them. Change the ramo first, then the seção.
+    if (!target.ramo) {
+      throw new Error("Defina o ramo do escoteiro antes de escolher a seção");
+    }
+    if (section.ramo !== target.ramo) {
+      throw new Error("Esta seção é de outro ramo");
+    }
+    await ctx.db.patch(target._id, { sectionId: section._id });
+  },
+});
+
+/**
+ * The seção the calling escotista is currently observing; `null` observes the
+ * whole grupo. Stored on their own row, so the choice survives a reload.
+ */
+export const setObservedSection = mutation({
+  args: { sectionId: v.union(v.id("sections"), v.null()) },
+  handler: async (ctx, args) => {
+    const viewer = await resolveRamoViewer(ctx);
+    if (args.sectionId === null) {
+      await ctx.db.patch(viewer.user._id, { observedSectionId: undefined });
+      return;
+    }
+    const section = await ctx.db.get(args.sectionId);
+    if (!section || section.groupId !== viewer.groupId) {
+      throw new Error("Seção não pertence ao seu grupo");
+    }
+    // Observing narrows what an escotista sees; it is never a way around
+    // visibilidade de ramo.
+    if (!viewer.isAdmin && !viewer.ramos.includes(section.ramo)) {
+      throw new Error("Você não acompanha esse ramo");
+    }
+    await ctx.db.patch(viewer.user._id, { observedSectionId: section._id });
   },
 });
 

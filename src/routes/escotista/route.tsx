@@ -115,6 +115,7 @@ function EscotistaLayout() {
           <PendingApprovalScreen
             groupName={myGroup.name}
             groupNumber={myGroup.number}
+            groupRegiao={myGroup.regiao}
           />
         ) : (
           <Suspense

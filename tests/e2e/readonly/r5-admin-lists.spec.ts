@@ -97,7 +97,7 @@ adminTest(
 
 adminTest("group info (name) renders on the painel", async ({ page }) => {
   await page.goto("/escotista");
-  // The group card heads the painel with the group name (+ nº).
+  // The group card heads the painel with the group name (+ "99999/RS").
   await expect(
     page.getByRole("heading", { name: /__TEST__ Grupo QA/ }),
   ).toBeVisible({ timeout: 15_000 });

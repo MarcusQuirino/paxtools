@@ -33,15 +33,27 @@ export default defineSchema({
     ),
     bannedAt: v.optional(v.number()),
     bannedBy: v.optional(v.id("users")),
+    // The seção an escoteiro is placed in (#72), assigned by an admin (#73).
+    // Unset means unplaced: that escoteiro falls back to plain ramo visibility
+    // and shows up under every observed seção.
+    sectionId: v.optional(v.id("sections")),
+    // The seção an escotista is currently observing (#73). Unset means the
+    // whole grupo. Stored per user so the choice survives a reload; a pointer
+    // left behind by a deleted seção is inert — reads resolve it to "todas".
+    observedSectionId: v.optional(v.id("sections")),
   })
     .index("email", ["email"])
     .index("by_groupId", ["groupId"])
     .index("by_groupId_and_role", ["groupId", "role"])
-    .index("by_groupId_and_status", ["groupId", "membershipStatus"]),
+    .index("by_groupId_and_status", ["groupId", "membershipStatus"])
+    .index("by_sectionId", ["sectionId"]),
 
   groups: defineTable({
     name: v.string(),
     number: v.optional(v.string()),
+    // Região escoteira as a two-letter UF ("RS"); together with `number` it
+    // identifies the grupo — "38/RS". Absent on groups created before #71.
+    regiao: v.optional(v.string()),
     password: v.string(),
     createdBy: v.id("users"),
     createdAt: v.number(),
@@ -57,6 +69,15 @@ export default defineSchema({
   })
     .index("by_password", ["password"])
     .index("by_number", ["number"]),
+
+  // A seção is a grupo's concrete local unit of a ramo — "Alcateia Norte".
+  // A grupo may run two seções of the same ramo, or none at all for a ramo,
+  // which the one-name-per-ramo `groups.ramoNames` could not express (#72).
+  sections: defineTable({
+    groupId: v.id("groups"),
+    name: v.string(),
+    ramo: ramoValidator,
+  }).index("by_groupId", ["groupId"]),
 
   actionCompletions: defineTable({
     userId: v.id("users"),

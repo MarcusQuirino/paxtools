@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { RAMO_UNIT_PREFIX, type Ramo, type RamoNames } from "@/lib/ramos";
 import { RamoNamesInputs } from "@/components/onboarding/ramo-names-inputs";
+import { RegiaoInput } from "@/components/onboarding/regiao-input";
 
 export const Route = createFileRoute("/onboarding")({
   component: OnboardingPage,
@@ -49,6 +50,7 @@ function OnboardingPage() {
   const [groupPassword, setGroupPassword] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupNumber, setNewGroupNumber] = useState("");
+  const [newGroupRegiao, setNewGroupRegiao] = useState("");
   const [newGroupRamoNames, setNewGroupRamoNames] = useState<RamoNames>({});
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState("");
@@ -168,10 +170,11 @@ function OnboardingPage() {
   const handleCreateGroup = () => {
     const name = newGroupName.trim();
     const number = newGroupNumber.trim();
-    if (!name || !number) return;
+    const regiao = newGroupRegiao.trim();
+    if (!name || !number || !regiao) return;
     setError("");
     createGroup(
-      { name, number, ramoNames: newGroupRamoNames },
+      { name, number, regiao, ramoNames: newGroupRamoNames },
       {
         onSuccess: () => {
           completeOnboarding(
@@ -349,6 +352,23 @@ function OnboardingPage() {
 
                   <div className="space-y-1">
                     <label
+                      htmlFor="group-regiao"
+                      className="text-xs font-bold uppercase tracking-wider text-foreground"
+                    >
+                      Região escoteira (UF)
+                    </label>
+                    <RegiaoInput
+                      id="group-regiao"
+                      value={newGroupRegiao}
+                      onChange={(next) => {
+                        setNewGroupRegiao(next);
+                        setError("");
+                      }}
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label
                       htmlFor="group-name"
                       className="text-xs font-bold uppercase tracking-wider text-foreground"
                     >
@@ -370,7 +390,7 @@ function OnboardingPage() {
 
                   {previewRamo && newGroupName.trim() && (
                     <p className="text-xs font-medium text-primary">
-                      Sua unidade será chamada de{" "}
+                      Sua seção será chamada de{" "}
                       <strong>
                         {RAMO_UNIT_PREFIX[previewRamo]}{" "}
                         {newGroupRamoNames[previewRamo]?.trim() ||
@@ -382,7 +402,7 @@ function OnboardingPage() {
 
                   <div className="space-y-1 pt-1">
                     <label className="text-xs font-bold uppercase tracking-wider text-foreground">
-                      Nomes das unidades (opcional)
+                      Seções iniciais (opcional)
                     </label>
                     <RamoNamesInputs
                       value={newGroupRamoNames}
@@ -396,6 +416,7 @@ function OnboardingPage() {
                     disabled={
                       !newGroupName.trim() ||
                       !newGroupNumber.trim() ||
+                      !newGroupRegiao.trim() ||
                       creatingGroup
                     }
                     className="w-full"

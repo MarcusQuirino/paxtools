@@ -7,6 +7,11 @@ import {
   type RamoNames,
 } from "@/lib/ramos";
 
+/**
+ * One unit name per ramo, collected at group creation. `createGroup` turns each
+ * name it receives into a seção of that ramo; the full seções list (several per
+ * ramo, none for a ramo) is managed in Configurações after the grupo exists.
+ */
 type Props = {
   value: RamoNames;
   onChange: (next: RamoNames) => void;
@@ -32,7 +37,7 @@ export function RamoNamesInputs({
   return (
     <div className="space-y-2">
       {RAMOS.map((r) => {
-        const placeholder = (groupName ?? "").trim() || "Nome da unidade";
+        const placeholder = (groupName ?? "").trim() || "Nome da seção";
         const id = `ramo-name-${r}`;
         return (
           <div key={r} className="space-y-1">
