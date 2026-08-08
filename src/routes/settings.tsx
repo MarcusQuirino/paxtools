@@ -276,10 +276,14 @@ function SettingsPage() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-xs font-medium">
+                        <label
+                          htmlFor="new-group-regiao"
+                          className="text-xs font-medium"
+                        >
                           Região escoteira (UF)
                         </label>
                         <RegiaoInput
+                          id="new-group-regiao"
                           value={newGroupRegiao}
                           onChange={(next) => {
                             setNewGroupRegiao(next);

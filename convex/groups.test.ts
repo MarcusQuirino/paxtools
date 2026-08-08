@@ -484,9 +484,15 @@ describe("updateGroup / deleteGroup", () => {
       groupId,
       membershipStatus: "approved",
     });
+    // Pin the *authorization* rejection: a bare toThrow() would also pass on
+    // an unrelated failure and hide the missing guard.
     await expect(
       as(t, member).mutation(api.groups.updateGroup, { regiao: "SP" }),
-    ).rejects.toThrow();
+    ).rejects.toThrow("Apenas administradores podem realizar esta ação");
+    // …and that the rejected edit left the grupo untouched. Asserted through
+    // the query, which reports "no região" as null either way.
+    const after = await as(t, member).query(api.groups.getMyGroup, {});
+    expect(after?.regiao).toBeNull();
   });
 
   test("deleteGroup requires exact name confirmation; soft-deletes", async () => {

@@ -384,10 +384,11 @@ function NoGroupState() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium">
+              <label htmlFor="no-group-regiao" className="text-xs font-medium">
                 Região escoteira (UF)
               </label>
               <RegiaoInput
+                id="no-group-regiao"
                 value={groupRegiao}
                 onChange={(next) => {
                   setGroupRegiao(next);

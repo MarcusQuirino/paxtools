@@ -22,7 +22,8 @@ export function RegiaoInput({ id, value, onChange }: Props) {
       }
       maxLength={2}
       autoCapitalize="characters"
-      className="uppercase"
+      // `uppercase` would shout the placeholder too ("EX: RS"), so exempt it.
+      className="uppercase placeholder:normal-case"
     />
   );
 }

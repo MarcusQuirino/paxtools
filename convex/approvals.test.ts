@@ -911,6 +911,21 @@ describe("getGroupStats", () => {
     expect(res).toBeNull();
   });
 
+  // The escotista painel builds the "38/RS" identity from this query, not from
+  // groups.getMyGroup — so the fallback has to hold here too.
+  test("carries the group's numeral and região, null when there is none", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+
+    const before = await as(t, adminId).query(api.approvals.getGroupStats, {});
+    expect(before?.group.number).toBe("100");
+    expect(before?.group.regiao).toBeNull();
+
+    await t.run(async (ctx) => ctx.db.patch(groupId, { regiao: "RS" }));
+    const after = await as(t, adminId).query(api.approvals.getGroupStats, {});
+    expect(after?.group.regiao).toBe("RS");
+  });
+
   test("returns counts and exposes group.password for an admin", async () => {
     const t = convexTest(schema, modules);
     const { adminId, groupId } = await seedGroup(t);

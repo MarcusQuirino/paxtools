@@ -7,8 +7,12 @@ Progression tracking for a Brazilian scout group: escoteiros record their progre
 ### People & access
 
 **Grupo**:
-A scout group; the top-level community every member belongs to.
+A scout group; the top-level community every member belongs to. Identified to its members by its numeral together with its [[regiao-escoteira]] — written `38/RS`.
 _Avoid_: organization, team
+
+**Região escoteira**:
+The regional body a [[grupo]] belongs to, named after the UF it covers — the 26 states plus the DF, written as the two-letter UF ("RS", "SP"). Together with the grupo's numeral it forms the grupo's identity (`38/RS`), so the numeral alone does not identify a grupo nationally. Optional on a grupo: one created before the região was recorded is identified by its numeral alone, never with a dangling slash.
+_Avoid_: estado, region, UF (that is only how a região is written, not the concept)
 
 **Ramo**:
 An age-based branch of the movement (lobinho, escoteiro, sênior, pioneiro). An escoteiro belongs to exactly one ramo *at a time*, but moves up through the ramos over the years (lobinho → escoteiro → sênior → pioneiro); each ramo has its own separate progression, and a past ramo's record is retained — never lost or merged — when the escoteiro advances. An escotista accompanies one or more ramos. A grupo realises a ramo locally as one or more [[secao]]s — the ramo is the movement-wide branch, a seção is this grupo's concrete unit of it.
