@@ -1107,6 +1107,60 @@ describe("getGroupStats: seção observada", () => {
     ).toBeNull();
   });
 
+  // The picker is built from this list, so it has to answer exactly what
+  // setObservedSection would accept — otherwise the UI offers a seção the
+  // server then refuses.
+  test("observableSections offers a non-admin only their own ramos", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId, norte, sul } = await seedTwoSections(t);
+    const alcateia = await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Alcateia",
+      ramo: "lobinho",
+    });
+    const escotista = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      isAdmin: false,
+      membershipStatus: "approved",
+    });
+
+    const mine = await as(t, escotista).query(api.approvals.getGroupStats, {});
+    expect(mine?.observableSections.map((s) => s._id).sort()).toEqual(
+      [norte, sul].sort(),
+    );
+
+    const asAdmin = await as(t, adminId).query(api.approvals.getGroupStats, {});
+    expect(asAdmin?.observableSections.map((s) => s._id).sort()).toEqual(
+      [norte, sul, alcateia].sort(),
+    );
+  });
+
+  // Otherwise the picker would read "Todas as seções" while the list below it
+  // is still narrowed to a seção the escotista can no longer pick.
+  test("observableSections keeps the observed seção after the ramos change", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId, norte } = await seedTwoSections(t);
+    const escotista = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      isAdmin: false,
+      membershipStatus: "approved",
+    });
+    await as(t, escotista).mutation(api.groups.setObservedSection, {
+      sectionId: norte,
+    });
+    await as(t, adminId).mutation(api.groups.setMemberRamos, {
+      userId: escotista,
+      ramos: ["lobinho"],
+    });
+
+    const res = await as(t, escotista).query(api.approvals.getGroupStats, {});
+    expect(res?.observedSection?._id).toBe(norte);
+    expect(res?.observableSections.map((s) => s._id)).toEqual([norte]);
+  });
+
   // A seção filter narrows what an escotista sees; it never widens it.
   test("the ramo rule still applies inside the observed seção", async () => {
     const t = convexTest(schema, modules);

@@ -16,7 +16,9 @@ import {
   type ProgressionSnapshot,
 } from "./lib/progression";
 import {
+  filterObservableSections,
   filterToObservedSection,
+  listSectionsOfGroup,
   resolveObservedSection,
 } from "./lib/sections";
 import {
@@ -303,6 +305,13 @@ export const getGroupStats = query({
             ramo: observedSection.ramo,
           }
         : null,
+      // Everything the seção picker needs, resolved by the same rule
+      // `setObservedSection` enforces — the dashboard never restates it.
+      observableSections: filterObservableSections(
+        viewer,
+        await listSectionsOfGroup(ctx, viewer.groupId),
+        observedSection?._id ?? null,
+      ).map((s) => ({ _id: s._id, name: s.name, ramo: s.ramo })),
       isAdmin: viewer.isAdmin,
       totalMembers: activeMembers.length,
       escoteiroCount: escoteiros.length,

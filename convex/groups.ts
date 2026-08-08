@@ -558,14 +558,11 @@ export const setMemberRamo = mutation({
       throw new Error("Apenas escoteiros têm um ramo único");
     }
     if (target.ramo === args.ramo) return; // no-op: don't log a phantom change
-    // A seção belongs to exactly one ramo, so advancing ramo (lobinho →
-    // escoteiro) leaves the old seção behind instead of dragging the escoteiro
-    // into a unit of a ramo they no longer belong to.
-    const current = target.sectionId ? await ctx.db.get(target.sectionId) : null;
-    await ctx.db.patch(target._id, {
-      ramo: args.ramo,
-      sectionId: current?.ramo === args.ramo ? target.sectionId : undefined,
-    });
+    // A seção belongs to exactly one ramo and `setMemberSection` refuses a
+    // mismatch, so the seção an escoteiro is in is always of the ramo they are
+    // leaving: advancing (lobinho → escoteiro) leaves it behind rather than
+    // dragging the escoteiro into a unit of a ramo they no longer belong to.
+    await ctx.db.patch(target._id, { ramo: args.ramo, sectionId: undefined });
     await logGroupEvent(ctx, {
       type: "ramoChange",
       actor: admin,

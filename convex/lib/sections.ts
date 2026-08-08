@@ -56,6 +56,27 @@ export async function resolveObservedSection(
 }
 
 /**
+ * The seções an escotista may choose to observe: an admin, any of the grupo's;
+ * anyone else, only those of a ramo they accompany — observing narrows what
+ * they see, it is never a way around visibilidade de ramo. `observedId` is
+ * always kept in the list, so a picker built from it still shows (and can
+ * undo) a choice made before the escotista's ramos changed.
+ *
+ * Lives here, next to the mutation's own check, so no surface — server or
+ * client — restates the rule.
+ */
+export function filterObservableSections(
+  viewer: { isAdmin: boolean; ramos: readonly Ramo[] },
+  sections: Doc<"sections">[],
+  observedId: Id<"sections"> | null,
+): Doc<"sections">[] {
+  if (viewer.isAdmin) return sections;
+  return sections.filter(
+    (s) => viewer.ramos.includes(s.ramo) || s._id === observedId,
+  );
+}
+
+/**
  * Narrow a list of escoteiros to the observed seção. An escoteiro with no
  * seção is kept: CONTEXT.md pins that an unplaced escoteiro falls back to
  * plain ramo visibility, so a grupo part-way through placing its escoteiros

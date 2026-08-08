@@ -31,9 +31,6 @@ function EscotistaDashboard() {
   const { data: stats } = useSuspenseQuery(
     convexQuery(api.approvals.getGroupStats, {}),
   );
-  const { data: sections } = useSuspenseQuery(
-    convexQuery(api.groups.listSections, {}),
-  );
 
   const [searchQuery, setSearchQuery] = useState("");
   const [showFavorites, setShowFavorites] = useState(false);
@@ -41,6 +38,7 @@ function EscotistaDashboard() {
   const [activeTab, setActiveTab] = useState<"escoteiros" | "escotistas">(
     "escoteiros",
   );
+  const [observedError, setObservedError] = useState("");
 
   const toggleFavFn = useConvexMutation(api.users.toggleFavoriteEscoteiro);
   const { mutate: toggleFav } = useMutation({ mutationFn: toggleFavFn });
@@ -52,19 +50,12 @@ function EscotistaDashboard() {
     return <NoGroupState />;
   }
 
-  // An escotista may only observe a seção of a ramo they accompany; an admin
-  // accompanies every ramo. The server enforces the same rule.
+  // Which seções this escotista may observe is decided server-side, by the
+  // same rule `setObservedSection` enforces — including keeping whatever is
+  // currently observed selectable, so the picker can never read "Todas as
+  // seções" while the list below it is narrowed.
   const observed = stats.observedSection;
-  const observableSections = stats.isAdmin
-    ? sections
-    : sections.filter((s) => (user?.escotistaRamos ?? []).includes(s.ramo));
-  // Whatever is being observed stays selectable even if the escotista's ramos
-  // changed since; otherwise the picker would read "Todas as seções" while the
-  // list below it is still narrowed.
-  const pickerSections =
-    observed && !observableSections.some((s) => s._id === observed._id)
-      ? [...observableSections, observed]
-      : observableSections;
+  const pickerSections = stats.observableSections;
 
   const favorites = new Set(user?.favoriteEscoteiroIds ?? []);
 
@@ -123,33 +114,47 @@ function EscotistaDashboard() {
         </div>
 
         {pickerSections.length > 0 && (
-          <div className="mb-3 flex items-center gap-2">
-            <label
-              htmlFor="observed-section"
-              className="text-[11px] font-bold uppercase opacity-80"
-            >
-              Seção
-            </label>
-            <select
-              id="observed-section"
-              value={observed?._id ?? ""}
-              onChange={(e) =>
-                setObserved({
-                  sectionId: (e.target.value ||
-                    null) as Id<"sections"> | null,
-                })
-              }
-              className="min-w-0 flex-1 rounded-md border border-white/40 bg-white/20 px-2 py-1 text-xs font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-white"
-            >
-              <option value="" className="text-foreground">
-                Todas as seções
-              </option>
-              {pickerSections.map((s) => (
-                <option key={s._id} value={s._id} className="text-foreground">
-                  {s.name}
+          <div className="mb-3 space-y-1">
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="observed-section"
+                className="text-[11px] font-bold uppercase opacity-80"
+              >
+                Seção
+              </label>
+              <select
+                id="observed-section"
+                value={observed?._id ?? ""}
+                onChange={(e) => {
+                  setObservedError("");
+                  setObserved(
+                    {
+                      sectionId: (e.target.value ||
+                        null) as Id<"sections"> | null,
+                    },
+                    // Without this the select would just snap back to the
+                    // server's value with no word of why (a seção removed in
+                    // another tab, ramos changed since this page loaded).
+                    { onError: (err) => setObservedError(err.message) },
+                  );
+                }}
+                className="min-w-0 flex-1 rounded-md border border-white/40 bg-white/20 px-2 py-1 text-xs font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <option value="" className="text-foreground">
+                  Todas as seções
                 </option>
-              ))}
-            </select>
+                {pickerSections.map((s) => (
+                  <option key={s._id} value={s._id} className="text-foreground">
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {observedError && (
+              <p className="text-[11px] font-bold text-amber-200">
+                {observedError}
+              </p>
+            )}
           </div>
         )}
 

@@ -1190,7 +1190,7 @@ describe("seções: atribuir um escoteiro a uma seção", () => {
     expect(await t.run(async (ctx) => ctx.db.get(alcateia))).toBeNull();
   });
 
-  test("a ramo change that keeps the ramo keeps the seção", async () => {
+  test("saving the ramo an escoteiro already has leaves the seção alone", async () => {
     const t = convexTest(schema, modules);
     const { adminId, tropa, escoteiro } = await seedGrupoComSecoes(t);
     await as(t, adminId).mutation(api.groups.setMemberSection, {

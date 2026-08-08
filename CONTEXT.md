@@ -19,7 +19,7 @@ An age-based branch of the movement (lobinho, escoteiro, sênior, pioneiro). An 
 _Avoid_: section (that is a distinct concept — see [[secao]]), branch
 
 **Seção**:
-A named local unit within a grupo that belongs to exactly one [[ramo]] — the grupo's concrete alcateia, tropa, or clã (e.g. "Alcateia Norte"). A grupo has zero or more; normally one per ramo, but it may run several of the same ramo (two alcateias). Seções only organise and filter *which* escoteiros an escotista works with; they never affect progression, which stays keyed to the [[ramo]]. An escoteiro is placed in a seção by an escotista; an unplaced escoteiro falls back to plain ramo visibility. Optional per grupo — a grupo that creates no seções behaves exactly as if the concept did not exist.
+A named local unit within a grupo that belongs to exactly one [[ramo]] — the grupo's concrete alcateia, tropa, or clã (e.g. "Alcateia Norte"). A grupo has zero or more; normally one per ramo, but it may run several of the same ramo (two alcateias). Seções only organise and filter *which* escoteiros an escotista works with; they never affect progression, which stays keyed to the [[ramo]]. An escoteiro is placed in a seção by an [[admin]], from the same surface as their [[ramo]]; an unplaced escoteiro falls back to plain ramo visibility. Optional per grupo — a grupo that creates no seções behaves exactly as if the concept did not exist.
 _Avoid_: unidade, unit, alcateia/tropa/clã (those are specific seções, not the general term)
 
 **Seção observada**:
