@@ -14,7 +14,8 @@ import {
   tryResolveRamoViewer,
 } from "./lib/ramoVisibility";
 import {
-  backfillSectionsForGroup,
+  createSectionsFromRamoNames,
+  listSectionsOfGroup,
   sanitizeSectionName,
 } from "./lib/sections";
 import { ramoValidator } from "./schema";
@@ -194,13 +195,14 @@ export const createGroup = mutation({
 
     // The creation forms still collect one unit name per ramo; turn them into
     // seções right away so a brand-new grupo starts out like a migrated one.
-    const group = await ctx.db.get(groupId);
-    if (group) await backfillSectionsForGroup(ctx, group);
+    await createSectionsFromRamoNames(ctx, groupId, ramoNames);
 
     await ctx.db.patch(user._id, {
       groupId,
       isAdmin: true,
       membershipStatus: "approved",
+      // Moving grupo: a seção of the old one must not follow them here.
+      sectionId: undefined,
     });
 
     return { groupId, password };
@@ -239,6 +241,8 @@ export const joinGroup = mutation({
       groupId: group._id,
       membershipStatus: "pending",
       isAdmin: false,
+      // Moving grupo: a seção of the old one must not follow them here.
+      sectionId: undefined,
     });
     return { groupId: group._id, groupName: group.name };
   },
@@ -272,6 +276,7 @@ export const leaveGroup = mutation({
       groupId: undefined,
       isAdmin: false,
       membershipStatus: undefined,
+      sectionId: undefined,
     });
   },
 });
@@ -390,6 +395,7 @@ export const rejectMembership = mutation({
       groupId: undefined,
       membershipStatus: undefined,
       isAdmin: false,
+      sectionId: undefined,
     });
   },
 });
@@ -422,6 +428,7 @@ export const banMember = mutation({
       groupId: undefined,
       isAdmin: false,
       membershipStatus: undefined,
+      sectionId: undefined,
       bannedAt: Date.now(),
       bannedBy: admin._id,
     });
@@ -453,6 +460,8 @@ export const changeMemberRole = mutation({
       patch.escotistaRamos = undefined;
     } else {
       patch.ramo = undefined;
+      // Seções hold escoteiros; an escotista has no place in one.
+      patch.sectionId = undefined;
     }
     await ctx.db.patch(target._id, patch);
     await logGroupEvent(ctx, {
@@ -608,10 +617,7 @@ export const listSections = query({
     const user = await ctx.db.get(userId);
     const groupId = user?.groupId;
     if (!groupId) return [];
-    const sections = await ctx.db
-      .query("sections")
-      .withIndex("by_groupId", (q) => q.eq("groupId", groupId))
-      .collect();
+    const sections = await listSectionsOfGroup(ctx, groupId);
     return sections.map((s) => ({ _id: s._id, name: s.name, ramo: s.ramo }));
   },
 });
@@ -646,8 +652,9 @@ export const removeSection = mutation({
   handler: async (ctx, args) => {
     const { section } = await loadOwnSection(ctx, args.sectionId);
     // Refuse rather than silently unassign: an escoteiro losing their seção is
-    // the admin's call to make explicitly. Only current members count — someone
-    // who left or was banned keeps a stale sectionId and must not block this.
+    // the admin's call to make explicitly. Only current members count — a row
+    // written before leaving/being banned cleared `sectionId` may still point
+    // here, and must not block the admin.
     const assigned = await ctx.db
       .query("users")
       .withIndex("by_sectionId", (q) => q.eq("sectionId", section._id))
@@ -657,6 +664,16 @@ export const removeSection = mutation({
       throw new Error(
         "Esta seção ainda tem escoteiros. Mova-os para outra seção antes de removê-la.",
       );
+    }
+    // Nobody is in it, so anything still pointing here is such a leftover:
+    // clear it, or deleting the row would leave a dangling reference that
+    // resurfaces if that person ever rejoins the grupo.
+    const stale = await ctx.db
+      .query("users")
+      .withIndex("by_sectionId", (q) => q.eq("sectionId", section._id))
+      .take(500);
+    for (const user of stale) {
+      await ctx.db.patch(user._id, { sectionId: undefined });
     }
     await ctx.db.delete(section._id);
   },

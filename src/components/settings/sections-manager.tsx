@@ -4,13 +4,13 @@ import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { Plus, Trash2, Users } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { MAX_SECTION_NAME_LENGTH } from "../../../convex/lib/sections";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { RAMOS, RAMO_LABELS, RAMO_UNIT_PREFIX, type Ramo } from "@/lib/ramos";
 
 type Section = { _id: Id<"sections">; name: string; ramo: Ramo };
-
-const MAX_NAME = 60;
 
 const selectClasses =
   "h-9 rounded-md border-2 border-black bg-white px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-1";
@@ -85,7 +85,7 @@ export function SectionsManager() {
           }}
           onKeyDown={(e) => e.key === "Enter" && handleAdd()}
           placeholder={`Ex: ${RAMO_UNIT_PREFIX[newRamo]} Potiguara`}
-          maxLength={MAX_NAME}
+          maxLength={MAX_SECTION_NAME_LENGTH}
         />
         <div className="flex items-center gap-2">
           <select
@@ -121,6 +121,7 @@ export function SectionsManager() {
 function SectionRow({ section }: { section: Section }) {
   const [name, setName] = useState(section.name);
   const [error, setError] = useState("");
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const renameSectionFn = useConvexMutation(api.groups.renameSection);
   const { mutate: renameSection, isPending: renaming } = useMutation({
@@ -145,11 +146,19 @@ function SectionRow({ section }: { section: Section }) {
     );
   };
 
+  // Removing a seção is irreversible, so it is confirmed like the grupo's other
+  // destructive admin actions (banir, excluir grupo).
   const handleRemove = () => {
     setError("");
     removeSection(
       { sectionId: section._id },
-      { onError: (err) => setError(err.message) },
+      {
+        onSuccess: () => setConfirmRemove(false),
+        onError: (err) => {
+          setConfirmRemove(false);
+          setError(err.message);
+        },
+      },
     );
   };
 
@@ -167,7 +176,7 @@ function SectionRow({ section }: { section: Section }) {
             setError("");
           }}
           onKeyDown={(e) => e.key === "Enter" && handleRename()}
-          maxLength={MAX_NAME}
+          maxLength={MAX_SECTION_NAME_LENGTH}
         />
         {dirty && (
           <Button size="sm" onClick={handleRename} disabled={renaming}>
@@ -178,7 +187,7 @@ function SectionRow({ section }: { section: Section }) {
           size="sm"
           variant="outline"
           className="text-destructive border-destructive/40 hover:bg-destructive/10"
-          onClick={handleRemove}
+          onClick={() => setConfirmRemove(true)}
           disabled={removing}
           title={`Remover ${section.name}`}
           aria-label={`Remover ${section.name}`}
@@ -187,6 +196,16 @@ function SectionRow({ section }: { section: Section }) {
         </Button>
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
+      <ConfirmDialog
+        open={confirmRemove}
+        onOpenChange={setConfirmRemove}
+        title="Remover seção"
+        description={`A seção "${section.name}" será removida do grupo. Esta ação não pode ser desfeita.`}
+        confirmLabel="Remover"
+        destructive
+        busy={removing}
+        onConfirm={handleRemove}
+      />
     </li>
   );
 }

@@ -868,6 +868,47 @@ describe("seções", () => {
     );
     await as(t, adminId).mutation(api.groups.removeSection, { sectionId });
     expect(await t.run(async (ctx) => ctx.db.get(sectionId))).toBeNull();
+    // ...and the leftover pointer goes with it, so nothing dangles at a row
+    // that no longer exists if that person ever rejoins.
+    expect(
+      await t.run(
+        async (ctx) => (await ctx.db.get(gone))?.sectionId ?? "unassigned",
+      ),
+    ).toBe("unassigned");
+  });
+
+  test("a non-admin member cannot rename or remove a seção", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+    const sectionId = await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Tropa Alheia",
+      ramo: "escoteiro",
+    });
+    const member = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      isAdmin: false,
+      membershipStatus: "approved",
+    });
+    await expect(
+      as(t, member).mutation(api.groups.renameSection, {
+        sectionId,
+        name: "Tropa Tomada",
+      }),
+    ).rejects.toThrow("Apenas administradores");
+    await expect(
+      as(t, member).mutation(api.groups.removeSection, { sectionId }),
+    ).rejects.toThrow("Apenas administradores");
+    expect(await t.run(async (ctx) => ctx.db.get(sectionId))).not.toBeNull();
+  });
+
+  test("an unauthenticated caller cannot add a seção", async () => {
+    const t = convexTest(schema, modules);
+    await seedGroup(t);
+    await expect(
+      t.mutation(api.groups.addSection, { name: "Tropa", ramo: "escoteiro" }),
+    ).rejects.toThrow("Não autenticado");
   });
 
   test("listSections is empty for a user in no group", async () => {
@@ -894,6 +935,94 @@ describe("seções", () => {
     expect(
       sections.map((s) => `${s.ramo}:${s.name}`).sort(),
     ).toEqual(["escoteiro:Tropa Só", "lobinho:Alcateia Só"]);
+  });
+});
+
+/**
+ * `users.sectionId` points at a row owned by one grupo, so every path that
+ * detaches a member from their grupo — or stops them being an escoteiro — has
+ * to drop it. Otherwise the pointer follows them into the next grupo and
+ * silently re-blocks `removeSection` if they ever come back.
+ */
+describe("seções: sectionId is dropped when a member leaves the grupo", () => {
+  async function seedAssignedEscoteiro(t: ReturnType<typeof convexTest>) {
+    const { adminId, groupId } = await seedGroup(t);
+    const sectionId = await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Tropa Origem",
+      ramo: "escoteiro",
+    });
+    const escoteiro = await insertUser(t, {
+      role: "escoteiro",
+      ramo: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+      sectionId,
+    });
+    return { adminId, groupId, sectionId, escoteiro };
+  }
+
+  // Checked inside `t.run`: an undefined field would come back as null across
+  // the convex-test boundary, which reads as "still set" to `toBeUndefined`.
+  const sectionOf = (t: ReturnType<typeof convexTest>, userId: Id<"users">) =>
+    t.run(async (ctx) => (await ctx.db.get(userId))?.sectionId ?? "unassigned");
+
+  test("leaveGroup drops it", async () => {
+    const t = convexTest(schema, modules);
+    const { escoteiro } = await seedAssignedEscoteiro(t);
+    await as(t, escoteiro).mutation(api.groups.leaveGroup, {});
+    expect(await sectionOf(t, escoteiro)).toBe("unassigned");
+  });
+
+  test("banMember drops it", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, escoteiro } = await seedAssignedEscoteiro(t);
+    await as(t, adminId).mutation(api.groups.banMember, { userId: escoteiro });
+    expect(await sectionOf(t, escoteiro)).toBe("unassigned");
+  });
+
+  test("rejectMembership drops it", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, escoteiro } = await seedAssignedEscoteiro(t);
+    await t.run(async (ctx) =>
+      ctx.db.patch(escoteiro, { membershipStatus: "pending" }),
+    );
+    await as(t, adminId).mutation(api.groups.rejectMembership, {
+      userId: escoteiro,
+    });
+    expect(await sectionOf(t, escoteiro)).toBe("unassigned");
+  });
+
+  test("joining another grupo drops it, so the old seção can be removed", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, sectionId, escoteiro } = await seedAssignedEscoteiro(t);
+    const otherAdmin = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+    });
+    await as(t, otherAdmin).mutation(api.groups.createGroup, {
+      name: "Grupo B",
+      number: "200",
+    });
+    const other = await t.run(async (ctx) => ctx.db.get(otherAdmin));
+    const otherGroup = await t.run(async (ctx) => ctx.db.get(other!.groupId!));
+
+    await as(t, escoteiro).mutation(api.groups.joinGroup, {
+      password: otherGroup!.password,
+    });
+    expect(await sectionOf(t, escoteiro)).toBe("unassigned");
+    // The seção they left behind is now genuinely empty.
+    await as(t, adminId).mutation(api.groups.removeSection, { sectionId });
+    expect(await t.run(async (ctx) => ctx.db.get(sectionId))).toBeNull();
+  });
+
+  test("becoming an escotista drops it — seções hold escoteiros", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, escoteiro } = await seedAssignedEscoteiro(t);
+    await as(t, adminId).mutation(api.groups.changeMemberRole, {
+      userId: escoteiro,
+      role: "escotista",
+    });
+    expect(await sectionOf(t, escoteiro)).toBe("unassigned");
   });
 });
 
