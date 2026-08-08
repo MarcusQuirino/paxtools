@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AuthButton } from "@/components/auth/auth-button";
 import { RamoNamesInputs } from "@/components/onboarding/ramo-names-inputs";
+import { RegiaoInput } from "@/components/onboarding/regiao-input";
 import { type RamoNames } from "@/lib/ramos";
+import { formatGroupIdentity } from "@/lib/group-identity";
 import {
   ArrowLeft,
   Users,
@@ -40,6 +42,7 @@ function SettingsPage() {
   const [joinPassword, setJoinPassword] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupNumber, setNewGroupNumber] = useState("");
+  const [newGroupRegiao, setNewGroupRegiao] = useState("");
   const [newGroupRamoNames, setNewGroupRamoNames] = useState<RamoNames>({});
   const [joinError, setJoinError] = useState("");
   const [createError, setCreateError] = useState("");
@@ -78,14 +81,16 @@ function SettingsPage() {
   const handleCreate = () => {
     const name = newGroupName.trim();
     const number = newGroupNumber.trim();
-    if (!name || !number) return;
+    const regiao = newGroupRegiao.trim();
+    if (!name || !number || !regiao) return;
     setCreateError("");
     createGroup(
-      { name, number, ramoNames: newGroupRamoNames },
+      { name, number, regiao, ramoNames: newGroupRamoNames },
       {
         onSuccess: () => {
           setNewGroupName("");
           setNewGroupNumber("");
+          setNewGroupRegiao("");
           setNewGroupRamoNames({});
           setShowCreate(false);
         },
@@ -93,6 +98,8 @@ function SettingsPage() {
       },
     );
   };
+
+  const groupIdentity = formatGroupIdentity(group?.number, group?.regiao);
 
   const handleCopyPassword = async () => {
     if (!group?.password) return;
@@ -163,7 +170,14 @@ function SettingsPage() {
             <div className="space-y-3">
               <div className="rounded-md border-2 border-black bg-muted/50 p-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-sm">{group.name}</span>
+                  <span className="font-medium text-sm">
+                    {group.name}
+                    {groupIdentity ? (
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        {groupIdentity}
+                      </span>
+                    ) : null}
+                  </span>
                   {group.password && (
                     <Button
                       variant="ghost"
@@ -263,6 +277,18 @@ function SettingsPage() {
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-medium">
+                          Região escoteira (UF)
+                        </label>
+                        <RegiaoInput
+                          value={newGroupRegiao}
+                          onChange={(next) => {
+                            setNewGroupRegiao(next);
+                            setCreateError("");
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium">
                           Nome do novo grupo
                         </label>
                         <Input
@@ -289,6 +315,7 @@ function SettingsPage() {
                         disabled={
                           !newGroupName.trim() ||
                           !newGroupNumber.trim() ||
+                          !newGroupRegiao.trim() ||
                           creating
                         }
                         size="sm"
@@ -322,6 +349,7 @@ function SettingsPage() {
         {group?.isAdmin && (
           <GroupAdminSection
             initialName={group.name}
+            initialRegiao={group.regiao ?? ""}
             initialRamoNames={group.ramoNames ?? {}}
           />
         )}
@@ -395,12 +423,15 @@ function UserNameSection({ currentName }: { currentName: string }) {
 
 function GroupAdminSection({
   initialName,
+  initialRegiao,
   initialRamoNames,
 }: {
   initialName: string;
+  initialRegiao: string;
   initialRamoNames: RamoNames;
 }) {
   const [name, setName] = useState(initialName);
+  const [regiao, setRegiao] = useState(initialRegiao);
   const [ramoNames, setRamoNames] = useState<RamoNames>(initialRamoNames);
   const [saveError, setSaveError] = useState("");
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -421,6 +452,7 @@ function GroupAdminSection({
 
   const dirty =
     name.trim() !== initialName ||
+    regiao.trim() !== initialRegiao ||
     JSON.stringify(ramoNames) !== JSON.stringify(initialRamoNames);
 
   const handleSave = () => {
@@ -431,7 +463,7 @@ function GroupAdminSection({
     }
     setSaveError("");
     updateGroup(
-      { name: trimmed, ramoNames },
+      { name: trimmed, regiao: regiao.trim(), ramoNames },
       {
         onSuccess: () => {
           setSavedAt(Date.now());
@@ -470,6 +502,21 @@ function GroupAdminSection({
               setSavedAt(null);
             }}
             maxLength={100}
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="admin-group-regiao" className="text-xs font-medium">
+            Região escoteira (UF)
+          </label>
+          <RegiaoInput
+            id="admin-group-regiao"
+            value={regiao}
+            onChange={(next) => {
+              setRegiao(next);
+              setSaveError("");
+              setSavedAt(null);
+            }}
           />
         </div>
 

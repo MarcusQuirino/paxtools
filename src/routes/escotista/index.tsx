@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { formatGroupIdentity } from "@/lib/group-identity";
+import { RegiaoInput } from "@/components/onboarding/regiao-input";
 import {
   Star,
   Search,
@@ -61,6 +63,11 @@ function EscotistaDashboard() {
     return e.name?.toLowerCase().includes(q) ?? false;
   });
 
+  const groupIdentity = formatGroupIdentity(
+    stats.group.number,
+    stats.group.regiao,
+  );
+
   const handleCopyPassword = async () => {
     if (!stats.group.password) return;
     await navigator.clipboard.writeText(stats.group.password);
@@ -75,9 +82,9 @@ function EscotistaDashboard() {
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-black text-lg uppercase">
             {stats.group.name}
-            {stats.group.number ? (
+            {groupIdentity ? (
               <span className="ml-1 text-xs font-bold text-white/70">
-                nº {stats.group.number}
+                {groupIdentity}
               </span>
             ) : null}
           </h2>
@@ -299,6 +306,7 @@ function NoGroupState() {
   const [mode, setMode] = useState<"choice" | "create" | "join">("choice");
   const [groupName, setGroupName] = useState("");
   const [groupNumber, setGroupNumber] = useState("");
+  const [groupRegiao, setGroupRegiao] = useState("");
   const [joinPassword, setJoinPassword] = useState("");
   const [error, setError] = useState("");
 
@@ -315,10 +323,11 @@ function NoGroupState() {
   const handleCreate = () => {
     const name = groupName.trim();
     const number = groupNumber.trim();
-    if (!name || !number) return;
+    const regiao = groupRegiao.trim();
+    if (!name || !number || !regiao) return;
     setError("");
     createGroup(
-      { name, number },
+      { name, number, regiao },
       { onError: (err) => setError(err.message) },
     );
   };
@@ -375,6 +384,18 @@ function NoGroupState() {
               />
             </div>
             <div className="space-y-1.5">
+              <label className="text-xs font-medium">
+                Região escoteira (UF)
+              </label>
+              <RegiaoInput
+                value={groupRegiao}
+                onChange={(next) => {
+                  setGroupRegiao(next);
+                  setError("");
+                }}
+              />
+            </div>
+            <div className="space-y-1.5">
               <label className="text-xs font-medium">Nome do grupo</label>
               <Input
                 placeholder="Ex: Potiguara"
@@ -388,7 +409,12 @@ function NoGroupState() {
             </div>
             <Button
               onClick={handleCreate}
-              disabled={!groupName.trim() || !groupNumber.trim() || creating}
+              disabled={
+                !groupName.trim() ||
+                !groupNumber.trim() ||
+                !groupRegiao.trim() ||
+                creating
+              }
               className="w-full"
             >
               {creating ? "Criando..." : "Criar grupo"}

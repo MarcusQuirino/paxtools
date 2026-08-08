@@ -42,6 +42,9 @@ export default defineSchema({
   groups: defineTable({
     name: v.string(),
     number: v.optional(v.string()),
+    // Região escoteira as a two-letter UF ("RS"); together with `number` it
+    // identifies the grupo — "38/RS". Absent on groups created before #71.
+    regiao: v.optional(v.string()),
     password: v.string(),
     createdBy: v.id("users"),
     createdAt: v.number(),

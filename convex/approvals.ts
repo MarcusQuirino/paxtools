@@ -277,6 +277,7 @@ export const getGroupStats = query({
         _id: group._id,
         name: group.name,
         number: group.number ?? null,
+        regiao: group.regiao ?? null,
         password: group.password,
       },
       isAdmin: viewer.isAdmin,

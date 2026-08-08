@@ -179,6 +179,57 @@ describe("createGroup", () => {
       }),
     ).rejects.toThrow("Nome do ramo muito longo");
   });
+
+  test("stores the região normalized to uppercase", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+    });
+    const res = await as(t, userId).mutation(api.groups.createGroup, {
+      name: "G",
+      number: "38",
+      regiao: " rs ",
+    });
+    const group = await t.run(async (ctx) => ctx.db.get(res.groupId));
+    expect(group?.regiao).toBe("RS");
+  });
+
+  test("rejects a região that is not a UF", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+    });
+    await expect(
+      as(t, userId).mutation(api.groups.createGroup, {
+        name: "G",
+        number: "38",
+        regiao: "XX",
+      }),
+    ).rejects.toThrow("Região escoteira inválida");
+    await expect(
+      as(t, userId).mutation(api.groups.createGroup, {
+        name: "G",
+        number: "38",
+        regiao: "Rio Grande do Sul",
+      }),
+    ).rejects.toThrow("Região escoteira inválida");
+  });
+
+  test("leaves the região unset when it is omitted", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+    });
+    const res = await as(t, userId).mutation(api.groups.createGroup, {
+      name: "G",
+      number: "38",
+    });
+    const group = await t.run(async (ctx) => ctx.db.get(res.groupId));
+    expect(group?.regiao).toBeUndefined();
+  });
 });
 
 describe("joinGroup", () => {
@@ -403,6 +454,41 @@ describe("updateGroup / deleteGroup", () => {
     ).rejects.toThrow("Nome do grupo inválido");
   });
 
+  test("updateGroup edits the região, normalizing and validating it", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+
+    await as(t, adminId).mutation(api.groups.updateGroup, { regiao: " sp " });
+    expect(await t.run(async (ctx) => (await ctx.db.get(groupId))?.regiao)).toBe(
+      "SP",
+    );
+
+    await expect(
+      as(t, adminId).mutation(api.groups.updateGroup, { regiao: "XX" }),
+    ).rejects.toThrow("Região escoteira inválida");
+
+    // An empty string clears it — a group may legitimately have no região.
+    // Asserted through the query the UI reads, since convex-test keeps a
+    // cleared field as null where the real backend drops it entirely.
+    await as(t, adminId).mutation(api.groups.updateGroup, { regiao: "" });
+    const cleared = await as(t, adminId).query(api.groups.getMyGroup, {});
+    expect(cleared?.regiao).toBeNull();
+  });
+
+  test("updateGroup requires admin to edit the região", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedGroup(t);
+    const member = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      membershipStatus: "approved",
+    });
+    await expect(
+      as(t, member).mutation(api.groups.updateGroup, { regiao: "SP" }),
+    ).rejects.toThrow();
+  });
+
   test("deleteGroup requires exact name confirmation; soft-deletes", async () => {
     const t = convexTest(schema, modules);
     const { adminId, groupId } = await seedGroup(t);
@@ -564,6 +650,20 @@ describe("group queries: visibility & filtering", () => {
     });
     const escView = await as(t, escoteiro).query(api.groups.getMyGroup, {});
     expect(escView?.password).toBeNull();
+  });
+
+  test("getMyGroup returns the região, null for a group that has none", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+
+    // Seeded groups predate the field: no região on the doc at all.
+    const before = await as(t, adminId).query(api.groups.getMyGroup, {});
+    expect(before?.number).toBe("100");
+    expect(before?.regiao).toBeNull();
+
+    await t.run(async (ctx) => ctx.db.patch(groupId, { regiao: "RS" }));
+    const after = await as(t, adminId).query(api.groups.getMyGroup, {});
+    expect(after?.regiao).toBe("RS");
   });
 
   test("getPendingMemberships returns pending users for an admin", async () => {

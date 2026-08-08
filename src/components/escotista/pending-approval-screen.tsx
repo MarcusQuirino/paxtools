@@ -3,14 +3,21 @@ import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Clock, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatGroupIdentity } from "@/lib/group-identity";
 import { api } from "../../../convex/_generated/api";
 
 type Props = {
   groupName: string;
   groupNumber: string | null;
+  groupRegiao: string | null;
 };
 
-export function PendingApprovalScreen({ groupName, groupNumber }: Props) {
+export function PendingApprovalScreen({
+  groupName,
+  groupNumber,
+  groupRegiao,
+}: Props) {
+  const identity = formatGroupIdentity(groupNumber, groupRegiao);
   const navigate = useNavigate();
   const leaveFn = useConvexMutation(api.groups.leaveGroup);
   const { mutate: leave, isPending } = useMutation({ mutationFn: leaveFn });
@@ -34,7 +41,7 @@ export function PendingApprovalScreen({ groupName, groupNumber }: Props) {
       <div className="rounded-md border-2 border-amber-400 bg-white px-3 py-2 text-sm text-amber-900">
         <p>
           <strong>Grupo:</strong> {groupName}
-          {groupNumber ? ` · nº ${groupNumber}` : ""}
+          {identity ? ` · ${identity}` : ""}
         </p>
       </div>
 

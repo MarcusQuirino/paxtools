@@ -68,6 +68,27 @@ function normalizeNumber(raw: string): string {
   return raw.trim().replace(/^0+(?=\d)/, "");
 }
 
+// Regiões escoteiras are named after the UF they cover, plus the DF.
+const REGIOES = new Set([
+  "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS",
+  "MT", "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC",
+  "SE", "SP", "TO",
+]);
+
+/**
+ * Normalize a região to its uppercase UF. Returns undefined for a blank value
+ * — a grupo may legitimately have no região, and is then identified by its
+ * numeral alone. Throws in Portuguese for anything that is not a UF.
+ */
+function normalizeRegiao(raw: string): string | undefined {
+  const regiao = raw.trim().toUpperCase();
+  if (!regiao) return undefined;
+  if (!REGIOES.has(regiao)) {
+    throw new Error("Região escoteira inválida");
+  }
+  return regiao;
+}
+
 const ramoNamesValidator = v.object({
   lobinho: v.optional(v.string()),
   escoteiro: v.optional(v.string()),
@@ -105,6 +126,7 @@ export const createGroup = mutation({
   args: {
     name: v.string(),
     number: v.string(),
+    regiao: v.optional(v.string()),
     ramoNames: v.optional(ramoNamesValidator),
   },
   handler: async (ctx, args) => {
@@ -127,6 +149,8 @@ export const createGroup = mutation({
     if (!number || !/^\d{1,6}$/.test(number)) {
       throw new Error("Número do grupo inválido");
     }
+
+    const regiao = normalizeRegiao(args.regiao ?? "");
 
     const ramoNames = sanitizeRamoNames(args.ramoNames);
 
@@ -157,6 +181,7 @@ export const createGroup = mutation({
     const groupId = await ctx.db.insert("groups", {
       name,
       number,
+      regiao,
       password,
       createdBy: user._id,
       createdAt: Date.now(),
@@ -259,6 +284,7 @@ export const getMyGroup = query({
       _id: group._id,
       name: group.name,
       number: group.number ?? null,
+      regiao: group.regiao ?? null,
       password:
         user.role === "escotista" && user.membershipStatus !== "pending"
           ? group.password
@@ -519,6 +545,7 @@ export const setMemberRamo = mutation({
 export const updateGroup = mutation({
   args: {
     name: v.optional(v.string()),
+    regiao: v.optional(v.string()),
     ramoNames: v.optional(ramoNamesValidator),
   },
   handler: async (ctx, args) => {
@@ -535,6 +562,10 @@ export const updateGroup = mutation({
         throw new Error("Nome do grupo inválido");
       }
       patch.name = name;
+    }
+
+    if (args.regiao !== undefined) {
+      patch.regiao = normalizeRegiao(args.regiao);
     }
 
     if (args.ramoNames !== undefined) {
