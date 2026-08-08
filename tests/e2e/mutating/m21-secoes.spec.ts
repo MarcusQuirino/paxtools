@@ -179,6 +179,13 @@ test("M21 seções: create two in one ramo, rename, place a scout, filter the pa
       .filter({ has: sectionNameInput(page, SECTION_A) })
       .getByRole("button", { name: "Salvar", exact: true })
       .click();
+    // Wait for the row's aria-label to flip BEFORE navigating. The reactive
+    // query pushing the new name back down is the only signal the mutation
+    // landed; reloading first races it and drops the rename.
+    await expect(sectionNameInput(page, SECTION_A_RENAMED)).toBeVisible({
+      timeout: 15_000,
+    });
+    // Then reload, to prove it persisted rather than just re-rendered.
     await gotoSettings(page);
     await expect(sectionNameInput(page, SECTION_A_RENAMED)).toBeVisible({
       timeout: 15_000,
