@@ -172,10 +172,16 @@ function SettingsPage() {
               <div className="rounded-md border-2 border-black bg-muted/50 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-sm">
-                    {group.name}
+                    {/* Two things are load-bearing here. The name needs its own
+                        element so a text query can match it exactly, and the
+                        identity needs a LEADING SPACE inside its text: an
+                        accessible name concatenates descendant text across
+                        element boundaries, so without it the heading announces
+                        as "Grupo QA99999/RS". `ml-1` only fixes the pixels. */}
+                    <span>{group.name}</span>
                     {groupIdentity ? (
                       <span className="ml-1 text-xs text-muted-foreground">
-                        {groupIdentity}
+                        {` ${groupIdentity}`}
                       </span>
                     ) : null}
                   </span>

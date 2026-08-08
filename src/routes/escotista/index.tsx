@@ -92,10 +92,11 @@ function EscotistaDashboard() {
       <div className="rounded-md border-2 border-black bg-emerald-800 px-4 py-3 text-white shadow-[4px_4px_0px_0px_#065f46]">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-black text-lg uppercase">
-            {stats.group.name}
+            {/* Own element + leading space — see the note in settings.tsx. */}
+            <span>{stats.group.name}</span>
             {groupIdentity ? (
               <span className="ml-1 text-xs font-bold text-white/70">
-                {groupIdentity}
+                {` ${groupIdentity}`}
               </span>
             ) : null}
           </h2>
