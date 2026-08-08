@@ -13,6 +13,10 @@ import {
   filterVisibleEscoteiros,
   tryResolveRamoViewer,
 } from "./lib/ramoVisibility";
+import {
+  backfillSectionsForGroup,
+  sanitizeSectionName,
+} from "./lib/sections";
 import { ramoValidator } from "./schema";
 
 /**
@@ -187,6 +191,11 @@ export const createGroup = mutation({
       createdAt: Date.now(),
       ramoNames,
     });
+
+    // The creation forms still collect one unit name per ramo; turn them into
+    // seções right away so a brand-new grupo starts out like a migrated one.
+    const group = await ctx.db.get(groupId);
+    if (group) await backfillSectionsForGroup(ctx, group);
 
     await ctx.db.patch(user._id, {
       groupId,
@@ -574,6 +583,82 @@ export const updateGroup = mutation({
 
     if (Object.keys(patch).length === 0) return;
     await ctx.db.patch(group._id, patch);
+  },
+});
+
+/**
+ * Load a seção the calling admin is allowed to manage: admin of a grupo, and
+ * the seção belongs to that same grupo.
+ */
+async function loadOwnSection(ctx: MutationCtx, sectionId: Id<"sections">) {
+  const admin = await assertAdmin(ctx);
+  const section = await ctx.db.get(sectionId);
+  if (!section || section.groupId !== admin.groupId) {
+    throw new Error("Seção não pertence ao seu grupo");
+  }
+  return { admin, section };
+}
+
+/** The seções of the caller's grupo, oldest first. Empty when they have none. */
+export const listSections = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const user = await ctx.db.get(userId);
+    const groupId = user?.groupId;
+    if (!groupId) return [];
+    const sections = await ctx.db
+      .query("sections")
+      .withIndex("by_groupId", (q) => q.eq("groupId", groupId))
+      .collect();
+    return sections.map((s) => ({ _id: s._id, name: s.name, ramo: s.ramo }));
+  },
+});
+
+export const addSection = mutation({
+  args: { name: v.string(), ramo: ramoValidator },
+  handler: async (ctx, args) => {
+    const admin = await assertAdmin(ctx);
+    const name = sanitizeSectionName(args.name);
+    // Two seções may share a ramo (a grupo can run two alcateias), so there is
+    // nothing to deduplicate here.
+    return await ctx.db.insert("sections", {
+      groupId: admin.groupId!,
+      name,
+      ramo: args.ramo,
+    });
+  },
+});
+
+export const renameSection = mutation({
+  args: { sectionId: v.id("sections"), name: v.string() },
+  handler: async (ctx, args) => {
+    const { section } = await loadOwnSection(ctx, args.sectionId);
+    const name = sanitizeSectionName(args.name);
+    if (name === section.name) return;
+    await ctx.db.patch(section._id, { name });
+  },
+});
+
+export const removeSection = mutation({
+  args: { sectionId: v.id("sections") },
+  handler: async (ctx, args) => {
+    const { section } = await loadOwnSection(ctx, args.sectionId);
+    // Refuse rather than silently unassign: an escoteiro losing their seção is
+    // the admin's call to make explicitly. Only current members count — someone
+    // who left or was banned keeps a stale sectionId and must not block this.
+    const assigned = await ctx.db
+      .query("users")
+      .withIndex("by_sectionId", (q) => q.eq("sectionId", section._id))
+      .filter((q) => q.eq(q.field("groupId"), section.groupId))
+      .first();
+    if (assigned) {
+      throw new Error(
+        "Esta seção ainda tem escoteiros. Mova-os para outra seção antes de removê-la.",
+      );
+    }
+    await ctx.db.delete(section._id);
   },
 });
 

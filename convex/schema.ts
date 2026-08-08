@@ -33,11 +33,15 @@ export default defineSchema({
     ),
     bannedAt: v.optional(v.number()),
     bannedBy: v.optional(v.id("users")),
+    // The seção an escoteiro is placed in (#72). Assigning it is #73's job; it
+    // lives here already so removing a seção can refuse to strand its scouts.
+    sectionId: v.optional(v.id("sections")),
   })
     .index("email", ["email"])
     .index("by_groupId", ["groupId"])
     .index("by_groupId_and_role", ["groupId", "role"])
-    .index("by_groupId_and_status", ["groupId", "membershipStatus"]),
+    .index("by_groupId_and_status", ["groupId", "membershipStatus"])
+    .index("by_sectionId", ["sectionId"]),
 
   groups: defineTable({
     name: v.string(),
@@ -60,6 +64,15 @@ export default defineSchema({
   })
     .index("by_password", ["password"])
     .index("by_number", ["number"]),
+
+  // A seção is a grupo's concrete local unit of a ramo — "Alcateia Norte".
+  // A grupo may run two seções of the same ramo, or none at all for a ramo,
+  // which the one-name-per-ramo `groups.ramoNames` could not express (#72).
+  sections: defineTable({
+    groupId: v.id("groups"),
+    name: v.string(),
+    ramo: ramoValidator,
+  }).index("by_groupId", ["groupId"]),
 
   actionCompletions: defineTable({
     userId: v.id("users"),

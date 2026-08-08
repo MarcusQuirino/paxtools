@@ -1,6 +1,7 @@
 import { Migrations, type MigrationStatus } from "@convex-dev/migrations";
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { backfillSectionsForGroup } from "./lib/sections";
 import schema from "./schema";
 
 /**
@@ -29,6 +30,18 @@ export const migrations = new Migrations(components.migrations, { schema });
 export const run = migrations.runner();
 
 /**
+ * #72 — every `groups.ramoNames` entry becomes one seção of that ramo, so no
+ * grupo loses the unit names it typed before seções existed. `ramoNames` is
+ * left untouched; a later ticket drops the field.
+ */
+export const sectionsFromRamoNames = migrations.define({
+  table: "groups",
+  migrateOne: async (ctx, group) => {
+    await backfillSectionsForGroup(ctx, group);
+  },
+});
+
+/**
  * Append-only, ordered registry of every migration that must run before a
  * release's frontend goes live. The pre-component migrations (legacy
  * action-id prefixing, Lis de Ouro→IRR copy, ramo backfills, specialty
@@ -36,7 +49,7 @@ export const run = migrations.runner();
  * on prod and dev and are intentionally absent.
  */
 const REGISTRY: Parameters<typeof migrations.runSerially>[1] = [
-  // internal.migrations.<name>,
+  internal.migrations.sectionsFromRamoNames,
 ];
 
 /** Run every registered migration in order. Invoked by the deploy workflows. */

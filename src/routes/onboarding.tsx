@@ -390,7 +390,7 @@ function OnboardingPage() {
 
                   {previewRamo && newGroupName.trim() && (
                     <p className="text-xs font-medium text-primary">
-                      Sua unidade será chamada de{" "}
+                      Sua seção será chamada de{" "}
                       <strong>
                         {RAMO_UNIT_PREFIX[previewRamo]}{" "}
                         {newGroupRamoNames[previewRamo]?.trim() ||
@@ -402,7 +402,7 @@ function OnboardingPage() {
 
                   <div className="space-y-1 pt-1">
                     <label className="text-xs font-bold uppercase tracking-wider text-foreground">
-                      Nomes das unidades (opcional)
+                      Seções iniciais (opcional)
                     </label>
                     <RamoNamesInputs
                       value={newGroupRamoNames}

@@ -4,6 +4,7 @@ import { convexTest } from "convex-test";
 import schema from "./schema";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { backfillSectionsForGroup } from "./lib/sections";
 
 // Bun's test runner has no `import.meta.glob` (Vite-only). Enumerate convex
 // modules explicitly so the in-memory backend can load them. At least one
@@ -44,6 +45,7 @@ async function insertUser(
     membershipStatus: "pending" | "approved";
     onboardingComplete: boolean;
     bannedAt: number;
+    sectionId: Id<"sections">;
   }> = {},
 ): Promise<Id<"users">> {
   return await t.run(async (ctx) => ctx.db.insert("users", { name: "U", ...fields }));
@@ -684,5 +686,269 @@ describe("group queries: visibility & filtering", () => {
     });
     const pending = await as(t, adminId).query(api.groups.getPendingMemberships, {});
     expect(pending.map((p) => p.name)).toContain("Pendente");
+  });
+});
+
+describe("seções", () => {
+  test("an admin adds a seção and it comes back from listSections", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId } = await seedGroup(t);
+    const sectionId = await as(t, adminId).mutation(api.groups.addSection, {
+      name: "  Alcateia Norte  ",
+      ramo: "lobinho",
+    });
+    const sections = await as(t, adminId).query(api.groups.listSections, {});
+    expect(sections).toEqual([
+      { _id: sectionId, name: "Alcateia Norte", ramo: "lobinho" },
+    ]);
+  });
+
+  test("a grupo runs two alcateias and no seção in the sênior ramo", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId } = await seedGroup(t);
+    await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Alcateia Norte",
+      ramo: "lobinho",
+    });
+    await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Alcateia Sul",
+      ramo: "lobinho",
+    });
+    const sections = await as(t, adminId).query(api.groups.listSections, {});
+    expect(sections.filter((s) => s.ramo === "lobinho").map((s) => s.name)).toEqual([
+      "Alcateia Norte",
+      "Alcateia Sul",
+    ]);
+    expect(sections.filter((s) => s.ramo === "senior")).toEqual([]);
+  });
+
+  test("addSection rejects an empty or over-long name", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId } = await seedGroup(t);
+    await expect(
+      as(t, adminId).mutation(api.groups.addSection, {
+        name: "   ",
+        ramo: "escoteiro",
+      }),
+    ).rejects.toThrow("Nome da seção é obrigatório");
+    await expect(
+      as(t, adminId).mutation(api.groups.addSection, {
+        name: "x".repeat(61),
+        ramo: "escoteiro",
+      }),
+    ).rejects.toThrow("Nome da seção muito longo");
+  });
+
+  test("a non-admin member cannot add a seção", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId } = await seedGroup(t);
+    const member = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      isAdmin: false,
+      membershipStatus: "approved",
+    });
+    await expect(
+      as(t, member).mutation(api.groups.addSection, {
+        name: "Tropa Nova",
+        ramo: "escoteiro",
+      }),
+    ).rejects.toThrow("Apenas administradores");
+  });
+
+  test("renameSection trims, validates and persists the new name", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId } = await seedGroup(t);
+    const sectionId = await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Tropa Velha",
+      ramo: "escoteiro",
+    });
+    await expect(
+      as(t, adminId).mutation(api.groups.renameSection, {
+        sectionId,
+        name: "x".repeat(61),
+      }),
+    ).rejects.toThrow("Nome da seção muito longo");
+    await as(t, adminId).mutation(api.groups.renameSection, {
+      sectionId,
+      name: "  Tropa Nova  ",
+    });
+    const sections = await as(t, adminId).query(api.groups.listSections, {});
+    expect(sections.map((s) => s.name)).toEqual(["Tropa Nova"]);
+  });
+
+  test("an admin cannot touch a seção of another grupo", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId } = await seedGroup(t);
+    const otherAdmin = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+    });
+    const otherGroupId = await t.run(async (ctx) =>
+      ctx.db.insert("groups", {
+        name: "Grupo B",
+        number: "200",
+        password: "BBBBBB",
+        createdBy: otherAdmin,
+        createdAt: 1,
+      }),
+    );
+    await t.run(async (ctx) =>
+      ctx.db.patch(otherAdmin, {
+        groupId: otherGroupId,
+        isAdmin: true,
+        membershipStatus: "approved",
+      }),
+    );
+    const foreign = await as(t, otherAdmin).mutation(api.groups.addSection, {
+      name: "Clã Alheio",
+      ramo: "pioneiro",
+    });
+    await expect(
+      as(t, adminId).mutation(api.groups.renameSection, {
+        sectionId: foreign,
+        name: "Roubada",
+      }),
+    ).rejects.toThrow("Seção não pertence ao seu grupo");
+    await expect(
+      as(t, adminId).mutation(api.groups.removeSection, { sectionId: foreign }),
+    ).rejects.toThrow("Seção não pertence ao seu grupo");
+  });
+
+  test("removeSection deletes an empty seção", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId } = await seedGroup(t);
+    const sectionId = await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Clã Antigo",
+      ramo: "pioneiro",
+    });
+    await as(t, adminId).mutation(api.groups.removeSection, { sectionId });
+    expect(await as(t, adminId).query(api.groups.listSections, {})).toEqual([]);
+    expect(await t.run(async (ctx) => ctx.db.get(sectionId))).toBeNull();
+  });
+
+  test("removeSection refuses to strand escoteiros still in the seção", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+    const sectionId = await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Tropa Cheia",
+      ramo: "escoteiro",
+    });
+    await insertUser(t, {
+      role: "escoteiro",
+      ramo: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+      sectionId,
+    });
+    await expect(
+      as(t, adminId).mutation(api.groups.removeSection, { sectionId }),
+    ).rejects.toThrow("escoteiros");
+    expect(await t.run(async (ctx) => ctx.db.get(sectionId))).not.toBeNull();
+  });
+
+  test("removeSection ignores an ex-member's stale seção assignment", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+    const sectionId = await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Tropa Esvaziada",
+      ramo: "escoteiro",
+    });
+    const gone = await insertUser(t, {
+      role: "escoteiro",
+      ramo: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+      sectionId,
+    });
+    // Left (or was banned from) the grupo, keeping the old sectionId behind.
+    await t.run(async (ctx) =>
+      ctx.db.patch(gone, { groupId: undefined, membershipStatus: undefined }),
+    );
+    await as(t, adminId).mutation(api.groups.removeSection, { sectionId });
+    expect(await t.run(async (ctx) => ctx.db.get(sectionId))).toBeNull();
+  });
+
+  test("listSections is empty for a user in no group", async () => {
+    const t = convexTest(schema, modules);
+    const outsider = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+    });
+    expect(await as(t, outsider).query(api.groups.listSections, {})).toEqual([]);
+  });
+
+  test("createGroup turns the unit names it is given into seções", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+    });
+    await as(t, userId).mutation(api.groups.createGroup, {
+      name: "G",
+      number: "42",
+      ramoNames: { lobinho: "Alcateia Só", escoteiro: "Tropa Só" },
+    });
+    const sections = await as(t, userId).query(api.groups.listSections, {});
+    expect(
+      sections.map((s) => `${s.ramo}:${s.name}`).sort(),
+    ).toEqual(["escoteiro:Tropa Só", "lobinho:Alcateia Só"]);
+  });
+});
+
+describe("backfillSectionsForGroup (migration body)", () => {
+  test("turns every ramoNames entry into one seção of that ramo", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t, {
+      ramoNames: { lobinho: "Alcateia Potiguara", pioneiro: "Clã Highlander" },
+    });
+    await t.run(async (ctx) => {
+      const group = await ctx.db.get(groupId);
+      await backfillSectionsForGroup(ctx, group!);
+    });
+    const sections = await as(t, adminId).query(api.groups.listSections, {});
+    expect(sections.map((s) => `${s.ramo}:${s.name}`).sort()).toEqual([
+      "lobinho:Alcateia Potiguara",
+      "pioneiro:Clã Highlander",
+    ]);
+  });
+
+  test("is a no-op the second time (the component may resume a batch)", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t, {
+      ramoNames: { escoteiro: "Tropa Índio Velho" },
+    });
+    await t.run(async (ctx) => {
+      const group = await ctx.db.get(groupId);
+      await backfillSectionsForGroup(ctx, group!);
+      await backfillSectionsForGroup(ctx, group!);
+    });
+    const sections = await as(t, adminId).query(api.groups.listSections, {});
+    expect(sections.map((s) => s.name)).toEqual(["Tropa Índio Velho"]);
+  });
+
+  test("leaves a grupo with no unit names, or a deleted one, alone", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+    await t.run(async (ctx) => {
+      const group = await ctx.db.get(groupId);
+      await backfillSectionsForGroup(ctx, group!);
+    });
+    expect(await as(t, adminId).query(api.groups.listSections, {})).toEqual([]);
+
+    const { groupId: deletedId } = await seedGroup(t, {
+      ramoNames: { senior: "Tropa Sênior" },
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(deletedId, { deletedAt: 1 });
+      const group = await ctx.db.get(deletedId);
+      await backfillSectionsForGroup(ctx, group!);
+      const sections = await ctx.db
+        .query("sections")
+        .withIndex("by_groupId", (q) => q.eq("groupId", deletedId))
+        .collect();
+      expect(sections).toEqual([]);
+    });
   });
 });

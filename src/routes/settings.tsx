@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { AuthButton } from "@/components/auth/auth-button";
 import { RamoNamesInputs } from "@/components/onboarding/ramo-names-inputs";
 import { RegiaoInput } from "@/components/onboarding/regiao-input";
+import { SectionsManager } from "@/components/settings/sections-manager";
 import { type RamoNames } from "@/lib/ramos";
 import { formatGroupIdentity } from "@/lib/group-identity";
 import {
@@ -306,7 +307,7 @@ function SettingsPage() {
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-medium">
-                          Nomes das unidades (opcional)
+                          Seções iniciais (opcional)
                         </label>
                         <RamoNamesInputs
                           value={newGroupRamoNames}
@@ -351,11 +352,13 @@ function SettingsPage() {
         </section>
 
         {group?.isAdmin && (
-          <GroupAdminSection
-            initialName={group.name}
-            initialRegiao={group.regiao ?? ""}
-            initialRamoNames={group.ramoNames ?? {}}
-          />
+          <>
+            <GroupAdminSection
+              initialName={group.name}
+              initialRegiao={group.regiao ?? ""}
+            />
+            <SectionsManager />
+          </>
         )}
       </div>
     </div>
@@ -428,15 +431,12 @@ function UserNameSection({ currentName }: { currentName: string }) {
 function GroupAdminSection({
   initialName,
   initialRegiao,
-  initialRamoNames,
 }: {
   initialName: string;
   initialRegiao: string;
-  initialRamoNames: RamoNames;
 }) {
   const [name, setName] = useState(initialName);
   const [regiao, setRegiao] = useState(initialRegiao);
-  const [ramoNames, setRamoNames] = useState<RamoNames>(initialRamoNames);
   const [saveError, setSaveError] = useState("");
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
@@ -455,9 +455,7 @@ function GroupAdminSection({
   });
 
   const dirty =
-    name.trim() !== initialName ||
-    regiao.trim() !== initialRegiao ||
-    JSON.stringify(ramoNames) !== JSON.stringify(initialRamoNames);
+    name.trim() !== initialName || regiao.trim() !== initialRegiao;
 
   const handleSave = () => {
     const trimmed = name.trim();
@@ -467,7 +465,7 @@ function GroupAdminSection({
     }
     setSaveError("");
     updateGroup(
-      { name: trimmed, regiao: regiao.trim(), ramoNames },
+      { name: trimmed, regiao: regiao.trim() },
       {
         onSuccess: () => {
           setSavedAt(Date.now());
@@ -521,19 +519,6 @@ function GroupAdminSection({
               setSaveError("");
               setSavedAt(null);
             }}
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-xs font-medium">Nomes das unidades</label>
-          <RamoNamesInputs
-            value={ramoNames}
-            onChange={(next) => {
-              setRamoNames(next);
-              setSaveError("");
-              setSavedAt(null);
-            }}
-            groupName={name}
           />
         </div>
 

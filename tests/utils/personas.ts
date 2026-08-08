@@ -21,7 +21,7 @@
  * The `name` column mirrors SIM_SPECS and is what painel/search shows.
  *
  * KNOWN SHARED ROWS (not per-persona, still single-owner):
- *   - the test group row (name/ramoNames) → m17-group-rename.spec.ts.
+ *   - the test group row (name) → m17-group-rename.spec.ts.
  *     No other spec may assert on the group name.
  *   - membership queue rows → each membership spec asserts only on its own
  *     personas' cards, never on exact queue counts.
