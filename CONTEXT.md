@@ -22,6 +22,10 @@ _Avoid_: section (that is a distinct concept — see [[secao]]), branch
 A named local unit within a grupo that belongs to exactly one [[ramo]] — the grupo's concrete alcateia, tropa, or clã (e.g. "Alcateia Norte"). A grupo has zero or more; normally one per ramo, but it may run several of the same ramo (two alcateias). Seções only organise and filter *which* escoteiros an escotista works with; they never affect progression, which stays keyed to the [[ramo]]. An escoteiro is placed in a seção by an escotista; an unplaced escoteiro falls back to plain ramo visibility. Optional per grupo — a grupo that creates no seções behaves exactly as if the concept did not exist.
 _Avoid_: unidade, unit, alcateia/tropa/clã (those are specific seções, not the general term)
 
+**Seção observada**:
+The one [[secao]] an escotista is currently looking at, chosen by them and kept on their own record so it survives a reload. Unset means the whole grupo. It only ever narrows: [[visibilidade-de-ramo]] is applied first and the seção filter after it, an escotista can only observe a seção of a ramo they accompany (an [[admin]], any), and an unplaced escoteiro keeps showing under every observed seção. Placement itself is an [[admin]] action; observing is each escotista's own.
+_Avoid_: filtro de seção, seção ativa, seção selecionada
+
 **Escoteiro**:
 A youth member whose progression is tracked. This is the role name regardless of ramo — a lobinho-aged member is still an escoteiro in the model.
 _Avoid_: jovem, scout, member

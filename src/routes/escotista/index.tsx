@@ -31,6 +31,9 @@ function EscotistaDashboard() {
   const { data: stats } = useSuspenseQuery(
     convexQuery(api.approvals.getGroupStats, {}),
   );
+  const { data: sections } = useSuspenseQuery(
+    convexQuery(api.groups.listSections, {}),
+  );
 
   const [searchQuery, setSearchQuery] = useState("");
   const [showFavorites, setShowFavorites] = useState(false);
@@ -42,9 +45,26 @@ function EscotistaDashboard() {
   const toggleFavFn = useConvexMutation(api.users.toggleFavoriteEscoteiro);
   const { mutate: toggleFav } = useMutation({ mutationFn: toggleFavFn });
 
+  const setObservedFn = useConvexMutation(api.groups.setObservedSection);
+  const { mutate: setObserved } = useMutation({ mutationFn: setObservedFn });
+
   if (!stats) {
     return <NoGroupState />;
   }
+
+  // An escotista may only observe a seção of a ramo they accompany; an admin
+  // accompanies every ramo. The server enforces the same rule.
+  const observed = stats.observedSection;
+  const observableSections = stats.isAdmin
+    ? sections
+    : sections.filter((s) => (user?.escotistaRamos ?? []).includes(s.ramo));
+  // Whatever is being observed stays selectable even if the escotista's ramos
+  // changed since; otherwise the picker would read "Todas as seções" while the
+  // list below it is still narrowed.
+  const pickerSections =
+    observed && !observableSections.some((s) => s._id === observed._id)
+      ? [...observableSections, observed]
+      : observableSections;
 
   const favorites = new Set(user?.favoriteEscoteiroIds ?? []);
 
@@ -101,6 +121,37 @@ function EscotistaDashboard() {
             {copiedPassword ? "Copiado!" : stats.group.password}
           </button>
         </div>
+
+        {pickerSections.length > 0 && (
+          <div className="mb-3 flex items-center gap-2">
+            <label
+              htmlFor="observed-section"
+              className="text-[11px] font-bold uppercase opacity-80"
+            >
+              Seção
+            </label>
+            <select
+              id="observed-section"
+              value={observed?._id ?? ""}
+              onChange={(e) =>
+                setObserved({
+                  sectionId: (e.target.value ||
+                    null) as Id<"sections"> | null,
+                })
+              }
+              className="min-w-0 flex-1 rounded-md border border-white/40 bg-white/20 px-2 py-1 text-xs font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <option value="" className="text-foreground">
+                Todas as seções
+              </option>
+              {pickerSections.map((s) => (
+                <option key={s._id} value={s._id} className="text-foreground">
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-3">
           <button
@@ -183,6 +234,9 @@ function EscotistaDashboard() {
               <EscoteiroCard
                 key={escoteiro._id}
                 escoteiro={escoteiro}
+                // An unplaced escoteiro shows up under every seção; say so,
+                // otherwise they read as members of the observed one.
+                showUnplaced={!!observed && !escoteiro.sectionId}
                 isFavorite={favorites.has(escoteiro._id)}
                 onToggleFavorite={() =>
                   toggleFav({ escoteiroId: escoteiro._id })
@@ -235,6 +289,7 @@ function EscotistaCard({
 
 function EscoteiroCard({
   escoteiro,
+  showUnplaced,
   isFavorite,
   onToggleFavorite,
 }: {
@@ -246,6 +301,7 @@ function EscoteiroCard({
     pendingActions: number;
     totalActions: number;
   };
+  showUnplaced: boolean;
   isFavorite: boolean;
   onToggleFavorite: () => void;
 }) {
@@ -273,6 +329,11 @@ function EscoteiroCard({
             >
               <Clock className="size-2.5 mr-0.5" />
               {escoteiro.pendingActions}
+            </Badge>
+          )}
+          {showUnplaced && (
+            <Badge variant="outline" className="text-[10px] px-1 py-0">
+              sem seção
             </Badge>
           )}
         </div>

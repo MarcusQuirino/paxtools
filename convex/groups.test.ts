@@ -1026,6 +1026,357 @@ describe("seções: sectionId is dropped when a member leaves the grupo", () => 
   });
 });
 
+describe("seções: atribuir um escoteiro a uma seção", () => {
+  async function seedGrupoComSecoes(t: ReturnType<typeof convexTest>) {
+    const { adminId, groupId } = await seedGroup(t);
+    const tropa = await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Tropa Norte",
+      ramo: "escoteiro",
+    });
+    const alcateia = await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Alcateia Sul",
+      ramo: "lobinho",
+    });
+    const escoteiro = await insertUser(t, {
+      role: "escoteiro",
+      ramo: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+    });
+    return { adminId, groupId, tropa, alcateia, escoteiro };
+  }
+
+  // Checked inside `t.run`: an undefined field comes back as null across the
+  // convex-test boundary, which reads as "still set" to `toBeUndefined`.
+  const sectionOf = (t: ReturnType<typeof convexTest>, userId: Id<"users">) =>
+    t.run(async (ctx) => (await ctx.db.get(userId))?.sectionId ?? "unassigned");
+
+  test("an admin places an escoteiro in a seção of their own ramo", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, tropa, escoteiro } = await seedGrupoComSecoes(t);
+    await as(t, adminId).mutation(api.groups.setMemberSection, {
+      userId: escoteiro,
+      sectionId: tropa,
+    });
+    expect(await sectionOf(t, escoteiro)).toBe(tropa);
+    const members = await as(t, adminId).query(api.groups.getGroupMembers, {});
+    expect(members.find((m) => m._id === escoteiro)?.sectionId).toBe(tropa);
+  });
+
+  // The decision this ticket pins: a seção whose ramo differs from the
+  // escoteiro's own ramo is REFUSED, not silently accepted or reconciled.
+  test("a seção of another ramo is refused", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, alcateia, escoteiro } = await seedGrupoComSecoes(t);
+    await expect(
+      as(t, adminId).mutation(api.groups.setMemberSection, {
+        userId: escoteiro,
+        sectionId: alcateia,
+      }),
+    ).rejects.toThrow("outro ramo");
+    expect(await sectionOf(t, escoteiro)).toBe("unassigned");
+  });
+
+  test("an escoteiro with no ramo cannot be placed in any seção", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId, tropa } = await seedGrupoComSecoes(t);
+    const ramoless = await insertUser(t, {
+      role: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+    });
+    await expect(
+      as(t, adminId).mutation(api.groups.setMemberSection, {
+        userId: ramoless,
+        sectionId: tropa,
+      }),
+    ).rejects.toThrow("ramo do escoteiro");
+  });
+
+  test("passing null takes the escoteiro out of their seção", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, tropa, escoteiro } = await seedGrupoComSecoes(t);
+    await as(t, adminId).mutation(api.groups.setMemberSection, {
+      userId: escoteiro,
+      sectionId: tropa,
+    });
+    await as(t, adminId).mutation(api.groups.setMemberSection, {
+      userId: escoteiro,
+      sectionId: null,
+    });
+    expect(await sectionOf(t, escoteiro)).toBe("unassigned");
+  });
+
+  test("only escoteiros belong to a seção", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId, tropa } = await seedGrupoComSecoes(t);
+    const outro = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      membershipStatus: "approved",
+    });
+    await expect(
+      as(t, adminId).mutation(api.groups.setMemberSection, {
+        userId: outro,
+        sectionId: tropa,
+      }),
+    ).rejects.toThrow("Apenas escoteiros");
+  });
+
+  test("a non-admin escotista cannot place an escoteiro", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId, tropa, escoteiro } = await seedGrupoComSecoes(t);
+    const member = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      isAdmin: false,
+      membershipStatus: "approved",
+    });
+    await expect(
+      as(t, member).mutation(api.groups.setMemberSection, {
+        userId: escoteiro,
+        sectionId: tropa,
+      }),
+    ).rejects.toThrow("Apenas administradores");
+  });
+
+  test("a seção of another grupo is refused", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, escoteiro } = await seedGrupoComSecoes(t);
+    const otherAdmin = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+    });
+    await as(t, otherAdmin).mutation(api.groups.createGroup, {
+      name: "Grupo B",
+      number: "200",
+    });
+    const foreign = await as(t, otherAdmin).mutation(api.groups.addSection, {
+      name: "Tropa Alheia",
+      ramo: "escoteiro",
+    });
+    await expect(
+      as(t, adminId).mutation(api.groups.setMemberSection, {
+        userId: escoteiro,
+        sectionId: foreign,
+      }),
+    ).rejects.toThrow("Seção não pertence ao seu grupo");
+  });
+
+  test("advancing ramo leaves the old ramo's seção behind", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId, alcateia } = await seedGrupoComSecoes(t);
+    const lobinho = await insertUser(t, {
+      role: "escoteiro",
+      ramo: "lobinho",
+      groupId,
+      membershipStatus: "approved",
+    });
+    await as(t, adminId).mutation(api.groups.setMemberSection, {
+      userId: lobinho,
+      sectionId: alcateia,
+    });
+    await as(t, adminId).mutation(api.groups.setMemberRamo, {
+      userId: lobinho,
+      ramo: "escoteiro",
+    });
+    expect(await sectionOf(t, lobinho)).toBe("unassigned");
+    // ...and the emptied seção can now be removed.
+    await as(t, adminId).mutation(api.groups.removeSection, {
+      sectionId: alcateia,
+    });
+    expect(await t.run(async (ctx) => ctx.db.get(alcateia))).toBeNull();
+  });
+
+  test("a ramo change that keeps the ramo keeps the seção", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, tropa, escoteiro } = await seedGrupoComSecoes(t);
+    await as(t, adminId).mutation(api.groups.setMemberSection, {
+      userId: escoteiro,
+      sectionId: tropa,
+    });
+    // Same ramo: a no-op change must not throw the escoteiro out of the seção.
+    await as(t, adminId).mutation(api.groups.setMemberRamo, {
+      userId: escoteiro,
+      ramo: "escoteiro",
+    });
+    expect(await sectionOf(t, escoteiro)).toBe(tropa);
+  });
+});
+
+describe("seções: a seção observada pelo escotista", () => {
+  async function seedObservable(t: ReturnType<typeof convexTest>) {
+    const { adminId, groupId } = await seedGroup(t);
+    const tropa = await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Tropa Norte",
+      ramo: "escoteiro",
+    });
+    const alcateia = await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Alcateia Sul",
+      ramo: "lobinho",
+    });
+    return { adminId, groupId, tropa, alcateia };
+  }
+
+  const observedOf = (t: ReturnType<typeof convexTest>, userId: Id<"users">) =>
+    t.run(
+      async (ctx) => (await ctx.db.get(userId))?.observedSectionId ?? "todas",
+    );
+
+  test("the choice is stored on the escotista, so it survives a reload", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, tropa } = await seedObservable(t);
+    await as(t, adminId).mutation(api.groups.setObservedSection, {
+      sectionId: tropa,
+    });
+    expect(await observedOf(t, adminId)).toBe(tropa);
+    // A fresh read (what a reload does) still reports the same seção.
+    const stats = await as(t, adminId).query(api.approvals.getGroupStats, {});
+    expect(stats?.observedSection).toEqual({
+      _id: tropa,
+      name: "Tropa Norte",
+      ramo: "escoteiro",
+    });
+  });
+
+  test("null goes back to observing the whole grupo", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, tropa } = await seedObservable(t);
+    await as(t, adminId).mutation(api.groups.setObservedSection, {
+      sectionId: tropa,
+    });
+    await as(t, adminId).mutation(api.groups.setObservedSection, {
+      sectionId: null,
+    });
+    expect(await observedOf(t, adminId)).toBe("todas");
+    const stats = await as(t, adminId).query(api.approvals.getGroupStats, {});
+    expect(stats?.observedSection).toBeNull();
+  });
+
+  test("a seção of another grupo cannot be observed", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId } = await seedObservable(t);
+    const otherAdmin = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+    });
+    await as(t, otherAdmin).mutation(api.groups.createGroup, {
+      name: "Grupo B",
+      number: "200",
+    });
+    const foreign = await as(t, otherAdmin).mutation(api.groups.addSection, {
+      name: "Tropa Alheia",
+      ramo: "escoteiro",
+    });
+    await expect(
+      as(t, adminId).mutation(api.groups.setObservedSection, {
+        sectionId: foreign,
+      }),
+    ).rejects.toThrow("Seção não pertence ao seu grupo");
+  });
+
+  // Observing narrows; it is never a way around visibilidade de ramo.
+  test("a non-admin escotista cannot observe a ramo they do not accompany", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId, tropa, alcateia } = await seedObservable(t);
+    const escotista = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      isAdmin: false,
+      membershipStatus: "approved",
+    });
+    await expect(
+      as(t, escotista).mutation(api.groups.setObservedSection, {
+        sectionId: alcateia,
+      }),
+    ).rejects.toThrow("Você não acompanha esse ramo");
+    await as(t, escotista).mutation(api.groups.setObservedSection, {
+      sectionId: tropa,
+    });
+    expect(await observedOf(t, escotista)).toBe(tropa);
+  });
+
+  test("an admin may observe any ramo's seção", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, alcateia } = await seedObservable(t);
+    await as(t, adminId).mutation(api.groups.setObservedSection, {
+      sectionId: alcateia,
+    });
+    expect(await observedOf(t, adminId)).toBe(alcateia);
+  });
+
+  test("an escoteiro cannot choose an observed seção", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId, tropa } = await seedObservable(t);
+    const escoteiro = await insertUser(t, {
+      role: "escoteiro",
+      ramo: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+    });
+    await expect(
+      as(t, escoteiro).mutation(api.groups.setObservedSection, {
+        sectionId: tropa,
+      }),
+    ).rejects.toThrow("Apenas escotistas");
+  });
+
+  test("an unauthenticated caller cannot observe or assign a seção", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId, tropa } = await seedObservable(t);
+    const escoteiro = await insertUser(t, {
+      role: "escoteiro",
+      ramo: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+    });
+    await expect(
+      t.mutation(api.groups.setObservedSection, { sectionId: tropa }),
+    ).rejects.toThrow("Não autenticado");
+    await expect(
+      t.mutation(api.groups.setMemberSection, {
+        userId: escoteiro,
+        sectionId: tropa,
+      }),
+    ).rejects.toThrow("Não autenticado");
+  });
+
+  test("leaving the grupo drops the observed seção", async () => {
+    const t = convexTest(schema, modules);
+    const { groupId, tropa } = await seedObservable(t);
+    const escotista = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      isAdmin: false,
+      membershipStatus: "approved",
+    });
+    await as(t, escotista).mutation(api.groups.setObservedSection, {
+      sectionId: tropa,
+    });
+    await as(t, escotista).mutation(api.groups.leaveGroup, {});
+    expect(await observedOf(t, escotista)).toBe("todas");
+  });
+
+  // Nothing cleans the pointer up when the seção goes away, so the read side
+  // has to: a dangling observedSectionId means "todas as seções" again.
+  test("removing the observed seção falls back to the whole grupo", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, tropa } = await seedObservable(t);
+    await as(t, adminId).mutation(api.groups.setObservedSection, {
+      sectionId: tropa,
+    });
+    await as(t, adminId).mutation(api.groups.removeSection, {
+      sectionId: tropa,
+    });
+    const stats = await as(t, adminId).query(api.approvals.getGroupStats, {});
+    expect(stats?.observedSection).toBeNull();
+  });
+});
+
 describe("backfillSectionsForGroup (migration body)", () => {
   test("turns every ramoNames entry into one seção of that ramo", async () => {
     const t = convexTest(schema, modules);

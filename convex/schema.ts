@@ -33,9 +33,14 @@ export default defineSchema({
     ),
     bannedAt: v.optional(v.number()),
     bannedBy: v.optional(v.id("users")),
-    // The seção an escoteiro is placed in (#72). Assigning it is #73's job; it
-    // lives here already so removing a seção can refuse to strand its scouts.
+    // The seção an escoteiro is placed in (#72), assigned by an admin (#73).
+    // Unset means unplaced: that escoteiro falls back to plain ramo visibility
+    // and shows up under every observed seção.
     sectionId: v.optional(v.id("sections")),
+    // The seção an escotista is currently observing (#73). Unset means the
+    // whole grupo. Stored per user so the choice survives a reload; a pointer
+    // left behind by a deleted seção is inert — reads resolve it to "todas".
+    observedSectionId: v.optional(v.id("sections")),
   })
     .index("email", ["email"])
     .index("by_groupId", ["groupId"])

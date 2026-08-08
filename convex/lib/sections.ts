@@ -39,6 +39,39 @@ export async function listSectionsOfGroup(
 }
 
 /**
+ * The seção an escotista is currently observing, or null when they observe the
+ * whole grupo. A pointer at a seção that was deleted — or that belongs to a
+ * grupo they have since left — resolves to null: Convex never reuses an id, so
+ * a leftover pointer is inert and simply means "todas as seções" again.
+ */
+export async function resolveObservedSection(
+  ctx: QueryCtx | MutationCtx,
+  user: Doc<"users">,
+  groupId: Id<"groups">,
+): Promise<Doc<"sections"> | null> {
+  if (!user.observedSectionId) return null;
+  const section = await ctx.db.get(user.observedSectionId);
+  if (!section || section.groupId !== groupId) return null;
+  return section;
+}
+
+/**
+ * Narrow a list of escoteiros to the observed seção. An escoteiro with no
+ * seção is kept: CONTEXT.md pins that an unplaced escoteiro falls back to
+ * plain ramo visibility, so a grupo part-way through placing its escoteiros
+ * never loses sight of them.
+ *
+ * Must be applied AFTER visibilidade de ramo — a seção filter narrows what an
+ * escotista sees, it never widens it.
+ */
+export function filterToObservedSection<
+  T extends { sectionId?: Id<"sections"> },
+>(sectionId: Id<"sections"> | null, escoteiros: T[]): T[] {
+  if (!sectionId) return escoteiros;
+  return escoteiros.filter((e) => !e.sectionId || e.sectionId === sectionId);
+}
+
+/**
  * Give a grupo one seção per named ramo in `ramoNames`, so the unit names an
  * escotista typed before seções existed are not lost.
  *
