@@ -34,14 +34,19 @@ the SHA does not.
 
 ```bash
 SHA=$(gh pr view <n> --json headRefOid --jq .headRefOid)
-vercel ls paxtools --meta githubCommitSha="$SHA"
+URL=$(vercel ls paxtools --meta githubCommitSha="$SHA" 2>/dev/null)
+vercel inspect "$URL" 2>&1 | grep status     # ● Ready
 ```
 
-The bare URL is the last line of output. Two states to poll through: an empty
-list right after a push, because the build has not registered yet, and a row
-reading `Canceled` when a newer push superseded it. Wait for `● Ready`
-(~1 minute for this project) and confirm the parsed line starts with
-`https://` before driving it.
+`vercel ls` prints its table on **stderr** and the bare URL on stdout, which
+is why `2>/dev/null` leaves a clean variable — and why a poll loop that greps
+that stdout for `Ready` never matches. Ask `vercel inspect` for the status
+instead.
+
+An empty `$URL` right after a push means the build has not registered yet;
+give it a few seconds and ask again. Builds take about a minute here, and a
+deployment reads `Canceled` when a newer push superseded it — resolve by the
+SHA you mean to test and that resolves itself.
 
 The staging alias is the constant in `tests/utils/target.ts`.
 
@@ -54,12 +59,14 @@ deployed target:
 
 - The extension is paired with **Helium**, not Chrome. Helium must be open for
   `tabs_context_mcp` to find a browser.
-- **Confirm who you are before concluding anything.** The profile usually
-  carries a live staging session, so the app opens straight into someone's
-  home view — and an escotista's view of a scout is not the scout's own view.
-  Screenshot first; sign in as the persona whose role the change affects.
-- PR previews take the **test-login form only** — Google's redirect URI is
-  registered for the staging alias, not for a random preview URL.
+- **Confirm who you are before concluding anything.** Sessions are per-origin:
+  each preview URL is a fresh one that lands on `/signin`, while the staging
+  alias usually opens straight into whichever persona was left signed in — and
+  an escotista's view of a scout is not the scout's own view. Screenshot
+  first, then sign in as the persona whose role the change affects.
+- PR previews take the **test-login form only**. The Google button renders,
+  but its redirect URI is registered for the staging alias, not for a random
+  preview URL, so it fails there.
 - Both targets read the same staging Convex data.
 
 ## Keep it read-only
