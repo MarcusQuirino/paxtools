@@ -16,6 +16,12 @@ import {
   type ProgressionSnapshot,
 } from "./lib/progression";
 import {
+  filterObservableSections,
+  filterToObservedSection,
+  listSectionsOfGroup,
+  resolveObservedSection,
+} from "./lib/sections";
+import {
   logRamoEvent,
   describeCompletion,
   completionRef,
@@ -222,8 +228,19 @@ export const getGroupStats = query({
     // ramo-scoped to the actual viewer.
     const activeMembers = filterActiveGrupoMembers(viewer.groupId, members);
 
-    const escoteiros = filterVisibleEscoteiros(viewer, members).filter(
-      (m) => m.role === "escoteiro",
+    // The seção the escotista is observing narrows the lista de jovens (and
+    // the counts derived from it) — always applied after the ramo rule, so it
+    // can only ever remove escoteiros from what they already see.
+    const observedSection = await resolveObservedSection(
+      ctx,
+      viewer.user,
+      viewer.groupId,
+    );
+    const escoteiros = filterToObservedSection(
+      observedSection?._id ?? null,
+      filterVisibleEscoteiros(viewer, members).filter(
+        (m) => m.role === "escoteiro",
+      ),
     );
     const escotistas = activeMembers.filter((m) => m.role === "escotista");
 
@@ -248,6 +265,7 @@ export const getGroupStats = query({
         _id: esc._id,
         name: esc.name,
         image: esc.image,
+        sectionId: esc.sectionId ?? null,
         approvedActions,
         pendingActions,
         totalActions: actions.length,
@@ -265,8 +283,23 @@ export const getGroupStats = query({
         _id: group._id,
         name: group.name,
         number: group.number ?? null,
+        regiao: group.regiao ?? null,
         password: group.password,
       },
+      observedSection: observedSection
+        ? {
+            _id: observedSection._id,
+            name: observedSection.name,
+            ramo: observedSection.ramo,
+          }
+        : null,
+      // Everything the seção picker needs, resolved by the same rule
+      // `setObservedSection` enforces — the dashboard never restates it.
+      observableSections: filterObservableSections(
+        viewer,
+        await listSectionsOfGroup(ctx, viewer.groupId),
+        observedSection?._id ?? null,
+      ).map((s) => ({ _id: s._id, name: s.name, ramo: s.ramo })),
       isAdmin: viewer.isAdmin,
       totalMembers: activeMembers.length,
       escoteiroCount: escoteiros.length,

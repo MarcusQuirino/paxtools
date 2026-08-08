@@ -22,6 +22,7 @@ import type * as lib_coverage from "../lib/coverage.js";
 import type * as lib_events from "../lib/events.js";
 import type * as lib_progression from "../lib/progression.js";
 import type * as lib_ramoVisibility from "../lib/ramoVisibility.js";
+import type * as lib_sections from "../lib/sections.js";
 import type * as migrations from "../migrations.js";
 import type * as onboarding from "../onboarding.js";
 import type * as plan from "../plan.js";
@@ -52,6 +53,7 @@ declare const fullApi: ApiFromModules<{
   "lib/events": typeof lib_events;
   "lib/progression": typeof lib_progression;
   "lib/ramoVisibility": typeof lib_ramoVisibility;
+  "lib/sections": typeof lib_sections;
   migrations: typeof migrations;
   onboarding: typeof onboarding;
   plan: typeof plan;

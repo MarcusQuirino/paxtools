@@ -31,6 +31,7 @@ const TEST_EMAIL_SUFFIX = "@test.paxtools.local";
 const TEST_GROUP_PREFIX = "__TEST__";
 const TEST_GROUP_NAME = "__TEST__ Grupo QA";
 const TEST_GROUP_NUMBER = "99999";
+const TEST_GROUP_REGIAO = "RS";
 const TEST_GROUP_PASSWORD = "TESTQA";
 const TEST_PROVIDER_ID = "test-password";
 // Seed-side secret; the actual signin secret is verified against
@@ -500,6 +501,7 @@ export const seedTestUsers = internalMutation({
       const newId = await ctx.db.insert("groups", {
         name: TEST_GROUP_NAME,
         number: TEST_GROUP_NUMBER,
+        regiao: TEST_GROUP_REGIAO,
         password: TEST_GROUP_PASSWORD,
         createdBy: adminId,
         createdAt: Date.now(),
@@ -512,6 +514,7 @@ export const seedTestUsers = internalMutation({
       // Re-apply expected fields in case a previous run mutated them.
       await ctx.db.patch(group._id, {
         number: TEST_GROUP_NUMBER,
+        regiao: TEST_GROUP_REGIAO,
         password: TEST_GROUP_PASSWORD,
         createdBy: adminId,
         deletedAt: undefined,

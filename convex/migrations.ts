@@ -1,6 +1,7 @@
 import { Migrations, type MigrationStatus } from "@convex-dev/migrations";
 import { components, internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { backfillSectionsForGroup } from "./lib/sections";
 import schema from "./schema";
 import { drainLegacySpecialtyRow } from "./lib/legacySpecialty";
 
@@ -28,6 +29,18 @@ export const migrations = new Migrations(components.migrations, { schema });
 
 /** Generic one-off runner: bunx convex run migrations:run '{"fn": "migrations:<name>"}' */
 export const run = migrations.runner();
+
+/**
+ * #72 — every `groups.ramoNames` entry becomes one seção of that ramo, so no
+ * grupo loses the unit names it typed before seções existed. `ramoNames` is
+ * left untouched; a later ticket drops the field.
+ */
+export const sectionsFromRamoNames = migrations.define({
+  table: "groups",
+  migrateOne: async (ctx, group) => {
+    await backfillSectionsForGroup(ctx, group);
+  },
+});
 
 /**
  * Drain the deprecated `specialtyCompletions` table (#47): convert what still
@@ -69,6 +82,10 @@ export const dropLegacySpecialtyCompletions = migrations.define({
  * on prod and dev and are intentionally absent.
  */
 const REGISTRY: Parameters<typeof migrations.runSerially>[1] = [
+  // sectionsFromRamoNames landed on master first (#72); the #47 drain is
+  // appended after it. The two are independent — different tables — but the
+  // registry is append-only, so this order is now fixed.
+  internal.migrations.sectionsFromRamoNames,
   internal.migrations.dropLegacySpecialtyCompletions,
 ];
 

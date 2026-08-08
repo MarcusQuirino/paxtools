@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { formatGroupIdentity } from "@/lib/group-identity";
+import { RegiaoInput } from "@/components/onboarding/regiao-input";
 import {
   Star,
   Search,
@@ -36,13 +38,24 @@ function EscotistaDashboard() {
   const [activeTab, setActiveTab] = useState<"escoteiros" | "escotistas">(
     "escoteiros",
   );
+  const [observedError, setObservedError] = useState("");
 
   const toggleFavFn = useConvexMutation(api.users.toggleFavoriteEscoteiro);
   const { mutate: toggleFav } = useMutation({ mutationFn: toggleFavFn });
 
+  const setObservedFn = useConvexMutation(api.groups.setObservedSection);
+  const { mutate: setObserved } = useMutation({ mutationFn: setObservedFn });
+
   if (!stats) {
     return <NoGroupState />;
   }
+
+  // Which seções this escotista may observe is decided server-side, by the
+  // same rule `setObservedSection` enforces — including keeping whatever is
+  // currently observed selectable, so the picker can never read "Todas as
+  // seções" while the list below it is narrowed.
+  const observed = stats.observedSection;
+  const pickerSections = stats.observableSections;
 
   const favorites = new Set(user?.favoriteEscoteiroIds ?? []);
 
@@ -61,6 +74,11 @@ function EscotistaDashboard() {
     return e.name?.toLowerCase().includes(q) ?? false;
   });
 
+  const groupIdentity = formatGroupIdentity(
+    stats.group.number,
+    stats.group.regiao,
+  );
+
   const handleCopyPassword = async () => {
     if (!stats.group.password) return;
     await navigator.clipboard.writeText(stats.group.password);
@@ -74,10 +92,11 @@ function EscotistaDashboard() {
       <div className="rounded-md border-2 border-black bg-emerald-800 px-4 py-3 text-white shadow-[4px_4px_0px_0px_#065f46]">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-black text-lg uppercase">
-            {stats.group.name}
-            {stats.group.number ? (
+            {/* Own element + leading space — see the note in settings.tsx. */}
+            <span>{stats.group.name}</span>
+            {groupIdentity ? (
               <span className="ml-1 text-xs font-bold text-white/70">
-                nº {stats.group.number}
+                {` ${groupIdentity}`}
               </span>
             ) : null}
           </h2>
@@ -94,6 +113,51 @@ function EscotistaDashboard() {
             {copiedPassword ? "Copiado!" : stats.group.password}
           </button>
         </div>
+
+        {pickerSections.length > 0 && (
+          <div className="mb-3 space-y-1">
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="observed-section"
+                className="text-[11px] font-bold uppercase opacity-80"
+              >
+                Seção
+              </label>
+              <select
+                id="observed-section"
+                value={observed?._id ?? ""}
+                onChange={(e) => {
+                  setObservedError("");
+                  setObserved(
+                    {
+                      sectionId: (e.target.value ||
+                        null) as Id<"sections"> | null,
+                    },
+                    // Without this the select would just snap back to the
+                    // server's value with no word of why (a seção removed in
+                    // another tab, ramos changed since this page loaded).
+                    { onError: (err) => setObservedError(err.message) },
+                  );
+                }}
+                className="min-w-0 flex-1 rounded-md border border-white/40 bg-white/20 px-2 py-1 text-xs font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <option value="" className="text-foreground">
+                  Todas as seções
+                </option>
+                {pickerSections.map((s) => (
+                  <option key={s._id} value={s._id} className="text-foreground">
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {observedError && (
+              <p className="text-[11px] font-bold text-amber-200">
+                {observedError}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-3">
           <button
@@ -176,6 +240,9 @@ function EscotistaDashboard() {
               <EscoteiroCard
                 key={escoteiro._id}
                 escoteiro={escoteiro}
+                // An unplaced escoteiro shows up under every seção; say so,
+                // otherwise they read as members of the observed one.
+                showUnplaced={!!observed && !escoteiro.sectionId}
                 isFavorite={favorites.has(escoteiro._id)}
                 onToggleFavorite={() =>
                   toggleFav({ escoteiroId: escoteiro._id })
@@ -228,6 +295,7 @@ function EscotistaCard({
 
 function EscoteiroCard({
   escoteiro,
+  showUnplaced,
   isFavorite,
   onToggleFavorite,
 }: {
@@ -239,6 +307,7 @@ function EscoteiroCard({
     pendingActions: number;
     totalActions: number;
   };
+  showUnplaced: boolean;
   isFavorite: boolean;
   onToggleFavorite: () => void;
 }) {
@@ -266,6 +335,11 @@ function EscoteiroCard({
             >
               <Clock className="size-2.5 mr-0.5" />
               {escoteiro.pendingActions}
+            </Badge>
+          )}
+          {showUnplaced && (
+            <Badge variant="outline" className="text-[10px] px-1 py-0">
+              sem seção
             </Badge>
           )}
         </div>
@@ -299,6 +373,7 @@ function NoGroupState() {
   const [mode, setMode] = useState<"choice" | "create" | "join">("choice");
   const [groupName, setGroupName] = useState("");
   const [groupNumber, setGroupNumber] = useState("");
+  const [groupRegiao, setGroupRegiao] = useState("");
   const [joinPassword, setJoinPassword] = useState("");
   const [error, setError] = useState("");
 
@@ -315,10 +390,11 @@ function NoGroupState() {
   const handleCreate = () => {
     const name = groupName.trim();
     const number = groupNumber.trim();
-    if (!name || !number) return;
+    const regiao = groupRegiao.trim();
+    if (!name || !number || !regiao) return;
     setError("");
     createGroup(
-      { name, number },
+      { name, number, regiao },
       { onError: (err) => setError(err.message) },
     );
   };
@@ -375,6 +451,19 @@ function NoGroupState() {
               />
             </div>
             <div className="space-y-1.5">
+              <label htmlFor="no-group-regiao" className="text-xs font-medium">
+                Região escoteira (UF)
+              </label>
+              <RegiaoInput
+                id="no-group-regiao"
+                value={groupRegiao}
+                onChange={(next) => {
+                  setGroupRegiao(next);
+                  setError("");
+                }}
+              />
+            </div>
+            <div className="space-y-1.5">
               <label className="text-xs font-medium">Nome do grupo</label>
               <Input
                 placeholder="Ex: Potiguara"
@@ -388,7 +477,12 @@ function NoGroupState() {
             </div>
             <Button
               onClick={handleCreate}
-              disabled={!groupName.trim() || !groupNumber.trim() || creating}
+              disabled={
+                !groupName.trim() ||
+                !groupNumber.trim() ||
+                !groupRegiao.trim() ||
+                creating
+              }
               className="w-full"
             >
               {creating ? "Criando..." : "Criar grupo"}

@@ -37,6 +37,9 @@ function AdminPage() {
   const { data: members } = useSuspenseQuery(
     convexQuery(api.groups.getGroupMembers, {}),
   );
+  const { data: sections } = useSuspenseQuery(
+    convexQuery(api.groups.listSections, {}),
+  );
   const navigate = useNavigate();
 
   if (!user || !myGroup?.isAdmin) {
@@ -61,7 +64,7 @@ function AdminPage() {
   return (
     <div className="space-y-4">
       <PendingSection pending={pending} />
-      <MembersSection members={members} selfId={user._id} />
+      <MembersSection members={members} sections={sections} selfId={user._id} />
     </div>
   );
 }
@@ -156,13 +159,18 @@ type Member = {
   ramo?: Ramo;
   escotistaRamos?: Ramo[];
   isAdmin: boolean;
+  sectionId: Id<"sections"> | null;
 };
+
+type Section = { _id: Id<"sections">; name: string; ramo: Ramo };
 
 function MembersSection({
   members,
+  sections,
   selfId,
 }: {
   members: Member[];
+  sections: Section[];
   selfId: Id<"users">;
 }) {
   return (
@@ -170,14 +178,27 @@ function MembersSection({
       <h2 className="font-black uppercase text-sm">Membros</h2>
       <ul className="space-y-2">
         {members.map((m) => (
-          <MemberRow key={m._id} member={m} isSelf={m._id === selfId} />
+          <MemberRow
+            key={m._id}
+            member={m}
+            sections={sections}
+            isSelf={m._id === selfId}
+          />
         ))}
       </ul>
     </section>
   );
 }
 
-function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
+function MemberRow({
+  member,
+  sections,
+  isSelf,
+}: {
+  member: Member;
+  sections: Section[];
+  isSelf: boolean;
+}) {
   const [pendingAction, setPendingAction] = useState<"role" | "admin" | "ban" | null>(null);
   const [busyAction, setBusyAction] = useState(false);
   const [editingRamos, setEditingRamos] = useState(false);
@@ -241,6 +262,9 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
             {member.role === "escotista" ? "Escotista" : "Escoteiro"}
             {" · "}
             {ramosLabel(member)}
+            {member.role !== "escotista" && sections.length > 0
+              ? ` · ${sections.find((s) => s._id === member.sectionId)?.name ?? "sem seção"}`
+              : ""}
           </p>
         </div>
 
@@ -253,7 +277,7 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
             title={
               member.role === "escotista"
                 ? "Editar ramos atribuídos"
-                : "Editar ramo do escoteiro"
+                : "Editar ramo e seção do escoteiro"
             }
           >
             <TreePine className="size-4" aria-hidden />
@@ -303,22 +327,27 @@ function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean }) {
       </div>
 
       {editingRamos && (
-        <RamoEditor
-          member={member}
-          busy={busyAction}
-          onSaveRamo={(ramo) =>
-            runAction(async () => {
-              await setRamo({ userId: member._id, ramo });
-              setEditingRamos(false);
-            })
-          }
-          onSaveRamos={(ramos) =>
-            runAction(async () => {
-              await setRamos({ userId: member._id, ramos });
-              setEditingRamos(false);
-            })
-          }
-        />
+        <>
+          <RamoEditor
+            member={member}
+            busy={busyAction}
+            onSaveRamo={(ramo) =>
+              runAction(async () => {
+                await setRamo({ userId: member._id, ramo });
+                setEditingRamos(false);
+              })
+            }
+            onSaveRamos={(ramos) =>
+              runAction(async () => {
+                await setRamos({ userId: member._id, ramos });
+                setEditingRamos(false);
+              })
+            }
+          />
+          {member.role !== "escotista" && (
+            <SectionPicker member={member} sections={sections} />
+          )}
+        </>
       )}
 
       <ConfirmDialog
@@ -427,6 +456,72 @@ function RamoEditor({
           Salvar ramo{isEscotista ? "s" : ""}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Place an escoteiro in one of the grupo's seções. Only seções of the
+ * escoteiro's own ramo are offered — a seção belongs to exactly one ramo, and
+ * the server refuses a mismatch — so the ramo has to be set first.
+ */
+function SectionPicker({
+  member,
+  sections,
+}: {
+  member: Member;
+  sections: Section[];
+}) {
+  const [error, setError] = useState("");
+  const setSectionFn = useConvexMutation(api.groups.setMemberSection);
+  const { mutate: setSection, isPending } = useMutation({
+    mutationFn: setSectionFn,
+  });
+
+  const options = member.ramo
+    ? sections.filter((s) => s.ramo === member.ramo)
+    : [];
+  const selectId = `member-section-${member._id}`;
+
+  return (
+    <div className="border-t pt-2 space-y-1">
+      <label htmlFor={selectId} className="text-xs font-medium">
+        Seção
+      </label>
+      <select
+        id={selectId}
+        className="h-9 w-full rounded-md border-2 border-black bg-white px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-1 disabled:opacity-50"
+        value={member.sectionId ?? ""}
+        disabled={!member.ramo || isPending}
+        onChange={(e) => {
+          setError("");
+          setSection(
+            {
+              userId: member._id,
+              sectionId: (e.target.value || null) as Id<"sections"> | null,
+            },
+            { onError: (err) => setError(err.message) },
+          );
+        }}
+      >
+        <option value="">Sem seção</option>
+        {options.map((s) => (
+          <option key={s._id} value={s._id}>
+            {s.name}
+          </option>
+        ))}
+      </select>
+      {!member.ramo && (
+        <p className="text-xs text-muted-foreground">
+          Defina o ramo antes de escolher a seção.
+        </p>
+      )}
+      {member.ramo && options.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          Nenhuma seção deste ramo. Crie uma em Ajustes.
+        </p>
+      )}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }

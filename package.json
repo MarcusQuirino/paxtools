@@ -24,6 +24,8 @@
     "staging:seed": "bunx convex run --deployment staging testing:seedTestUsers && bunx convex run --deployment staging testing:seedSimulatedTroop",
     "staging:wipe-real": "bunx convex run --deployment staging testing:wipeRealUsers",
     "staging:reset": "bunx convex run --deployment staging testing:wipeTestData && bun run staging:seed",
+    "sandcastle": "GH_TOKEN=$(gh auth token) bun .sandcastle/main.ts",
+    "sandcastle:build-image": "bunx sandcastle docker build-image",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "changeset": "changeset",
@@ -58,6 +60,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@ai-hero/sandcastle": "^0.12.0",
     "@changesets/cli": "^2.30.0",
     "@playwright/test": "^1.60.0",
     "@tailwindcss/vite": "^4.2.2",

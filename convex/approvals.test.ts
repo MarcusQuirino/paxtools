@@ -847,6 +847,21 @@ describe("getGroupStats", () => {
     expect(res).toBeNull();
   });
 
+  // The escotista painel builds the "38/RS" identity from this query, not from
+  // groups.getMyGroup — so the fallback has to hold here too.
+  test("carries the group's numeral and região, null when there is none", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+
+    const before = await as(t, adminId).query(api.approvals.getGroupStats, {});
+    expect(before?.group.number).toBe("100");
+    expect(before?.group.regiao).toBeNull();
+
+    await t.run(async (ctx) => ctx.db.patch(groupId, { regiao: "RS" }));
+    const after = await as(t, adminId).query(api.approvals.getGroupStats, {});
+    expect(after?.group.regiao).toBe("RS");
+  });
+
   test("returns counts and exposes group.password for an admin", async () => {
     const t = convexTest(schema, modules);
     const { adminId, groupId } = await seedGroup(t);
@@ -949,6 +964,158 @@ describe("getGroupStats", () => {
     });
     const res = await as(t, banned).query(api.approvals.getGroupStats, {});
     expect(res).toBeNull();
+  });
+});
+
+// ===========================================================================
+// 9b. getGroupStats: a seção observada narrows the lista de jovens (#73)
+// ===========================================================================
+
+describe("getGroupStats: seção observada", () => {
+  /** Grupo with two seções of the same ramo and one escoteiro in each. */
+  async function seedTwoSections(t: ReturnType<typeof convexTest>) {
+    const { adminId, groupId } = await seedGroup(t);
+    const norte = await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Tropa Norte",
+      ramo: "escoteiro",
+    });
+    const sul = await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Tropa Sul",
+      ramo: "escoteiro",
+    });
+    const doNorte = await seedEscoteiro(t, groupId, "escoteiro");
+    const doSul = await seedEscoteiro(t, groupId, "escoteiro");
+    await as(t, adminId).mutation(api.groups.setMemberSection, {
+      userId: doNorte,
+      sectionId: norte,
+    });
+    await as(t, adminId).mutation(api.groups.setMemberSection, {
+      userId: doSul,
+      sectionId: sul,
+    });
+    return { adminId, groupId, norte, sul, doNorte, doSul };
+  }
+
+  test("with no seção observed the whole grupo is listed", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, doNorte, doSul } = await seedTwoSections(t);
+    const res = await as(t, adminId).query(api.approvals.getGroupStats, {});
+    expect(res?.observedSection).toBeNull();
+    expect(res?.escoteiroStats.map((s) => s._id).sort()).toEqual(
+      [doNorte, doSul].sort(),
+    );
+  });
+
+  test("observing a seção narrows the list and its counts to that seção", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, norte, doNorte, doSul } = await seedTwoSections(t);
+    await insertAction(t, doNorte, "pending");
+    await insertAction(t, doSul, "pending");
+
+    await as(t, adminId).mutation(api.groups.setObservedSection, {
+      sectionId: norte,
+    });
+    const res = await as(t, adminId).query(api.approvals.getGroupStats, {});
+    expect(res?.observedSection?.name).toBe("Tropa Norte");
+    expect(res?.escoteiroStats.map((s) => s._id)).toEqual([doNorte]);
+    expect(res?.escoteiroCount).toBe(1);
+    // Counts derived from the list follow it: only the observed seção's
+    // pendências are counted.
+    expect(res?.totalPending).toBe(1);
+    // Membership counts stay grupo-wide, like the ramo rule leaves them.
+    expect(res?.totalMembers).toBe(3);
+  });
+
+  // CONTEXT.md: an unplaced escoteiro falls back to plain ramo visibility, so
+  // a grupo mid-way through placing its escoteiros never loses sight of them.
+  test("an escoteiro with no seção stays visible under any observed seção", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId, norte } = await seedTwoSections(t);
+    const semSecao = await seedEscoteiro(t, groupId, "escoteiro");
+    await as(t, adminId).mutation(api.groups.setObservedSection, {
+      sectionId: norte,
+    });
+    const res = await as(t, adminId).query(api.approvals.getGroupStats, {});
+    expect(res?.escoteiroStats.map((s) => s._id)).toContain(semSecao);
+    expect(
+      res?.escoteiroStats.find((s) => s._id === semSecao)?.sectionId,
+    ).toBeNull();
+  });
+
+  // The picker is built from this list, so it has to answer exactly what
+  // setObservedSection would accept — otherwise the UI offers a seção the
+  // server then refuses.
+  test("observableSections offers a non-admin only their own ramos", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId, norte, sul } = await seedTwoSections(t);
+    const alcateia = await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Alcateia",
+      ramo: "lobinho",
+    });
+    const escotista = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      isAdmin: false,
+      membershipStatus: "approved",
+    });
+
+    const mine = await as(t, escotista).query(api.approvals.getGroupStats, {});
+    expect(mine?.observableSections.map((s) => s._id).sort()).toEqual(
+      [norte, sul].sort(),
+    );
+
+    const asAdmin = await as(t, adminId).query(api.approvals.getGroupStats, {});
+    expect(asAdmin?.observableSections.map((s) => s._id).sort()).toEqual(
+      [norte, sul, alcateia].sort(),
+    );
+  });
+
+  // Otherwise the picker would read "Todas as seções" while the list below it
+  // is still narrowed to a seção the escotista can no longer pick.
+  test("observableSections keeps the observed seção after the ramos change", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId, norte } = await seedTwoSections(t);
+    const escotista = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      isAdmin: false,
+      membershipStatus: "approved",
+    });
+    await as(t, escotista).mutation(api.groups.setObservedSection, {
+      sectionId: norte,
+    });
+    await as(t, adminId).mutation(api.groups.setMemberRamos, {
+      userId: escotista,
+      ramos: ["lobinho"],
+    });
+
+    const res = await as(t, escotista).query(api.approvals.getGroupStats, {});
+    expect(res?.observedSection?._id).toBe(norte);
+    expect(res?.observableSections.map((s) => s._id)).toEqual([norte]);
+  });
+
+  // A seção filter narrows what an escotista sees; it never widens it.
+  test("the ramo rule still applies inside the observed seção", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId, norte, doNorte } = await seedTwoSections(t);
+    const escotista = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      isAdmin: false,
+      membershipStatus: "approved",
+    });
+    // A lobinho with no seção: unplaced, but still outside the viewer's ramos.
+    const lobinho = await seedEscoteiro(t, groupId, "lobinho");
+
+    await as(t, escotista).mutation(api.groups.setObservedSection, {
+      sectionId: norte,
+    });
+    const res = await as(t, escotista).query(api.approvals.getGroupStats, {});
+    expect(res?.escoteiroStats.map((s) => s._id)).toEqual([doNorte]);
+    expect(res?.escoteiroStats.map((s) => s._id)).not.toContain(lobinho);
   });
 });
 

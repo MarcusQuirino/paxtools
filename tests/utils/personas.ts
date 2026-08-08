@@ -21,8 +21,15 @@
  * The `name` column mirrors SIM_SPECS and is what painel/search shows.
  *
  * KNOWN SHARED ROWS (not per-persona, still single-owner):
- *   - the test group row (name/ramoNames) → m17-group-rename.spec.ts.
+ *   - the test group row (name) → m17-group-rename.spec.ts.
  *     No other spec may assert on the group name.
+ *   - the group's seções (#72) → m21-secoes.spec.ts. The seed creates NONE, so
+ *     M21 creates its own and removes it in finally{}; no other spec may create
+ *     a seção or assert on the seções list. R7 asserts the group IDENTITY
+ *     (numeral/UF), which is a different field and safe to read.
+ *   - `observedSectionId` on the shared admin row → m21-secoes.spec.ts. It is
+ *     server-side state, so a leaked selection would silently filter the
+ *     escotista painel for every later spec using the admin login.
  *   - membership queue rows → each membership spec asserts only on its own
  *     personas' cards, never on exact queue counts.
  */
@@ -78,7 +85,8 @@ export const MANIFEST: readonly ManifestEntry[] = [
   { slug: "sim-troop-escoteiro-9", email: `sim-troop-escoteiro-9${SUFFIX}`, name: "Íris Campos",
     ownedBy: M("m06-plan-lifecycle.spec.ts"), notes: "seeded plano" },
   { slug: "sim-troop-escoteiro-10", email: `sim-troop-escoteiro-10${SUFFIX}`, name: "João Mendes",
-    ownedBy: null, notes: "level2 younger especialidade (R4)" },
+    ownedBy: M("m21-secoes.spec.ts"),
+    notes: "level2 younger especialidade (R4 reads it); M21 mutates ONLY sectionId, which no readonly spec asserts" },
   { slug: "sim-troop-escoteiro-15", email: `sim-troop-escoteiro-15${SUFFIX}`, name: "Otávio Freitas",
     ownedBy: null, notes: "18 blocos, IRR full — Lis de Ouro trophy (R2)" },
 
@@ -163,7 +171,7 @@ export const MANIFEST: readonly ManifestEntry[] = [
   // session file: every mutating spec that drives a shared login gets its
   // own captured session below. Readonly specs keep the base slugs (their
   // phase is short-lived and read-only, empirically unaffected).
-  ...(["m11", "m12", "m17", "m18", "m19", "m20"] as const).map((tag) => ({
+  ...(["m11", "m12", "m17", "m18", "m19", "m20", "m21"] as const).map((tag) => ({
     slug: `admin--${tag}`, email: `admin${SUFFIX}`, name: "admin",
     ownedBy: null, notes: `dedicated admin session for ${tag}`,
   })),
