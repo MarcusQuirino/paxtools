@@ -54,7 +54,7 @@ export function SectionsManager() {
   };
 
   return (
-    <section className="rounded-md border-2 border-black bg-card p-4 space-y-4 shadow-[3px_3px_0px_0px_#065f46]">
+    <section className="rounded-md border-2 border-black bg-card p-4 space-y-4">
       <h2 className="text-sm font-black uppercase flex items-center gap-2">
         <Users className="size-4" />
         Seções

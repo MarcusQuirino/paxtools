@@ -16,7 +16,7 @@ const { DesignPreviewProvider, Button } = window.PaxTools;
 </DesignPreviewProvider>
 ```
 
-`PlanNav`, `SpecialtySection`, `BlocoCard` and `EixoSection` read TanStack
+`EscoteiroTabBar`, `SpecialtySection`, `BlocoCard` and `EixoSection` read TanStack
 Router context (`useLocation`, `Link`). Outside the provider they throw and the
 whole subtree renders nothing. It is harmless for components that don't need
 it, so wrap once at the root and forget about it.

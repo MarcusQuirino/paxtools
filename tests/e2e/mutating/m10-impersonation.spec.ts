@@ -128,6 +128,9 @@ test("escotista impersonation auto-approves an ação, then removes it", async (
     await expect(
       veraPage.getByText(DANTE_NAME, { exact: true }),
     ).toBeVisible({ timeout: 10_000 });
+    // The impersonation view reuses the escoteiro Dashboard but never the
+    // escoteiro tab bar — the escotista stays in their own shell.
+    await expect(veraPage.getByTestId("escoteiro-tab-bar")).toHaveCount(0);
   };
   const expandVera = () =>
     veraPage.getByRole("button", { name: BLOCO_TRIGGER }).first().click();
