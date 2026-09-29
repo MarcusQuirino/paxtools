@@ -21,7 +21,7 @@ Always use the `gh` CLI to interface with GitHub (PRs, issues, releases, etc.). 
 1. Create a new branch with a descriptive name.
 2. Commit the changes to that branch.
 3. Open a PR targeting `master` using `gh pr create`.
-4. Verify the change on the PR's Vercel preview — the `test-preview` skill; process in `docs/agents/preview-testing.md`.
+4. Verify the change on the PR's Vercel preview — `docs/agents/preview-testing.md`.
 
 ## Quality Checks
 
@@ -30,6 +30,10 @@ After any code changes, always run:
 2. `bun run lint` — check for lint errors
 
 Fix any failures before considering the task done.
+
+## Running the app
+
+To launch, sign in as a test persona, or drive the app in a browser locally: `docs/agents/running-locally.md` (hydration delay, test-auth setup, persona catalogue).
 
 ## Changesets
 

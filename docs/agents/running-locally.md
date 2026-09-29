@@ -1,9 +1,4 @@
----
-name: run-app
-description: Launch and drive the Paxtools app locally — run, start, or screenshot it, sign in as a test persona, or confirm a change works in the real UI rather than only in tests.
----
-
-# Running Paxtools
+# Running Paxtools locally
 
 Vite frontend on port 3000 plus a Convex backend, launched together by one
 script. Everything below is the part the environment does not confess —
