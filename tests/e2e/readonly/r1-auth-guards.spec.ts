@@ -159,7 +159,7 @@ escotistaTest.describe("escotista on escoteiro surface", () => {
       // contract this test locks: the escoteiro dashboard never renders.
       await expect(page).toHaveURL(/\/(signin|escotista)$/, { timeout: 15_000 });
       await expect(page.getByText("ETAPA ATUAL")).toHaveCount(0);
-      await expect(page.getByRole("link", { name: "Tudo" })).toHaveCount(0);
+      await expect(page.getByTestId("escoteiro-tab-bar")).toHaveCount(0);
     });
   }
 });

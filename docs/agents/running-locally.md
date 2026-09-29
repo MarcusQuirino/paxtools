@@ -92,6 +92,6 @@ If launch reports a missing executable, `bunx playwright install chromium`.
 ## Verifying
 
 Launching alone proves the entrypoint resolves. Drive to something a user would
-see: sign in, expand a bloco on the home view, switch to the **Esp.** tab, and
+see: sign in, expand a bloco on the home view, switch to the **Especialidades** tab, and
 read the console for errors. Look at the screenshot — a blank frame means you
 screenshotted too early, not that the app is broken.

@@ -28,7 +28,7 @@ export function OverallProgress({
         return (
           <div
             key={eixo.id}
-            className="rounded-md border-2 border-black bg-card p-3 space-y-2 shadow-[3px_3px_0px_0px_#000]"
+            className="rounded-md border-2 border-black bg-card p-3 space-y-2"
             style={{ borderLeftWidth: 4, borderLeftColor: eixo.color }}
           >
             <p className="text-xs font-black uppercase truncate">{eixo.name}</p>
