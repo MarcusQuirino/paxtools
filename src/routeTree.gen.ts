@@ -9,43 +9,23 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SigninRouteImport } from './routes/signin'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as PlanRouteImport } from './routes/plan'
-import { Route as OnboardingRouteImport } from './routes/onboarding'
-import { Route as EspecialidadesRouteImport } from './routes/especialidades'
-import { Route as EscotistaRouteRouteImport } from './routes/escotista/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EscotistaRouteRouteImport } from './routes/escotista/route'
+import { Route as EspecialidadesRouteImport } from './routes/especialidades'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as PlanRouteImport } from './routes/plan'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SigninRouteImport } from './routes/signin'
 import { Route as EscotistaIndexRouteImport } from './routes/escotista/index'
-import { Route as EscotistaTimelineRouteImport } from './routes/escotista/timeline'
-import { Route as EscotistaStatsRouteImport } from './routes/escotista/stats'
-import { Route as EscotistaPendingRouteImport } from './routes/escotista/pending'
 import { Route as EscotistaAdminRouteImport } from './routes/escotista/admin'
+import { Route as EscotistaPendingRouteImport } from './routes/escotista/pending'
+import { Route as EscotistaStatsRouteImport } from './routes/escotista/stats'
+import { Route as EscotistaTimelineRouteImport } from './routes/escotista/timeline'
 import { Route as EscotistaEscoteiroEscoteiroIdRouteImport } from './routes/escotista/escoteiro.$escoteiroId'
 
-const SigninRoute = SigninRouteImport.update({
-  id: '/signin',
-  path: '/signin',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PlanRoute = PlanRouteImport.update({
-  id: '/plan',
-  path: '/plan',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OnboardingRoute = OnboardingRouteImport.update({
-  id: '/onboarding',
-  path: '/onboarding',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EspecialidadesRoute = EspecialidadesRouteImport.update({
-  id: '/especialidades',
-  path: '/especialidades',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EscotistaRouteRoute = EscotistaRouteRouteImport.update({
@@ -53,9 +33,29 @@ const EscotistaRouteRoute = EscotistaRouteRouteImport.update({
   path: '/escotista',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const EspecialidadesRoute = EspecialidadesRouteImport.update({
+  id: '/especialidades',
+  path: '/especialidades',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlanRoute = PlanRouteImport.update({
+  id: '/plan',
+  path: '/plan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SigninRoute = SigninRouteImport.update({
+  id: '/signin',
+  path: '/signin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EscotistaIndexRoute = EscotistaIndexRouteImport.update({
@@ -63,14 +63,9 @@ const EscotistaIndexRoute = EscotistaIndexRouteImport.update({
   path: '/',
   getParentRoute: () => EscotistaRouteRoute,
 } as any)
-const EscotistaTimelineRoute = EscotistaTimelineRouteImport.update({
-  id: '/timeline',
-  path: '/timeline',
-  getParentRoute: () => EscotistaRouteRoute,
-} as any)
-const EscotistaStatsRoute = EscotistaStatsRouteImport.update({
-  id: '/stats',
-  path: '/stats',
+const EscotistaAdminRoute = EscotistaAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => EscotistaRouteRoute,
 } as any)
 const EscotistaPendingRoute = EscotistaPendingRouteImport.update({
@@ -78,9 +73,14 @@ const EscotistaPendingRoute = EscotistaPendingRouteImport.update({
   path: '/pending',
   getParentRoute: () => EscotistaRouteRoute,
 } as any)
-const EscotistaAdminRoute = EscotistaAdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
+const EscotistaStatsRoute = EscotistaStatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
+  getParentRoute: () => EscotistaRouteRoute,
+} as any)
+const EscotistaTimelineRoute = EscotistaTimelineRouteImport.update({
+  id: '/timeline',
+  path: '/timeline',
   getParentRoute: () => EscotistaRouteRoute,
 } as any)
 const EscotistaEscoteiroEscoteiroIdRoute =
@@ -194,39 +194,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/signin': {
-      id: '/signin'
-      path: '/signin'
-      fullPath: '/signin'
-      preLoaderRoute: typeof SigninRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/plan': {
-      id: '/plan'
-      path: '/plan'
-      fullPath: '/plan'
-      preLoaderRoute: typeof PlanRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/onboarding': {
-      id: '/onboarding'
-      path: '/onboarding'
-      fullPath: '/onboarding'
-      preLoaderRoute: typeof OnboardingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/especialidades': {
-      id: '/especialidades'
-      path: '/especialidades'
-      fullPath: '/especialidades'
-      preLoaderRoute: typeof EspecialidadesRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/escotista': {
@@ -236,11 +208,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EscotistaRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/especialidades': {
+      id: '/especialidades'
+      path: '/especialidades'
+      fullPath: '/especialidades'
+      preLoaderRoute: typeof EspecialidadesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/plan': {
+      id: '/plan'
+      path: '/plan'
+      fullPath: '/plan'
+      preLoaderRoute: typeof PlanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signin': {
+      id: '/signin'
+      path: '/signin'
+      fullPath: '/signin'
+      preLoaderRoute: typeof SigninRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/escotista/': {
@@ -250,18 +250,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EscotistaIndexRouteImport
       parentRoute: typeof EscotistaRouteRoute
     }
-    '/escotista/timeline': {
-      id: '/escotista/timeline'
-      path: '/timeline'
-      fullPath: '/escotista/timeline'
-      preLoaderRoute: typeof EscotistaTimelineRouteImport
-      parentRoute: typeof EscotistaRouteRoute
-    }
-    '/escotista/stats': {
-      id: '/escotista/stats'
-      path: '/stats'
-      fullPath: '/escotista/stats'
-      preLoaderRoute: typeof EscotistaStatsRouteImport
+    '/escotista/admin': {
+      id: '/escotista/admin'
+      path: '/admin'
+      fullPath: '/escotista/admin'
+      preLoaderRoute: typeof EscotistaAdminRouteImport
       parentRoute: typeof EscotistaRouteRoute
     }
     '/escotista/pending': {
@@ -271,11 +264,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EscotistaPendingRouteImport
       parentRoute: typeof EscotistaRouteRoute
     }
-    '/escotista/admin': {
-      id: '/escotista/admin'
-      path: '/admin'
-      fullPath: '/escotista/admin'
-      preLoaderRoute: typeof EscotistaAdminRouteImport
+    '/escotista/stats': {
+      id: '/escotista/stats'
+      path: '/stats'
+      fullPath: '/escotista/stats'
+      preLoaderRoute: typeof EscotistaStatsRouteImport
+      parentRoute: typeof EscotistaRouteRoute
+    }
+    '/escotista/timeline': {
+      id: '/escotista/timeline'
+      path: '/timeline'
+      fullPath: '/escotista/timeline'
+      preLoaderRoute: typeof EscotistaTimelineRouteImport
       parentRoute: typeof EscotistaRouteRoute
     }
     '/escotista/escoteiro/$escoteiroId': {
