@@ -14,6 +14,7 @@ import {
   assertCanActOnEscoteiro,
   filterVisibleEscoteiros,
   tryResolveRamoViewer,
+  type RamoViewer,
 } from "./lib/ramoVisibility";
 import {
   snapshotProgression,
@@ -22,6 +23,20 @@ import {
   type LevelUpToast,
 } from "./lib/progression";
 import { logRamoEvent } from "./lib/events";
+import {
+  filterToObservedSection,
+  resolveObservedSection,
+} from "./lib/sections";
+import {
+  compareByProximity,
+  olderProgress,
+  youngerProgress,
+  PROJECT_STEPS,
+  type ProjectStep as RosterStep,
+  type StepStatus,
+} from "./lib/specialtyProgress";
+import { YOUNGER_SPECIALTY_BY_ID } from "../src/data/specialty-data/younger";
+import { OLDER_SPECIALTY_BY_ID } from "../src/data/specialty-data/older";
 
 // ramoGroup derivation lives in ./lib/progression (shared with snapshotProgression).
 
@@ -505,7 +520,8 @@ async function otherStepsAllApproved(
  * - If the row is already approved → throws (escoteiro cannot overwrite an
  *   approved step).
  * - An escotista submitting on behalf of a target (targetUserId) writes the row
- *   as approved.
+ *   as approved (logged + level-up cascade), but never over the target's own
+ *   pending relato — that throws; it is resolved with approve/reject.
  */
 export const submitSpecialtyStep = mutation({
   args: {
@@ -546,6 +562,16 @@ export const submitSpecialtyStep = mutation({
       args.step,
     );
 
+    // An escotista registering on a scout's behalf never overwrites the
+    // scout's own pending relato — that is resolved with approve/reject.
+    if (args.targetUserId && existing && existing.status === "pending") {
+      throw new Error("Etapa enviada pelo escoteiro — use Aprovar ou Rejeitar");
+    }
+    const before =
+      args.targetUserId && effectiveUser
+        ? await snapshotProgression(ctx, effectiveUserId)
+        : null;
+
     if (existing) {
       // An approved step is locked to the escoteiro; only escotista-on-behalf overwrites.
       if (existing.status === "approved" && !args.targetUserId) {
@@ -572,10 +598,19 @@ export const submitSpecialtyStep = mutation({
       });
     }
 
-    // The earned cascade (all three steps approved → specialty earned → level-up
-    // toasts) runs in approveSpecialtyStep, where a pre-write snapshot is
-    // available to diff against. Direct escotista-on-behalf writes skip toasts
-    // (rare path).
+    // An escotista-on-behalf write is an approval: audit it and run the earned
+    // cascade (a third approved etapa earns the specialty → level-up toasts),
+    // like approveSpecialtyStep. An escoteiro's own submission stays pending,
+    // so it can never earn anything here.
+    if (before && effectiveUser) {
+      await logRamoEvent(ctx, {
+        type: "approval",
+        actor: caller,
+        subject: effectiveUser,
+        summary: `Registrou etapa "${args.step}" da especialidade: ${args.specialtyId}`,
+      });
+      return detectLevelUps(ctx, caller, effectiveUser, before);
+    }
     return [];
   },
 });
@@ -642,5 +677,464 @@ export const rejectSpecialtyStep = mutation({
       summary: `Rejeitou etapa "${doc.step}" da especialidade: ${doc.specialtyId}`,
     });
     await ctx.db.delete(args.reportId);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Escotista especialidades tab — catalog signals, per-specialty roster, and an
+// explicit per-escoteiro item mark.
+//
+// Scope: every read here is limited to the escoteiros the caller sees —
+// visibilidade de ramo first, then the seção observada narrows it (never
+// widens) — and to those whose CURRENT ramo is in the requested ramoGroup
+// (especialidades carry over only within a ramoGroup; CONTEXT.md). Counts are
+// always of that visible set, never of the whole grupo.
+// ---------------------------------------------------------------------------
+
+const ramoGroupArg = v.union(v.literal("younger"), v.literal("older"));
+type RamoGroup = "younger" | "older";
+
+/** Upper bound on escoteiros per grupo read at once (same as the pending list). */
+const MAX_ESCOTEIROS = 500;
+
+/**
+ * The escoteiros an aggregate especialidade view may count: visible to the
+ * viewer (visibilidade de ramo), narrowed to the observed seção, and currently
+ * in `ramoGroup`.
+ */
+async function visibleEscoteirosInRamoGroup(
+  ctx: QueryCtx,
+  viewer: RamoViewer,
+  ramoGroup: RamoGroup,
+): Promise<{
+  escoteiros: Doc<"users">[];
+  observedSection: Doc<"sections"> | null;
+}> {
+  const all = await ctx.db
+    .query("users")
+    .withIndex("by_groupId_and_role", (q) =>
+      q.eq("groupId", viewer.groupId).eq("role", "escoteiro"),
+    )
+    .take(MAX_ESCOTEIROS);
+  const observedSection = await resolveObservedSection(
+    ctx,
+    viewer.user,
+    viewer.groupId,
+  );
+  const escoteiros = filterToObservedSection(
+    observedSection?._id ?? null,
+    filterVisibleEscoteiros(viewer, all),
+  ).filter((e) => ramoGroupForRamo(e.ramo) === ramoGroup);
+  return { escoteiros, observedSection };
+}
+
+/** The ramoGroups a viewer accompanies (an admin, both). */
+function viewerRamoGroups(viewer: RamoViewer): RamoGroup[] {
+  if (viewer.isAdmin) return ["younger", "older"];
+  const groups = new Set(viewer.ramos.map((r) => ramoGroupForRamo(r)));
+  return (["younger", "older"] as const).filter((g) => groups.has(g));
+}
+
+type PersonRef = {
+  _id: Id<"users">;
+  name: string | null;
+  image: string | null;
+};
+
+function personRef(u: Doc<"users">): PersonRef {
+  return { _id: u._id, name: u.name ?? null, image: u.image ?? null };
+}
+
+type Standing = { person: PersonRef; approvedCount: number; pendingCount: number };
+
+function byProximity(a: Standing, b: Standing): number {
+  return compareByProximity(
+    { ...a, name: a.person.name },
+    { ...b, name: b.person.name },
+  );
+}
+
+function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
+  const m = new Map<string, T[]>();
+  for (const r of rows) {
+    const k = key(r);
+    const arr = m.get(k);
+    if (arr) arr.push(r);
+    else m.set(k, [r]);
+  }
+  return m;
+}
+
+/** Avatars shown per specialty row in the catalog. */
+const MAX_AVATARS = 4;
+
+/**
+ * Catalog signals for the escotista Especialidades tab: per especialidade with
+ * any activity in the visible set, how many conquistaram / are em andamento,
+ * plus an avatar stack (closest to conquering first) and the tab's KPIs.
+ * Especialidades nobody has touched are absent — the client lists them from
+ * the static catalog.
+ *
+ * Younger: conquistou = level ≥ 1; em andamento = any item row (approved or
+ * pending) short of level 1. Older: conquistou = all three etapas approved;
+ * em andamento = any etapa row short of that.
+ *
+ * Silent-empty (null) for a caller who is not a valid escotista viewer.
+ */
+export const getGroupSpecialtySummary = query({
+  args: { ramoGroup: ramoGroupArg },
+  handler: async (ctx, args) => {
+    const viewer = await tryResolveRamoViewer(ctx);
+    if (!viewer) return null;
+
+    const { escoteiros, observedSection } = await visibleEscoteirosInRamoGroup(
+      ctx,
+      viewer,
+      args.ramoGroup,
+    );
+
+    type Entry = { earned: Standing[]; inProgress: Standing[]; pendingCount: number };
+    const bySpecialty = new Map<string, Entry>();
+    const record = (specialtyId: string, s: Standing, earned: boolean) => {
+      let e = bySpecialty.get(specialtyId);
+      if (!e) {
+        e = { earned: [], inProgress: [], pendingCount: 0 };
+        bySpecialty.set(specialtyId, e);
+      }
+      (earned ? e.earned : e.inProgress).push(s);
+      e.pendingCount += s.pendingCount;
+    };
+
+    for (const escoteiro of escoteiros) {
+      const person = personRef(escoteiro);
+      if (args.ramoGroup === "younger") {
+        const rows = await ctx.db
+          .query("specialtyItemCompletions")
+          .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
+            q.eq("userId", escoteiro._id).eq("ramoGroup", "younger"),
+          )
+          .take(2000);
+        for (const [specialtyId, specialtyRows] of groupBy(
+          rows,
+          (r) => r.specialtyId,
+        )) {
+          const specialty = YOUNGER_SPECIALTY_BY_ID.get(specialtyId);
+          if (!specialty) continue;
+          const p = youngerProgress(specialtyRows, specialty.items.length);
+          if (p.approvedCount === 0 && p.pendingCount === 0) continue;
+          record(
+            specialtyId,
+            { person, approvedCount: p.approvedCount, pendingCount: p.pendingCount },
+            p.level >= 1,
+          );
+        }
+      } else {
+        const rows = await ctx.db
+          .query("specialtyProjectReports")
+          .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
+            q.eq("userId", escoteiro._id).eq("ramoGroup", "older"),
+          )
+          .take(2000);
+        for (const [specialtyId, specialtyRows] of groupBy(
+          rows,
+          (r) => r.specialtyId,
+        )) {
+          if (!OLDER_SPECIALTY_BY_ID.has(specialtyId)) continue;
+          const p = olderProgress(specialtyRows);
+          if (p.approvedCount === 0 && p.pendingCount === 0) continue;
+          record(
+            specialtyId,
+            { person, approvedCount: p.approvedCount, pendingCount: p.pendingCount },
+            p.earned,
+          );
+        }
+      }
+    }
+
+    let totalEarned = 0;
+    let totalInProgress = 0;
+    const specialties = [...bySpecialty].map(([specialtyId, e]) => {
+      totalEarned += e.earned.length;
+      totalInProgress += e.inProgress.length;
+      const ordered = [
+        ...[...e.earned].sort(byProximity),
+        ...[...e.inProgress].sort(byProximity),
+      ];
+      return {
+        specialtyId,
+        earnedCount: e.earned.length,
+        inProgressCount: e.inProgress.length,
+        pendingCount: e.pendingCount,
+        avatars: ordered.slice(0, MAX_AVATARS).map((s) => s.person),
+      };
+    });
+    // Most activity first; ties by conquered count, then id (stable).
+    specialties.sort(
+      (a, b) =>
+        b.earnedCount + b.inProgressCount - (a.earnedCount + a.inProgressCount) ||
+        b.earnedCount - a.earnedCount ||
+        a.specialtyId.localeCompare(b.specialtyId),
+    );
+
+    return {
+      ramoGroup: args.ramoGroup,
+      ramoGroups: viewerRamoGroups(viewer),
+      escoteiroCount: escoteiros.length,
+      observedSectionName: observedSection?.name ?? null,
+      totals: { earned: totalEarned, inProgress: totalInProgress },
+      specialties,
+    };
+  },
+});
+
+/**
+ * Detail (consulta) for one especialidade across the visible set.
+ *
+ * Younger: per item "N têm" (approved) and pending counts; "Quem tem" = every
+ * visible escoteiro with any row, closest to conquering first.
+ * Older: per etapa approved/pending counts; "Quem tem" with each etapa's
+ * status; and the pending relatos, so the escotista can approve/reject inline
+ * (approveSpecialtyStep / rejectSpecialtyStep, which re-check access).
+ *
+ * Read-only. Silent-empty (null) for a non-viewer or an id outside the
+ * ramoGroup's catalog.
+ */
+export const getSpecialtyRoster = query({
+  args: { specialtyId: v.string(), ramoGroup: ramoGroupArg },
+  handler: async (ctx, args) => {
+    const viewer = await tryResolveRamoViewer(ctx);
+    if (!viewer) return null;
+
+    const { escoteiros, observedSection } = await visibleEscoteirosInRamoGroup(
+      ctx,
+      viewer,
+      args.ramoGroup,
+    );
+    const base = {
+      specialtyId: args.specialtyId,
+      escoteiroCount: escoteiros.length,
+      observedSectionName: observedSection?.name ?? null,
+    };
+
+    if (args.ramoGroup === "younger") {
+      const specialty = YOUNGER_SPECIALTY_BY_ID.get(args.specialtyId);
+      if (!specialty) return null;
+      const total = specialty.items.length;
+      const items = specialty.items.map(() => ({
+        approvedCount: 0,
+        pendingCount: 0,
+      }));
+      const people: (PersonRef & {
+        approvedCount: number;
+        pendingCount: number;
+        level: 0 | 1 | 2;
+      })[] = [];
+
+      for (const escoteiro of escoteiros) {
+        const rows = await ctx.db
+          .query("specialtyItemCompletions")
+          .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
+            q
+              .eq("userId", escoteiro._id)
+              .eq("ramoGroup", "younger")
+              .eq("specialtyId", args.specialtyId),
+          )
+          .take(200);
+        const p = youngerProgress(rows, total);
+        if (p.approvedCount === 0 && p.pendingCount === 0) continue;
+        for (const i of p.approvedIndexes) items[i]!.approvedCount++;
+        for (const i of p.pendingIndexes) items[i]!.pendingCount++;
+        people.push({
+          ...personRef(escoteiro),
+          approvedCount: p.approvedCount,
+          pendingCount: p.pendingCount,
+          level: p.level,
+        });
+      }
+      people.sort(compareByProximity);
+      return {
+        ...base,
+        kind: "younger" as const,
+        earnedCount: people.filter((p) => p.level >= 1).length,
+        inProgressCount: people.filter((p) => p.level === 0).length,
+        items,
+        people,
+      };
+    }
+
+    if (!OLDER_SPECIALTY_BY_ID.has(args.specialtyId)) return null;
+    const steps: Record<
+      RosterStep,
+      { approvedCount: number; pendingCount: number }
+    > = {
+      conhecer: { approvedCount: 0, pendingCount: 0 },
+      fazer: { approvedCount: 0, pendingCount: 0 },
+      compartilhar: { approvedCount: 0, pendingCount: 0 },
+    };
+    const people: (PersonRef & {
+      approvedCount: number;
+      pendingCount: number;
+      steps: Record<RosterStep, StepStatus>;
+      earned: boolean;
+    })[] = [];
+    const pendingReports: {
+      reportId: Id<"specialtyProjectReports">;
+      escoteiroId: Id<"users">;
+      escoteiroName: string | null;
+      escoteiroImage: string | null;
+      step: RosterStep;
+      text: string;
+      completedAt: number;
+    }[] = [];
+
+    for (const escoteiro of escoteiros) {
+      const rows = await ctx.db
+        .query("specialtyProjectReports")
+        .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
+          q
+            .eq("userId", escoteiro._id)
+            .eq("ramoGroup", "older")
+            .eq("specialtyId", args.specialtyId),
+        )
+        .take(10);
+      const p = olderProgress(rows);
+      if (p.approvedCount === 0 && p.pendingCount === 0) continue;
+      for (const s of PROJECT_STEPS) {
+        if (p.steps[s] === "approved") steps[s].approvedCount++;
+        if (p.steps[s] === "pending") steps[s].pendingCount++;
+      }
+      for (const r of rows) {
+        if (r.status !== "pending") continue;
+        pendingReports.push({
+          reportId: r._id,
+          escoteiroId: escoteiro._id,
+          escoteiroName: escoteiro.name ?? null,
+          escoteiroImage: escoteiro.image ?? null,
+          step: r.step,
+          text: r.text,
+          completedAt: r.completedAt,
+        });
+      }
+      people.push({
+        ...personRef(escoteiro),
+        approvedCount: p.approvedCount,
+        pendingCount: p.pendingCount,
+        steps: p.steps,
+        earned: p.earned,
+      });
+    }
+    people.sort(compareByProximity);
+    // Oldest submission first — it has waited longest.
+    pendingReports.sort((a, b) => a.completedAt - b.completedAt);
+    return {
+      ...base,
+      kind: "older" as const,
+      earnedCount: people.filter((p) => p.earned).length,
+      inProgressCount: people.filter((p) => !p.earned).length,
+      steps,
+      people,
+      pendingReports,
+    };
+  },
+});
+
+/**
+ * Explicit escotista mark on one younger especialidade item of one escoteiro
+ * (the actionable ficha). Unlike toggleSpecialtyItem — which, called on a
+ * PENDING row, deletes the escoteiro's submission — this states the outcome:
+ *
+ * - approved: true  → no row: insert approved; pending row: promote it to
+ *   approved (keeps the escoteiro's completedAt); approved row: no-op.
+ * - approved: false → approved row: delete it (unmark — may drop a level or
+ *   un-complete a bloco, same as unmarking an ação); no row: no-op; pending
+ *   row: throws — a submission is resolved with Aprovar / Rejeitar
+ *   (rejectSpecialtyItem), never silently deleted by an unmark.
+ *
+ * Approver + time are recorded; approvals log a ramo event and run the
+ * level-up cascade like approveSpecialtyItem. Access = assertCanActOnEscoteiro
+ * (visibilidade de ramo) — the same guard every approval mutation uses.
+ */
+export const setSpecialtyItemApproved = mutation({
+  args: {
+    escoteiroId: v.id("users"),
+    specialtyId: v.string(),
+    itemIndex: v.number(),
+    approved: v.boolean(),
+  },
+  handler: async (ctx, args): Promise<LevelUpToast[]> => {
+    const { caller, target } = await assertCanActOnEscoteiro(
+      ctx,
+      args.escoteiroId,
+    );
+    if (target.role !== "escoteiro") {
+      throw new Error("Apenas escoteiros têm especialidades");
+    }
+    if (ramoGroupForRamo(target.ramo) !== "younger") {
+      throw new Error(
+        "Especialidades de sênior e pioneiro são registradas por etapas",
+      );
+    }
+    const specialty = YOUNGER_SPECIALTY_BY_ID.get(args.specialtyId);
+    if (!specialty) throw new Error("Especialidade não encontrada");
+    if (
+      !Number.isInteger(args.itemIndex) ||
+      args.itemIndex < 0 ||
+      args.itemIndex >= specialty.items.length
+    ) {
+      throw new Error("Item inválido");
+    }
+
+    const rows = await ctx.db
+      .query("specialtyItemCompletions")
+      .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
+        q
+          .eq("userId", target._id)
+          .eq("ramoGroup", "younger")
+          .eq("specialtyId", args.specialtyId),
+      )
+      .take(200);
+    const existing = rows.find((r) => r.itemIndex === args.itemIndex) ?? null;
+    const existingApproved = !!existing && existing.status !== "pending";
+
+    if (!args.approved) {
+      if (!existing) return [];
+      if (!existingApproved) {
+        throw new Error("Item enviado pelo escoteiro — use Aprovar ou Rejeitar");
+      }
+      // Unmark: same as unmarking an ação — no audit line, no warning; a
+      // dropped level or bloco simply drops.
+      await ctx.db.delete(existing._id);
+      return [];
+    }
+
+    if (existingApproved) return [];
+
+    const now = Date.now();
+    const before = await snapshotProgression(ctx, target._id);
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        status: "approved",
+        approvedBy: caller._id,
+        approvedAt: now,
+      });
+    } else {
+      await ctx.db.insert("specialtyItemCompletions", {
+        userId: target._id,
+        ramoGroup: "younger",
+        specialtyId: args.specialtyId,
+        itemIndex: args.itemIndex,
+        completedAt: now,
+        status: "approved",
+        approvedBy: caller._id,
+        approvedAt: now,
+      });
+    }
+    await logRamoEvent(ctx, {
+      type: "approval",
+      actor: caller,
+      subject: target,
+      summary: `Aprovou item de especialidade: ${args.specialtyId}[${args.itemIndex}]`,
+    });
+    return detectLevelUps(ctx, caller, target, before);
   },
 });

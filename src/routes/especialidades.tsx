@@ -29,6 +29,7 @@ import {
   type ProjectStep as Step,
 } from "@/data/specialty-data/older";
 import { getSpecialtyLevel } from "@/lib/completion-logic";
+import { EscotistaFicha } from "@/components/escotista/especialidades/ficha";
 
 // ---------------------------------------------------------------------------
 // Deep-link helpers (#44)
@@ -484,10 +485,11 @@ function EspecialidadesPage() {
 }
 
 /**
- * Escotista read-only view of a scout's especialidades (#53). The scout's ramo
- * (resolved via the visibility-scoped getGroupMembers) decides younger vs older
- * UI. Data comes from the visibility-checked per-escoteiro queries; the backend
- * returns [] when the viewer lacks ramo visibility, so no data can leak here.
+ * Escotista view of a scout's especialidades (#53) — the actionable ficha
+ * (EscotistaFicha): tap marks/unmarks items, pending submissions get Aprovar /
+ * Rejeitar, older etapas can be registered on the scout's behalf. The scout's
+ * ramo (visibility-scoped getGroupMembers) picks younger vs older; every write
+ * re-checks visibilidade de ramo server-side.
  */
 function EscotistaEspecialidadesContent({
   escoteiroId,
@@ -496,26 +498,7 @@ function EscotistaEspecialidadesContent({
   escoteiroId: Id<"users">;
   highlightId?: string;
 }) {
-  const { data: members } = useSuspenseQuery(
-    convexQuery(api.groups.getGroupMembers, {}),
-  );
-  const ramo = members.find((m) => m._id === escoteiroId)?.ramo;
-
-  if (ramo === "senior" || ramo === "pioneiro") {
-    return (
-      <OlderEscoteiroContent
-        highlightId={highlightId}
-        escoteiroId={escoteiroId}
-      />
-    );
-  }
-
-  return (
-    <YoungerEscoteiroContent
-      highlightId={highlightId}
-      escoteiroId={escoteiroId}
-    />
-  );
+  return <EscotistaFicha escoteiroId={escoteiroId} specialtyId={highlightId} />;
 }
 
 // Self-service fetcher: the escoteiro's own items (editable).
@@ -529,23 +512,6 @@ function YoungerEspecialidadesContent({
   );
   return (
     <YoungerEspecialidadesView items={myItems} highlightId={highlightId} />
-  );
-}
-
-// Escotista fetcher (#53): a scout's items via the visibility-checked query,
-// rendered read-only.
-function YoungerEscoteiroContent({
-  highlightId,
-  escoteiroId,
-}: {
-  highlightId?: string;
-  escoteiroId: Id<"users">;
-}) {
-  const { data: items } = useSuspenseQuery(
-    convexQuery(api.specialties.getSpecialtyItemsForEscoteiro, { escoteiroId }),
-  );
-  return (
-    <YoungerEspecialidadesView items={items} highlightId={highlightId} readOnly />
   );
 }
 
@@ -896,29 +862,6 @@ function OlderEspecialidadesContent({ highlightId }: { highlightId?: string }) {
   );
   return (
     <OlderEspecialidadesView reports={myReports} highlightId={highlightId} />
-  );
-}
-
-// Escotista fetcher (#53): a scout's reports via the visibility-checked query,
-// rendered read-only.
-function OlderEscoteiroContent({
-  highlightId,
-  escoteiroId,
-}: {
-  highlightId?: string;
-  escoteiroId: Id<"users">;
-}) {
-  const { data: reports } = useSuspenseQuery(
-    convexQuery(api.specialties.getSpecialtyReportsForEscoteiro, {
-      escoteiroId,
-    }),
-  );
-  return (
-    <OlderEspecialidadesView
-      reports={reports}
-      highlightId={highlightId}
-      readOnly
-    />
   );
 }
 

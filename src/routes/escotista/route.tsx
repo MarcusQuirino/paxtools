@@ -22,6 +22,7 @@ import {
   MoreHorizontal,
   Settings,
   BarChart3,
+  Award,
 } from "lucide-react";
 import {
   Sheet,
@@ -44,7 +45,12 @@ type NavItem =
 const NAV_ITEMS: NavItem[] = [
   { kind: "link", to: "/escotista", label: "Painel", icon: LayoutDashboard, exact: true },
   { kind: "link", to: "/escotista/pending", label: "Pendentes", icon: Clock },
-  { kind: "link", to: "/escotista/stats", label: "Stats", icon: BarChart3 },
+  {
+    kind: "link",
+    to: "/escotista/especialidades",
+    label: "Especialidades",
+    icon: Award,
+  },
   { kind: "sheet", label: "Mais", icon: MoreHorizontal },
 ];
 
@@ -57,6 +63,7 @@ type SecondaryItem = {
 
 // Destinations shown inside the "Mais" sheet.
 const SECONDARY_ITEMS: SecondaryItem[] = [
+  { to: "/escotista/stats", label: "Stats", icon: BarChart3 },
   { to: "/escotista/timeline", label: "Histórico", icon: ScrollText },
   { to: "/escotista/admin", label: "Admin", icon: Shield, adminOnly: true },
   { to: "/settings", label: "Ajustes", icon: Settings },
@@ -139,9 +146,9 @@ function EscotistaLayout() {
 }
 
 const PRIMARY_INACTIVE =
-  "flex flex-1 flex-col items-center justify-center gap-0.5 rounded-md py-2 text-xs font-bold text-muted-foreground transition-all hover:bg-white/50 hover:text-foreground";
+  "flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 py-2 text-[11px] font-extrabold text-muted-foreground transition-all hover:bg-white/50 hover:text-foreground";
 const PRIMARY_ACTIVE =
-  "flex flex-1 flex-col items-center justify-center gap-0.5 rounded-md border-2 border-black bg-primary py-2 text-xs font-bold text-white shadow-[2px_2px_0px_0px_#000] transition-all";
+  "flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-md border-2 border-black bg-primary px-0.5 py-2 text-[11px] font-extrabold text-white shadow-[2px_2px_0px_0px_#000] transition-all";
 
 function EscotistaBottomNav({ isAdmin }: { isAdmin: boolean }) {
   const [sheetOpen, setSheetOpen] = useState(false);
