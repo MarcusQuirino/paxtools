@@ -1,4 +1,5 @@
 import type { Eixo, Action } from "../types";
+import { EIXO_COLOR_BY_ID } from "../eixo-colors";
 
 const RAMO = "escoteiro";
 
@@ -17,8 +18,8 @@ export const EIXOS_ESCOTEIRO: Eixo[] = [
   {
     id: "habilidades-para-a-vida",
     name: "Habilidades para a Vida",
-    color: "#E91E63",
-    colorLight: "#FCE4EC",
+    color: EIXO_COLOR_BY_ID["habilidades-para-a-vida"].color,
+    colorLight: EIXO_COLOR_BY_ID["habilidades-para-a-vida"].tint,
     blocos: [
       {
         id: "aprendizagem-continua",
@@ -128,8 +129,8 @@ export const EIXOS_ESCOTEIRO: Eixo[] = [
   {
     id: "meio-ambiente",
     name: "Meio Ambiente",
-    color: "#4CAF50",
-    colorLight: "#E8F5E9",
+    color: EIXO_COLOR_BY_ID["meio-ambiente"].color,
+    colorLight: EIXO_COLOR_BY_ID["meio-ambiente"].tint,
     blocos: [
       {
         id: "consumo-responsavel",
@@ -252,8 +253,8 @@ export const EIXOS_ESCOTEIRO: Eixo[] = [
   {
     id: "paz-e-desenvolvimento",
     name: "Paz e Desenvolvimento",
-    color: "#1A237E",
-    colorLight: "#E8EAF6",
+    color: EIXO_COLOR_BY_ID["paz-e-desenvolvimento"].color,
+    colorLight: EIXO_COLOR_BY_ID["paz-e-desenvolvimento"].tint,
     blocos: [
       {
         id: "comunidade",
@@ -379,8 +380,8 @@ export const EIXOS_ESCOTEIRO: Eixo[] = [
   {
     id: "saude-e-bem-estar",
     name: "Saúde e Bem-estar",
-    color: "#E57373",
-    colorLight: "#FFEBEE",
+    color: EIXO_COLOR_BY_ID["saude-e-bem-estar"].color,
+    colorLight: EIXO_COLOR_BY_ID["saude-e-bem-estar"].tint,
     blocos: [
       {
         id: "cuidado-com-o-corpo",

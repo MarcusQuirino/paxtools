@@ -2,191 +2,151 @@
  * R4 — Especialidades (/especialidades): younger item-based levels and older
  * three-etapa (conhecer → fazer → compartilhar) project states.
  *
- * The page (src/routes/especialidades.tsx) renders one of two UIs by ramo:
- *   - younger (lobinho/escoteiro): eixo sections → SpecialtyCard, whose header
- *     shows a Nível 1 / Nível 2 badge, an "N pendente(s)" badge, and
- *     "{approved}/{total} itens aprovados" (the "itens" spelling is the app's
- *     own — see the SUSPECTED PRODUCT BUG note below).
- *   - older (sênior/pioneiro): eixo sections → OlderSpecialtyCard, whose header
- *     shows "{n}/3 etapas aprovadas" and a "Conquistada" trophy badge once all
- *     three approved; each StepCard shows an "Aprovado"/"Pendente" badge.
- *
- * Each card is a `?specialty=<id>` deep-link target (#44): navigating with the
- * seed-derived specialty id auto-opens the containing eixo section AND the card
- * (useDeepLinkHighlight), so the header + step badges are in the DOM without
- * any clicking. The specialty each persona holds is derived by pickTarget in
- * convex/testing.ts — deterministic across reseeds; the ids below are the
- * observed seed values (verified against the dev deployment).
- *
- * SUSPECTED PRODUCT BUG: the younger progress line concatenates
- * `item{totalItems > 1 ? "ns" : ""}` → the app renders "itens aprovados"
- * (should be "itens"). Assertions match the actual rendered text.
+ * The page (src/routes/especialidades.tsx) is a hub (KPIs, search, eixo
+ * chips, Em andamento / Conquistadas / Explorar) and a pushed detail screen,
+ * opened by `?specialty=<id>` (#44 deep link from bloco cards):
+ *   - younger (lobinho/escoteiro): detail head `esp-detail-head` shows
+ *     "{approved} de {total} itens", "{n} aguardando aprovação" when pending,
+ *     and level boxes `level-box-1` / `level-box-2` with `data-reached`.
+ *     Items are `ficha-item-{i}` with `data-state` open|pending|approved.
+ *   - older (sênior/pioneiro): head shows `esp-older-status` ("{n} de 3
+ *     etapas…" / "Conquistada · 3 etapas aprovadas") and a "Conquistada" pill;
+ *     each etapa is `ficha-step-{step}` with `data-state` open|pending|approved
+ *     and an "Aprovado"/"Pendente" pill in its header.
  *
  * Seed state (SIM_SPECS + insertYoungerSpecialty/insertOlderSpecialty):
  *   YOUNGER (lobinho)
  *     lobinho-8  Helena Braga  earned    brasilidades  3/6 approved → Nível 1
  *     lobinho-11 Kaique Neves  level2    nutricao      6/6 approved → Nível 2
  *     lobinho-6  Felipe Duarte inProgress acampamento  3/8 approved, 1 pending
- *                                                       (one short of Nível 1)
  *     lobinho-3  Cecília Moraes pending  meteorologia  0/6, 2 pending
  *   OLDER (sênior)
- *     senior-3   Rafael Bastos  pending    comunicacoes                0/3
- *                                                       conhecer pending
+ *     senior-3   Rafael Bastos  pending    comunicacoes                0/3, conhecer pending
  *     senior-6   Úrsula Mattos  inProgress natureza-e-ciencias-naturais 1/3
- *                                          conhecer approved, fazer pending
- *     senior-7   Vitor Sampaio  earned     esportes-de-aventura        3/3
- *                                          all approved → Conquistada
+ *     senior-7   Vitor Sampaio  earned     esportes-de-aventura        3/3 → Conquistada
  *
- * The generous first-assertion timeout absorbs the escoteiro auth handshake: on
- * a cold, fully-parallel load the app briefly bounces through /signin before
- * the gated page renders, and the polling `expect` picks the card up once that
- * settles (same pattern as the r5 authed specs).
- *
- * READ-ONLY: deep-links + reads header/badges only. No checkbox toggles, no
+ * READ-ONLY: deep-links + reads the head/pills only. No item toggles, no
  * step submissions.
  */
 
-import type { Page, TestInfo } from "@playwright/test";
+import type { Locator, Page, TestInfo } from "@playwright/test";
 import { testAs, expect } from "../../fixtures/auth";
 
 /**
- * Navigate to a deep-linked especialidade and wait for the card to render.
- *
+ * Navigate to a deep-linked especialidade and wait for the detail to render.
  * On a cold, fully-parallel load the escoteiro auth handshake can be starved,
- * bouncing the page to /signin. That state does NOT self-heal by waiting — only
- * a fresh navigation re-attempts the handshake — so we re-`goto` until the card
- * appears (re-navigating recovers far more runs than a single long wait).
+ * bouncing the page to /signin; re-`goto` until the detail head appears.
  */
-async function openCard(
-  page: Page,
-  testInfo: TestInfo,
-  specialtyId: string,
-  card: import("@playwright/test").Locator,
-): Promise<void> {
+async function openDetail(page: Page, testInfo: TestInfo, specialtyId: string): Promise<Locator> {
   testInfo.setTimeout(90_000);
+  const head = page.getByTestId("esp-detail-head");
   const signin = page.getByRole("button", { name: "Sign in (test)" });
   const url = `/especialidades?specialty=${specialtyId}`;
   for (let attempt = 0; attempt < 6; attempt++) {
     await page.goto(url);
     const outcome = await Promise.race([
-      card
-        .waitFor({ state: "visible", timeout: 12_000 })
-        .then(() => "ready" as const)
-        .catch(() => "timeout" as const),
-      signin
-        .waitFor({ state: "visible", timeout: 12_000 })
-        .then(() => "signin" as const)
-        .catch(() => "timeout" as const),
+      head.waitFor({ state: "visible", timeout: 12_000 }).then(() => "ready" as const).catch(() => "timeout" as const),
+      signin.waitFor({ state: "visible", timeout: 12_000 }).then(() => "signin" as const).catch(() => "timeout" as const),
     ]);
-    if (outcome === "ready") return;
+    if (outcome === "ready") return head;
   }
-  await card.waitFor({ state: "visible", timeout: 12_000 });
+  await head.waitFor({ state: "visible", timeout: 12_000 });
+  return head;
 }
+
+const levelBox = (page: Page, level: 1 | 2) => page.getByTestId(`level-box-${level}`);
+const step = (page: Page, s: "conhecer" | "fazer" | "compartilhar") => page.getByTestId(`ficha-step-${s}`);
 
 // ── Younger: item-count-driven levels ──────────────────────────────────────
 
 testAs("sim-troop-lobinho-8")(
   "younger earned especialidade shows Nível 1 at half the items approved",
   async ({ page }, testInfo) => {
-    const card = page.getByRole("button", { name: /Brasilidades/ });
-    await openCard(page, testInfo, "brasilidades", card);
-    await expect(card).toContainText("Nível 1");
-    await expect(card).not.toContainText("Nível 2");
-    await expect(card).toContainText("3/6 itens aprovados");
+    const head = await openDetail(page, testInfo, "brasilidades");
+    await expect(head).toContainText("3 de 6 itens");
+    await expect(levelBox(page, 1)).toHaveAttribute("data-reached", "true");
+    await expect(levelBox(page, 2)).toHaveAttribute("data-reached", "false");
+    await expect(page.locator('[data-testid^="ficha-item-"][data-state="approved"]')).toHaveCount(3);
   },
 );
 
 testAs("sim-troop-lobinho-11")(
   "younger level2 especialidade shows Nível 2 with every item approved",
   async ({ page }, testInfo) => {
-    const card = page.getByRole("button", { name: /Nutrição/ });
-    await openCard(page, testInfo, "nutricao", card);
-    await expect(card).toContainText("Nível 2");
-    await expect(card).toContainText("6/6 itens aprovados");
+    const head = await openDetail(page, testInfo, "nutricao");
+    await expect(head).toContainText("6 de 6 itens");
+    await expect(levelBox(page, 2)).toHaveAttribute("data-reached", "true");
+    await expect(page.locator('[data-testid^="ficha-item-"][data-state="approved"]')).toHaveCount(6);
   },
 );
 
 testAs("sim-troop-lobinho-6")(
   "younger in-progress especialidade is one item short of Nível 1 with a pending item",
   async ({ page }, testInfo) => {
-    const card = page.getByRole("button", { name: /Acampamento/ });
-    await openCard(page, testInfo, "acampamento", card);
-    // 3/8 approved: below the 4-item Nível 1 threshold → no level badge yet.
-    await expect(card).not.toContainText("Nível");
-    await expect(card).toContainText("3/8 itens aprovados");
-    await expect(card).toContainText("1 pendente");
+    const head = await openDetail(page, testInfo, "acampamento");
+    await expect(head).toContainText("3 de 8 itens");
+    await expect(head).toContainText("1 aguardando aprovação");
+    // 3/8 approved: below the 4-item Nível 1 threshold.
+    await expect(levelBox(page, 1)).toHaveAttribute("data-reached", "false");
+    await expect(levelBox(page, 1)).toContainText("falta 1 item");
+    await expect(page.locator('[data-testid^="ficha-item-"][data-state="pending"]')).toHaveCount(1);
   },
 );
 
 testAs("sim-troop-lobinho-3")(
   "younger pending especialidade shows zero approved and two pending items",
   async ({ page }, testInfo) => {
-    const card = page.getByRole("button", { name: /Meteorologia/ });
-    await openCard(page, testInfo, "meteorologia", card);
-    await expect(card).not.toContainText("Nível");
-    await expect(card).toContainText("0/6 itens aprovados");
-    await expect(card).toContainText("2 pendentes");
+    const head = await openDetail(page, testInfo, "meteorologia");
+    await expect(head).toContainText("0 de 6 itens");
+    await expect(head).toContainText("2 aguardando aprovação");
+    await expect(levelBox(page, 1)).toHaveAttribute("data-reached", "false");
+    await expect(page.locator('[data-testid^="ficha-item-"][data-state="pending"]')).toHaveCount(2);
+    await expect(page.locator('[data-testid^="ficha-item-"][data-state="approved"]')).toHaveCount(0);
   },
 );
 
 // ── Older: three-etapa project states ───────────────────────────────────────
 
-/** The scoped OlderSpecialtyCard root (`div.scroll-mt-4` wrapping trigger +
- * step cards) for the deep-linked, auto-opened specialty. */
-function olderCard(page: Page, name: string) {
-  return page.locator("div.scroll-mt-4").filter({ hasText: name });
-}
-/** A StepCard's header row (`div.flex.items-center.gap-2.mb-2`) for a step. */
-function stepHeader(card: ReturnType<typeof olderCard>, stepLabel: string) {
-  return card
-    .locator("div.flex.items-center.gap-2.mb-2")
-    .filter({ hasText: stepLabel });
-}
-
 testAs("sim-troop-senior-3")(
   "older pending especialidade: conhecer pending, nothing approved, not Conquistada",
   async ({ page }, testInfo) => {
-    const card = olderCard(page, "Comunicações");
-    await openCard(page, testInfo, "comunicacoes", card);
-    await expect(card).toContainText("0/3 etapas aprovadas");
-    await expect(card).not.toContainText("Conquistada");
+    const head = await openDetail(page, testInfo, "comunicacoes");
+    await expect(page.getByTestId("esp-older-status")).toContainText("0 de 3 etapas");
+    await expect(head).not.toContainText("Conquistada");
 
-    await expect(stepHeader(card, "Conhecer")).toContainText("Pendente");
-    // fazer / compartilhar have no report yet → no state badge.
-    await expect(stepHeader(card, "Fazer")).not.toContainText("Aprovado");
-    await expect(stepHeader(card, "Fazer")).not.toContainText("Pendente");
-    await expect(stepHeader(card, "Compartilhar")).not.toContainText("Aprovado");
-    await expect(stepHeader(card, "Compartilhar")).not.toContainText("Pendente");
+    await expect(step(page, "conhecer")).toHaveAttribute("data-state", "pending");
+    await expect(step(page, "conhecer")).toContainText("Pendente");
+    // fazer / compartilhar have no report yet → no state pill.
+    await expect(step(page, "fazer")).toHaveAttribute("data-state", "open");
+    await expect(step(page, "compartilhar")).toHaveAttribute("data-state", "open");
   },
 );
 
 testAs("sim-troop-senior-6")(
   "older in-progress especialidade: conhecer approved, fazer pending, not Conquistada",
   async ({ page }, testInfo) => {
-    const card = olderCard(page, "Natureza e Ciências Naturais");
-    await openCard(page, testInfo, "natureza-e-ciencias-naturais", card);
-    await expect(card).toContainText("1/3 etapas aprovadas");
-    await expect(card).not.toContainText("Conquistada");
+    const head = await openDetail(page, testInfo, "natureza-e-ciencias-naturais");
+    await expect(page.getByTestId("esp-older-status")).toContainText("1 de 3 etapas");
+    await expect(head).not.toContainText("Conquistada");
 
-    await expect(stepHeader(card, "Conhecer")).toContainText("Aprovado");
-    await expect(stepHeader(card, "Fazer")).toContainText("Pendente");
-    await expect(stepHeader(card, "Compartilhar")).not.toContainText("Aprovado");
-    await expect(stepHeader(card, "Compartilhar")).not.toContainText("Pendente");
+    await expect(step(page, "conhecer")).toHaveAttribute("data-state", "approved");
+    await expect(step(page, "conhecer")).toContainText("Aprovado");
+    await expect(step(page, "fazer")).toHaveAttribute("data-state", "pending");
+    await expect(step(page, "fazer")).toContainText("Pendente");
+    await expect(step(page, "compartilhar")).toHaveAttribute("data-state", "open");
   },
 );
 
 testAs("sim-troop-senior-7")(
   "older earned especialidade: all three etapas approved → Conquistada",
   async ({ page }, testInfo) => {
-    const card = olderCard(page, "Esportes de Aventura");
-    await openCard(page, testInfo, "esportes-de-aventura", card);
-    await expect(card).toContainText("3/3 etapas aprovadas");
-    await expect(card).toContainText("Conquistada");
+    const head = await openDetail(page, testInfo, "esportes-de-aventura");
+    await expect(page.getByTestId("esp-older-status")).toContainText("3 etapas aprovadas");
+    await expect(head).toContainText("Conquistada");
 
-    await expect(stepHeader(card, "Conhecer")).toContainText("Aprovado");
-    await expect(stepHeader(card, "Fazer")).toContainText("Aprovado");
-    await expect(stepHeader(card, "Compartilhar")).toContainText("Aprovado");
-    // No etapa is left pending.
-    await expect(card.getByText("Pendente", { exact: true })).toHaveCount(0);
+    for (const s of ["conhecer", "fazer", "compartilhar"] as const) {
+      await expect(step(page, s)).toHaveAttribute("data-state", "approved");
+    }
+    await expect(page.getByText("Pendente", { exact: true })).toHaveCount(0);
   },
 );

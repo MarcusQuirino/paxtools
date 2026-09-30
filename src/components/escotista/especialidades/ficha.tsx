@@ -12,11 +12,10 @@
  *
  * Every write goes through a mutation that re-checks visibilidade de ramo.
  */
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { convexQuery } from "@convex-dev/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
-import { Check, Clock, Search } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
@@ -25,63 +24,40 @@ import {
   PROJECT_STEP_LABELS,
   type ProjectStep,
 } from "@/data/specialty-data/older";
+import { eixoMeta } from "@/data/eixo-colors";
 import { getSpecialtyLevel } from "@/lib/completion-logic";
+import { EMERALD } from "@/lib/design-tokens";
+import { RAMO_LABELS, type Ramo } from "@/lib/ramos";
 import {
-  AMBER_INK,
-  BACK_CLASS,
-  BackIcon,
-  EMERALD,
-  FichaLink,
-  LevelPill,
-  ListBox,
-  ListHeader,
-  RowChevron,
-  SectionHeading,
-  SubBar,
   catalogFor,
-  eixoMeta,
+  filterCatalog,
   findCatalogEntry,
-  matchEntry,
   ramoGroupOf,
   type CatalogEntry,
   type RamoGroup,
-} from "./ui";
+} from "@/lib/specialty-catalog";
+import { AppShell } from "@/components/layout/app-shell";
+import { BackButton, PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
+import { HardButton } from "@/components/ui/hard-button";
+import { DashedRowButton, ListRow, RowChevron } from "@/components/ui/list-row";
+import { SearchInput } from "@/components/ui/search-input";
+import { Card, ListBox, ListHeader, Note, SectionHeading } from "@/components/ui/section";
+import { LevelPill, Pill, StatusPill } from "@/components/ui/status-pill";
+import {
+  ItemProgressHead,
+  SpecialtyItemRow,
+  StepHeader,
+  firstName,
+  shortDate,
+} from "@/components/especialidades/pieces";
 import {
   PendingRelato,
-  SmallButton,
   Suggestions,
   useItemReview,
   useRegisterStep,
   useStepReview,
 } from "./actions";
-
-const RAMO_LABEL: Record<string, string> = {
-  lobinho: "Lobinho",
-  escoteiro: "Escoteiro",
-  senior: "Sênior",
-  pioneiro: "Pioneiro",
-};
-
-function shortDate(ts: number | undefined): string {
-  if (!ts) return "";
-  const d = new Date(ts);
-  const today = new Date();
-  const days = Math.floor(
-    (new Date(today.toDateString()).getTime() -
-      new Date(d.toDateString()).getTime()) /
-      86_400_000,
-  );
-  if (days === 0) return "hoje";
-  if (days === 1) return "ontem";
-  return d
-    .toLocaleDateString("pt-BR", { day: "numeric", month: "short" })
-    .replace(" de ", " ")
-    .replace(".", "");
-}
-
-function firstName(name: string | null | undefined): string {
-  return (name ?? "o escoteiro").trim().split(/\s+/)[0] ?? "o escoteiro";
-}
 
 export function EscotistaFicha({
   escoteiroId,
@@ -117,78 +93,42 @@ export function EscotistaFicha({
       });
     else void navigate({ to: "/escotista/especialidades" });
   };
-  const back = (
-    <button
-      type="button"
-      onClick={goBack}
-      aria-label="Voltar"
-      className={BACK_CLASS}
-    >
-      <BackIcon />
-    </button>
-  );
-
-  const shell = (children: React.ReactNode) => (
-    <div className="min-h-screen bg-background text-[#141414]">
-      <div className="mx-auto max-w-lg px-4 py-4 pb-20">{children}</div>
-    </div>
-  );
+  const back = <BackButton onClick={goBack} />;
 
   if (!escoteiro) {
-    return shell(
-      <>
-        <SubBar back={back} crumb="Especialidades" title="Escoteiro" />
-        <p className="mt-3 rounded-[10px] border-2 border-dashed border-[#8A887F] p-5 text-center text-sm text-[#4A4A44]">
-          Escoteiro não encontrado ou fora dos ramos que você acompanha.
-        </p>
-      </>,
+    return (
+      <AppShell header={<PageHeader back={back} eyebrow="Especialidades" title="Escoteiro" />}>
+        <EmptyState>Escoteiro não encontrado ou fora dos ramos que você acompanha.</EmptyState>
+      </AppShell>
     );
   }
 
-  const crumb = [escoteiro.name ?? "Escoteiro", RAMO_LABEL[escoteiro.ramo ?? ""]]
+  const crumb = [
+    escoteiro.name ?? "Escoteiro",
+    escoteiro.ramo ? RAMO_LABELS[escoteiro.ramo as Ramo] : null,
+  ]
     .filter(Boolean)
     .join(" · ");
 
-  return shell(
-    group === "younger" ? (
-      <YoungerFicha
-        escoteiro={escoteiro}
-        entry={entry}
-        back={back}
-        crumb={crumb}
-        approverNames={approverNames}
-      />
-    ) : (
-      <OlderFicha
-        escoteiro={escoteiro}
-        entry={entry}
-        back={back}
-        crumb={crumb}
-        approverNames={approverNames}
-      />
-    ),
-  );
+  const common = { escoteiro, entry, back, crumb, approverNames };
+  return group === "younger" ? <YoungerFicha {...common} /> : <OlderFicha {...common} />;
 }
 
 type Member = { _id: Id<"users">; name?: string | null; ramo?: string | null };
+
+type FichaProps = {
+  escoteiro: Member;
+  entry: CatalogEntry | undefined;
+  back: ReactNode;
+  crumb: string;
+  approverNames: Map<string, string>;
+};
 
 // ---------------------------------------------------------------------------
 // Younger
 // ---------------------------------------------------------------------------
 
-function YoungerFicha({
-  escoteiro,
-  entry,
-  back,
-  crumb,
-  approverNames,
-}: {
-  escoteiro: Member;
-  entry: CatalogEntry | undefined;
-  back: React.ReactNode;
-  crumb: string;
-  approverNames: Map<string, string>;
-}) {
+function YoungerFicha({ escoteiro, entry, back, crumb, approverNames }: FichaProps) {
   const { data: rows } = useSuspenseQuery(
     convexQuery(api.specialties.getSpecialtyItemsForEscoteiro, {
       escoteiroId: escoteiro._id,
@@ -215,6 +155,14 @@ function YoungerFicha({
       level: getSpecialtyLevel(approved, e.itemCount ?? 0) as 0 | 1 | 2,
     };
   };
+  const statusOf: StatusOf = (e) => {
+    const p = progressOf(e);
+    return {
+      text: `${p.approved} de ${e.itemCount} itens${p.pending ? ` · ${p.pending} aguardando` : ""}`,
+      level: p.level,
+      pending: p.pending > 0,
+    };
+  };
 
   const others = catalogFor("younger").filter(
     (e) => e.id !== entry?.id && bySpecialty.has(e.id),
@@ -222,21 +170,7 @@ function YoungerFicha({
 
   if (!entry) {
     return (
-      <Hub
-        escoteiro={escoteiro}
-        group="younger"
-        back={back}
-        crumb={crumb}
-        active={others}
-        statusOf={(e) => {
-          const p = progressOf(e);
-          return {
-            text: `${p.approved} de ${e.itemCount} itens${p.pending ? ` · ${p.pending} aguardando` : ""}`,
-            level: p.level,
-            pending: p.pending > 0,
-          };
-        }}
-      />
+      <Hub escoteiro={escoteiro} group="younger" back={back} crumb={crumb} active={others} statusOf={statusOf} />
     );
   }
 
@@ -245,121 +179,43 @@ function YoungerFicha({
   const own = bySpecialty.get(entry.id) ?? [];
   const byIndex = new Map(own.map((r) => [r.itemIndex, r]));
   const { approved, pending, level } = progressOf(entry);
-  const half = total / 2;
   const name = firstName(escoteiro.name);
 
   return (
-    <>
-      <SubBar back={back} crumb={crumb} title={entry.name} />
-      <div
-        className="mb-3 mt-2 rounded-[10px] border-2 border-[#141414] bg-white p-3.5"
-        style={{ borderLeftWidth: 8, borderLeftColor: eixo.color }}
-      >
-        <div className="flex items-baseline justify-between gap-3 text-[14px] font-extrabold">
-          <span>
-            <span data-testid="ficha-approved-count">{approved}</span> de {total}{" "}
-            itens
-          </span>
-          <span
-            className="text-[12px] font-bold"
-            style={{ color: pending ? AMBER_INK : "#8A887F" }}
-          >
-            {pending
-              ? `${pending} aguardando aprovação`
-              : "nada aguardando"}
-          </span>
-        </div>
-        <div className="relative mt-1.5 h-3 overflow-hidden rounded-md border-2 border-[#141414] bg-[#EEE9DC]">
-          <span
-            className="absolute inset-y-0 left-0"
-            style={{
-              width: `${((approved + pending) / total) * 100}%`,
-              background:
-                "repeating-linear-gradient(45deg,#F5B300 0 4px,#fff 4px 8px)",
-            }}
-          />
-          <span
-            className="absolute inset-y-0 left-0"
-            style={{ width: `${(approved / total) * 100}%`, background: eixo.color }}
-          />
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <LevelBox
-            label="Nível 1"
-            reached={level >= 1}
-            missing={half - approved}
-            bg="#E3E8F8"
-          />
-          <LevelBox
-            label="Nível 2"
-            reached={level >= 2}
-            missing={total - approved}
-            bg="#F4C430"
-          />
-        </div>
+    <AppShell header={<PageHeader back={back} eyebrow={crumb} title={entry.name} />}>
+      <div>
+        <ItemProgressHead
+          color={eixo.color}
+          total={total}
+          approved={approved}
+          pending={pending}
+          level={level}
+        />
+        <Note className="mb-3 mt-0">
+          Você edita como escotista: tocar um item aberto marca{" "}
+          <b className="text-[#4A4A44]">aprovado na hora</b>; tocar de novo desmarca. Itens
+          enviados por {name} aparecem em amarelo com Aprovar / Rejeitar.
+        </Note>
+
+        <ListBox className="mb-4">
+          <ListHeader label="Itens" meta="toque para marcar" tint={eixo.tint} />
+          {entry.texts.map((text, i) => (
+            <ItemRow
+              key={i}
+              index={i}
+              text={text}
+              row={byIndex.get(i)}
+              escoteiroId={escoteiro._id}
+              specialtyId={entry.id}
+              escoteiroName={name}
+              approverNames={approverNames}
+            />
+          ))}
+        </ListBox>
+
+        <OthersList escoteiro={escoteiro} entries={others} statusOf={statusOf} />
       </div>
-      <p className="mb-3 text-[12px] text-[#8A887F]">
-        Você edita como escotista: tocar um item aberto marca{" "}
-        <b className="text-[#4A4A44]">aprovado na hora</b>; tocar de novo
-        desmarca. Itens enviados por {name} aparecem em amarelo com Aprovar /
-        Rejeitar.
-      </p>
-
-      <ListBox className="mb-4">
-        <ListHeader label="Itens" meta="toque para marcar" tint={eixo.tint} />
-        {entry.texts.map((text, i) => (
-          <ItemRow
-            key={i}
-            index={i}
-            text={text}
-            row={byIndex.get(i)}
-            escoteiroId={escoteiro._id}
-            specialtyId={entry.id}
-            escoteiroName={name}
-            approverNames={approverNames}
-          />
-        ))}
-      </ListBox>
-
-      <OthersList
-        escoteiro={escoteiro}
-        entries={others}
-        statusOf={(e) => {
-          const p = progressOf(e);
-          return {
-            text: `${p.approved} de ${e.itemCount} itens${p.pending ? ` · ${p.pending} aguardando` : ""}`,
-            level: p.level,
-            pending: p.pending > 0,
-          };
-        }}
-      />
-    </>
-  );
-}
-
-function LevelBox({
-  label,
-  reached,
-  missing,
-  bg,
-}: {
-  label: string;
-  reached: boolean;
-  missing: number;
-  bg: string;
-}) {
-  return (
-    <div
-      className="rounded-md border-2 border-[#141414] px-2.5 py-2 text-[12px] font-bold text-[#4A4A44]"
-      style={{ background: reached ? bg : "#fff" }}
-    >
-      <b className="block text-[14px] text-[#141414]">{label}</b>
-      {reached
-        ? "conquistado"
-        : missing === 1
-          ? "falta 1 item"
-          : `faltam ${missing} itens`}
-    </div>
+    </AppShell>
   );
 }
 
@@ -390,12 +246,7 @@ function ItemRow({
 
   const toggle = () => {
     if (state === "pending" || busy) return;
-    review.setApproved({
-      escoteiroId,
-      specialtyId,
-      itemIndex: index,
-      approved: state === "open",
-    });
+    review.setApproved({ escoteiroId, specialtyId, itemIndex: index, approved: state === "open" });
   };
 
   const approver = row?.approvedBy ? approverNames.get(row.approvedBy) : undefined;
@@ -406,88 +257,43 @@ function ItemRow({
           .join(" · ")
       : state === "pending"
         ? `Enviado por ${escoteiroName} · ${shortDate(row?.completedAt)}`
-        : null;
+        : undefined;
 
   return (
-    <div
-      data-testid={`ficha-item-${index}`}
-      data-state={state}
-      className={`flex min-h-14 items-start gap-3 border-t-[1.5px] border-[#D9D5C9] py-3 pl-3 pr-1 first-of-type:border-t-0 ${
-        busy ? "opacity-60" : ""
-      }`}
-    >
-      <button
-        type="button"
-        onClick={toggle}
-        disabled={state === "pending" || busy}
-        aria-pressed={state === "approved"}
-        aria-label={
-          state === "approved"
-            ? `Desmarcar item ${index + 1}`
-            : state === "pending"
-              ? `Item ${index + 1} aguardando aprovação`
-              : `Marcar item ${index + 1} como aprovado`
-        }
-        className="-my-2.5 -ml-2.5 grid size-12 shrink-0 place-items-center rounded-md"
-      >
-        <span
-          className={`grid size-7 place-items-center rounded-[7px] border-2 border-[#141414] ${
-            state === "approved"
-              ? "bg-[#0E6B4E] text-white shadow-[2px_2px_0_#141414]"
-              : state === "pending"
-                ? "bg-[#F5B300] text-[#141414] shadow-[2px_2px_0_#141414]"
-                : "bg-white"
-          }`}
-        >
-          {state === "approved" && <Check className="size-[18px]" strokeWidth={3} />}
-          {state === "pending" && <Clock className="size-[18px]" strokeWidth={3} />}
-        </span>
-      </button>
-      <div className="min-w-0 flex-1 pt-0.5 text-[15px] leading-[1.4]">
-        <span
-          className={
-            state === "approved"
-              ? "text-[#8A887F] line-through decoration-[#0E6B4E]"
-              : ""
-          }
-        >
-          <b className="text-[#141414]">{index + 1}.</b> {text}
-        </span>
-        {status && (
-          <span
-            className="mt-0.5 block text-[12px] font-extrabold"
-            style={{ color: state === "approved" ? EMERALD : AMBER_INK }}
-          >
-            {status}
-          </span>
-        )}
-        {state === "pending" && row && (
-          <span className="mt-2 flex gap-1.5">
-            <SmallButton
-              kind="primary"
+    <SpecialtyItemRow
+      index={index}
+      text={text}
+      state={state}
+      onToggle={toggle}
+      disabled={state === "pending"}
+      busy={busy}
+      status={status}
+      ariaLabel={
+        state === "approved"
+          ? `Desmarcar item ${index + 1}`
+          : state === "pending"
+            ? `Item ${index + 1} aguardando aprovação`
+            : `Marcar item ${index + 1} como aprovado`
+      }
+      actions={
+        state === "pending" && row ? (
+          <>
+            <HardButton
+              size="sm"
               disabled={busy}
               onClick={() =>
-                review.setApproved({
-                  escoteiroId,
-                  specialtyId,
-                  itemIndex: index,
-                  approved: true,
-                })
+                review.setApproved({ escoteiroId, specialtyId, itemIndex: index, approved: true })
               }
             >
               Aprovar
-            </SmallButton>
-            <SmallButton
-              kind="ghost"
-              disabled={busy}
-              onClick={() => review.reject(row._id)}
-            >
+            </HardButton>
+            <HardButton size="sm" tone="paper" disabled={busy} onClick={() => review.reject(row._id)}>
               Rejeitar
-            </SmallButton>
-          </span>
-        )}
-      </div>
-    </div>
+            </HardButton>
+          </>
+        ) : undefined
+      }
+    />
   );
 }
 
@@ -495,19 +301,7 @@ function ItemRow({
 // Older (sênior / pioneiro)
 // ---------------------------------------------------------------------------
 
-function OlderFicha({
-  escoteiro,
-  entry,
-  back,
-  crumb,
-  approverNames,
-}: {
-  escoteiro: Member;
-  entry: CatalogEntry | undefined;
-  back: React.ReactNode;
-  crumb: string;
-  approverNames: Map<string, string>;
-}) {
+function OlderFicha({ escoteiro, entry, back, crumb, approverNames }: FichaProps) {
   const { data: rows } = useSuspenseQuery(
     convexQuery(api.specialties.getSpecialtyReportsForEscoteiro, {
       escoteiroId: escoteiro._id,
@@ -527,12 +321,8 @@ function OlderFicha({
 
   const statusOf = (e: CatalogEntry) => {
     const steps = bySpecialty.get(e.id);
-    const approved = PROJECT_STEPS.filter(
-      (s) => steps?.get(s)?.status === "approved",
-    ).length;
-    const pending = PROJECT_STEPS.filter(
-      (s) => steps?.get(s)?.status === "pending",
-    ).length;
+    const approved = PROJECT_STEPS.filter((s) => steps?.get(s)?.status === "approved").length;
+    const pending = PROJECT_STEPS.filter((s) => steps?.get(s)?.status === "pending").length;
     return {
       text:
         approved === 3
@@ -543,20 +333,11 @@ function OlderFicha({
       earned: approved === 3,
     };
   };
-  const others = catalogFor("older").filter(
-    (e) => e.id !== entry?.id && bySpecialty.has(e.id),
-  );
+  const others = catalogFor("older").filter((e) => e.id !== entry?.id && bySpecialty.has(e.id));
 
   if (!entry) {
     return (
-      <Hub
-        escoteiro={escoteiro}
-        group="older"
-        back={back}
-        crumb={crumb}
-        active={others}
-        statusOf={statusOf}
-      />
+      <Hub escoteiro={escoteiro} group="older" back={back} crumb={crumb} active={others} statusOf={statusOf} />
     );
   }
 
@@ -571,47 +352,38 @@ function OlderFicha({
   };
 
   return (
-    <>
-      <SubBar back={back} crumb={crumb} title={entry.name} />
-      <div
-        className="mb-3 mt-2 rounded-[10px] border-2 border-[#141414] bg-white p-3.5"
-        style={{ borderLeftWidth: 8, borderLeftColor: eixo.color }}
-      >
-        <p className="text-[14px] leading-[1.45] text-[#4A4A44]">
-          {entry.description}
-        </p>
-        <div className="mt-3 flex items-center justify-between gap-3 text-[14px] font-extrabold">
-          <span>{status.text}</span>
-          {status.earned && (
-            <span className="rounded-full border-2 border-[#141414] bg-[#F4C430] px-2 py-0.5 text-[11px] font-extrabold uppercase">
-              Conquistada
-            </span>
-          )}
-        </div>
+    <AppShell header={<PageHeader back={back} eyebrow={crumb} title={entry.name} />}>
+      <div>
+        <Card accent={eixo.color} className="mb-3 mt-2">
+          <p className="text-[14px] leading-[1.45] text-[#4A4A44]">{entry.description}</p>
+          <div className="mt-3 flex items-center justify-between gap-3 text-[14px] font-extrabold">
+            <span>{status.text}</span>
+            {status.earned && <Pill tone="gold">Conquistada</Pill>}
+          </div>
+        </Card>
+        <Note className="mb-3 mt-0">
+          Relatos enviados por {firstName(escoteiro.name)} aparecem com Aprovar / Rejeitar. Uma
+          etapa sem relato pode ser registrada por você — ela entra já aprovada.
+        </Note>
+
+        {PROJECT_STEPS.map((step, i) => (
+          <StepCard
+            key={step}
+            ordinal={i + 1}
+            step={step}
+            tint={eixo.tint}
+            suggestions={suggestions[step]}
+            row={steps.get(step)}
+            escoteiroId={escoteiro._id}
+            specialtyId={entry.id}
+            approverNames={approverNames}
+            review={review}
+          />
+        ))}
+
+        <OthersList escoteiro={escoteiro} entries={others} statusOf={statusOf} />
       </div>
-      <p className="mb-3 text-[12px] text-[#8A887F]">
-        Relatos enviados por {firstName(escoteiro.name)} aparecem com Aprovar /
-        Rejeitar. Uma etapa sem relato pode ser registrada por você — ela entra
-        já aprovada.
-      </p>
-
-      {PROJECT_STEPS.map((step, i) => (
-        <StepCard
-          key={step}
-          ordinal={i + 1}
-          step={step}
-          tint={eixo.tint}
-          suggestions={suggestions[step]}
-          row={steps.get(step)}
-          escoteiroId={escoteiro._id}
-          specialtyId={entry.id}
-          approverNames={approverNames}
-          review={review}
-        />
-      ))}
-
-      <OthersList escoteiro={escoteiro} entries={others} statusOf={statusOf} />
-    </>
+    </AppShell>
   );
 }
 
@@ -644,128 +416,105 @@ function StepCard({
   const state = !row ? "open" : row.status === "approved" ? "approved" : "pending";
 
   return (
-    <section
-      data-testid={`ficha-step-${step}`}
-      data-state={state}
-      className="mb-3 overflow-hidden rounded-[10px] border-2 border-[#141414] bg-white"
-    >
-      <div
-        className="flex items-center gap-2.5 border-b-2 border-[#141414] px-3 py-2.5"
-        style={{ background: tint }}
-      >
-        <span className="grid size-7 place-items-center rounded-full border-2 border-[#141414] bg-[#0E6B4E] text-[13px] font-black text-white">
-          {ordinal}
-        </span>
-        <h3 className="text-[16px] font-black">{label}</h3>
-        {state !== "open" && (
-          <span
-            className={`ml-auto inline-flex items-center gap-1 rounded-full border-2 border-[#141414] px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide ${
-              state === "approved" ? "bg-[#0E6B4E] text-white" : "bg-[#F5B300]"
-            }`}
-          >
-            {state === "approved" ? (
-              <Check className="size-3" strokeWidth={3} />
-            ) : (
-              <Clock className="size-3" strokeWidth={3} />
-            )}
-            {state === "approved" ? "Aprovado" : "Pendente"}
-          </span>
-        )}
-      </div>
-      <Suggestions items={suggestions} />
-
-      {state === "pending" && row && (
-        <PendingRelato
-          reportId={row._id}
-          stepLabel={label}
-          text={row.text}
-          review={review}
+    <section data-testid={`ficha-step-${step}`} data-state={state}>
+      <ListBox className="mb-3">
+        <StepHeader
+          ordinal={ordinal}
+          label={label}
+          tint={tint}
+          right={
+            state !== "open" ? (
+              <StatusPill state={state}>{state === "approved" ? "Aprovado" : "Pendente"}</StatusPill>
+            ) : undefined
+          }
         />
-      )}
+        <Suggestions items={suggestions} />
 
-      {state === "approved" && row && (
-        <div className="border-t-2 border-[#D9D5C9] px-3 py-2.5">
-          <p
-            className={`whitespace-pre-line border-l-[3px] border-[#D9D5C9] pl-2.5 text-[13px] leading-snug text-[#4A4A44] ${
-              expanded ? "" : "line-clamp-3"
-            }`}
-          >
-            {row.text}
-          </p>
-          <div className="mt-1.5 flex items-center justify-between gap-2">
-            <span className="text-[12px] font-extrabold" style={{ color: EMERALD }}>
-              {[
-                "Aprovado",
-                row.approvedBy ? approverNames.get(row.approvedBy) : undefined,
-                shortDate(row.approvedAt ?? row.completedAt),
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </span>
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="min-h-11 px-1 text-[13px] font-extrabold text-[#0E6B4E]"
+        {state === "pending" && row && (
+          <PendingRelato reportId={row._id} stepLabel={label} text={row.text} review={review} />
+        )}
+
+        {state === "approved" && row && (
+          <div className="border-t-2 border-[#D9D5C9] px-3 py-2.5">
+            <p
+              className={`whitespace-pre-line border-l-[3px] border-[#D9D5C9] pl-2.5 text-[13px] leading-snug text-[#4A4A44] ${
+                expanded ? "" : "line-clamp-3"
+              }`}
             >
-              {expanded ? "Recolher" : "Ler relato"}
-            </button>
+              {row.text}
+            </p>
+            <div className="mt-1.5 flex items-center justify-between gap-2">
+              <span className="text-[12px] font-extrabold" style={{ color: EMERALD }}>
+                {[
+                  "Aprovado",
+                  row.approvedBy ? approverNames.get(row.approvedBy) : undefined,
+                  shortDate(row.approvedAt ?? row.completedAt),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+              <HardButton size="sm" tone="ghost" onClick={() => setExpanded((v) => !v)}>
+                {expanded ? "Recolher" : "Ler relato"}
+              </HardButton>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {state === "open" && (
-        <div className="border-t-2 border-dashed border-[#D9D5C9] px-3 py-2.5">
-          {writing ? (
-            <>
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                rows={4}
-                autoFocus
-                aria-label={`Relato da etapa ${label}`}
-                placeholder={`O que foi feito na etapa ${label}?`}
-                className="w-full resize-y rounded-md border-2 border-[#141414] bg-white p-2 text-[15px] outline-none focus:ring-2 focus:ring-[#0E6B4E]/40"
-              />
-              <div className="mt-2 flex flex-wrap gap-2">
-                <SmallButton
-                  kind="primary"
-                  disabled={!text.trim() || register.isPending}
-                  onClick={() =>
-                    register.mutate(
-                      { specialtyId, step, text, targetUserId: escoteiroId },
-                      {
-                        onSuccess: () => {
-                          setWriting(false);
-                          setText("");
+        {state === "open" && (
+          <div className="border-t-2 border-dashed border-[#D9D5C9] px-3 py-2.5">
+            {writing ? (
+              <>
+                <textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  rows={4}
+                  autoFocus
+                  aria-label={`Relato da etapa ${label}`}
+                  placeholder={`O que foi feito na etapa ${label}?`}
+                  className="w-full resize-y rounded-md border-2 border-[#141414] bg-white p-2 text-[15px] outline-none focus:ring-2 focus:ring-[#0E6B4E]/40"
+                />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <HardButton
+                    size="sm"
+                    disabled={!text.trim() || register.isPending}
+                    onClick={() =>
+                      register.mutate(
+                        { specialtyId, step, text, targetUserId: escoteiroId },
+                        {
+                          onSuccess: () => {
+                            setWriting(false);
+                            setText("");
+                          },
                         },
-                      },
-                    )
-                  }
-                >
-                  Registrar como aprovada
-                </SmallButton>
-                <SmallButton
-                  kind="ghost"
-                  onClick={() => {
-                    setWriting(false);
-                    setText("");
-                  }}
-                >
-                  Cancelar
-                </SmallButton>
-              </div>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setWriting(true)}
-              className="flex min-h-11 w-full items-center text-left text-[15px] font-extrabold text-[#0E6B4E]"
-            >
-              + Registrar {label} pelo escoteiro
-            </button>
-          )}
-        </div>
-      )}
+                      )
+                    }
+                  >
+                    Registrar como aprovada
+                  </HardButton>
+                  <HardButton
+                    size="sm"
+                    tone="paper"
+                    onClick={() => {
+                      setWriting(false);
+                      setText("");
+                    }}
+                  >
+                    Cancelar
+                  </HardButton>
+                </div>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setWriting(true)}
+                className="flex min-h-11 w-full items-center text-left text-[15px] font-extrabold text-[#0E6B4E]"
+              >
+                + Registrar {label} pelo escoteiro
+              </button>
+            )}
+          </div>
+        )}
+      </ListBox>
     </section>
   );
 }
@@ -793,22 +542,19 @@ function OthersList({
     <>
       {entries.length > 0 && (
         <>
-          <SectionHeading
-            label={`Outras especialidades de ${firstName(escoteiro.name)}`}
-          />
+          <SectionHeading label={`Outras especialidades de ${firstName(escoteiro.name)}`} />
           <EntryList escoteiroId={escoteiro._id} entries={entries} statusOf={statusOf} />
         </>
       )}
-      <Link
-        to="/especialidades"
-        search={{ escoteiroId: escoteiro._id }}
-        className="mt-3 flex min-h-[52px] w-full items-center gap-3 rounded-[10px] border-2 border-dashed border-[#D9D5C9] px-3 text-[15px] font-extrabold text-[#0E6B4E]"
+      <DashedRowButton
+        className="mt-3"
+        link={<Link to="/especialidades" search={{ escoteiroId: escoteiro._id }} />}
       >
         Abrir outra especialidade de {firstName(escoteiro.name)}
         <span className="ml-auto">
           <RowChevron />
         </span>
-      </Link>
+      </DashedRowButton>
     </>
   );
 }
@@ -826,29 +572,18 @@ function EntryList({
     <ListBox>
       {entries.map((e) => {
         const s = statusOf(e);
-        const eixo = eixoMeta(e.eixoId);
         return (
-          <FichaLink
+          <ListRow
             key={e.id}
-            escoteiroId={escoteiroId}
-            specialtyId={e.id}
-            className="flex min-h-16 w-full items-center gap-3 border-t-[1.5px] border-[#D9D5C9] py-2.5 pr-3 text-left first:border-t-0 hover:bg-black/[0.02]"
-          >
-            <span className="w-2 self-stretch" style={{ background: eixo.color }} />
-            <span className="min-w-0 flex-1">
-              <span className="block text-[15px] font-extrabold leading-tight">
-                {e.name}
-              </span>
-              <span
-                className="mt-0.5 block text-[12px] font-semibold"
-                style={{ color: s.pending ? AMBER_INK : "#8A887F" }}
-              >
-                {s.text}
-              </span>
-            </span>
-            <LevelPill level={s.level} />
-            <RowChevron />
-          </FichaLink>
+            tall
+            bar={eixoMeta(e.eixoId).color}
+            title={e.name}
+            subtitle={s.text}
+            subtitleTone={s.pending ? "pending" : "muted"}
+            trailing={<LevelPill level={s.level} />}
+            chevron
+            link={<Link to="/especialidades" search={{ escoteiroId, specialty: e.id }} />}
+          />
         );
       })}
     </ListBox>
@@ -866,41 +601,36 @@ function Hub({
 }: {
   escoteiro: Member;
   group: RamoGroup;
-  back: React.ReactNode;
+  back: ReactNode;
   crumb: string;
   active: CatalogEntry[];
   statusOf: StatusOf;
 }) {
   const [query, setQuery] = useState("");
   const results = query.trim()
-    ? catalogFor(group).filter((e) => matchEntry(e, query).matched)
+    ? filterCatalog(catalogFor(group), { query }).map((r) => r.entry)
     : [];
   return (
-    <>
-      <SubBar back={back} crumb={crumb} title="Especialidades" />
-      <SectionHeading label="Com atividade" meta={active.length || undefined} />
-      {active.length === 0 ? (
-        <p className="rounded-[10px] border-2 border-dashed border-[#8A887F] p-4 text-center text-sm text-[#4A4A44]">
-          {firstName(escoteiro.name)} ainda não começou nenhuma especialidade.
-        </p>
-      ) : (
-        <EntryList escoteiroId={escoteiro._id} entries={active} statusOf={statusOf} />
-      )}
-      <SectionHeading label="Abrir outra" />
-      <label className="mb-2.5 flex min-h-12 items-center gap-2.5 rounded-[10px] border-2 border-[#141414] bg-white px-3">
-        <Search className="size-[22px] shrink-0 text-[#8A887F]" strokeWidth={2.5} />
-        <input
-          type="search"
+    <AppShell header={<PageHeader back={back} eyebrow={crumb} title="Especialidades" />}>
+      <div>
+        <SectionHeading className="mt-1" label="Com atividade" meta={active.length || undefined} />
+        {active.length === 0 ? (
+          <EmptyState>{firstName(escoteiro.name)} ainda não começou nenhuma especialidade.</EmptyState>
+        ) : (
+          <EntryList escoteiroId={escoteiro._id} entries={active} statusOf={statusOf} />
+        )}
+        <SectionHeading label="Abrir outra" />
+        <SearchInput
+          className="mb-2.5"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={setQuery}
           placeholder="Buscar por nome ou requisito"
-          aria-label="Buscar especialidade"
-          className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#8A887F]"
+          ariaLabel="Buscar especialidade"
         />
-      </label>
-      {results.length > 0 && (
-        <EntryList escoteiroId={escoteiro._id} entries={results} statusOf={statusOf} />
-      )}
-    </>
+        {results.length > 0 && (
+          <EntryList escoteiroId={escoteiro._id} entries={results} statusOf={statusOf} />
+        )}
+      </div>
+    </AppShell>
   );
 }

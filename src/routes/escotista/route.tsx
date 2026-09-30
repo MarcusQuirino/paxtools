@@ -1,22 +1,32 @@
 import { Suspense, useState } from "react";
 import { convexQuery } from "@convex-dev/react-query";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
   Link,
   Outlet,
-  useNavigate,
   useMatchRoute,
 } from "@tanstack/react-router";
 import { api } from "../../../convex/_generated/api";
 import { useAuthGate } from "@/hooks/use-auth-gate";
-import { AuthButton } from "@/components/auth/auth-button";
-import { Footer } from "@/components/footer";
+import { AppShell, AppShellSkeleton } from "@/components/layout/app-shell";
+import {
+  BackLink,
+  PageHeader,
+  ViewerAvatar,
+} from "@/components/layout/page-header";
+import {
+  TAB_ICON_ACTIVE_CLASS,
+  TAB_ICON_CLASS,
+  TabBar,
+  TabLink,
+  tabItemClass,
+} from "@/components/layout/tab-bar";
 import { PendingApprovalScreen } from "@/components/escotista/pending-approval-screen";
+import { formatGroupIdentity } from "@/lib/group-identity";
 import {
   LayoutDashboard,
   Clock,
-  ArrowLeft,
   Shield,
   ScrollText,
   MoreHorizontal,
@@ -37,29 +47,14 @@ export const Route = createFileRoute("/escotista")({
 
 type IconType = React.ComponentType<{ className?: string }>;
 
-type NavItem =
-  | { kind: "link"; to: string; label: string; icon: IconType; exact?: boolean }
-  | { kind: "sheet"; label: string; icon: IconType };
-
 // Primary bottom-bar slots. Adding a tab = adding one entry here.
-const NAV_ITEMS: NavItem[] = [
-  { kind: "link", to: "/escotista", label: "Painel", icon: LayoutDashboard, exact: true },
-  { kind: "link", to: "/escotista/pending", label: "Pendentes", icon: Clock },
-  {
-    kind: "link",
-    to: "/escotista/especialidades",
-    label: "Especialidades",
-    icon: Award,
-  },
-  { kind: "sheet", label: "Mais", icon: MoreHorizontal },
+const NAV_ITEMS: { to: string; label: string; icon: IconType; exact?: boolean }[] = [
+  { to: "/escotista", label: "Painel", icon: LayoutDashboard, exact: true },
+  { to: "/escotista/pending", label: "Pendentes", icon: Clock },
+  { to: "/escotista/especialidades", label: "Especialidades", icon: Award },
 ];
 
-type SecondaryItem = {
-  to: string;
-  label: string;
-  icon: IconType;
-  adminOnly?: boolean;
-};
+type SecondaryItem = { to: string; label: string; icon: IconType; adminOnly?: boolean };
 
 // Destinations shown inside the "Mais" sheet.
 const SECONDARY_ITEMS: SecondaryItem[] = [
@@ -69,18 +64,45 @@ const SECONDARY_ITEMS: SecondaryItem[] = [
   { to: "/settings", label: "Ajustes", icon: Settings },
 ];
 
+/**
+ * Tab-screen titles by route. Routes not listed here (especialidade detail,
+ * escoteiro impersonation) render their own pushed-screen PageHeader.
+ */
+const TAB_TITLES: { to: string; title: string; exact?: boolean }[] = [
+  { to: "/escotista", title: "Painel", exact: true },
+  { to: "/escotista/pending", title: "Pendentes" },
+  { to: "/escotista/especialidades", title: "Especialidades", exact: true },
+  { to: "/escotista/stats", title: "Stats" },
+  { to: "/escotista/timeline", title: "Histórico" },
+  { to: "/escotista/admin", title: "Admin" },
+];
+
 function EscotistaLayout() {
-  const navigate = useNavigate();
   const { ready, user } = useAuthGate("escotista");
   const { data: myGroup } = useSuspenseQuery(
     convexQuery(api.groups.getMyGroup, {}),
   );
 
   const matchRoute = useMatchRoute();
-  const isImpersonating = matchRoute({
+  const isImpersonating = !!matchRoute({
     to: "/escotista/escoteiro/$escoteiroId",
     fuzzy: true,
   });
+  const tab = TAB_TITLES.find((t) => matchRoute({ to: t.to, fuzzy: !t.exact }));
+
+  // Only the impersonation header needs the scout's name; non-suspending.
+  const { data: members } = useQuery({
+    ...convexQuery(api.groups.getGroupMembers, {}),
+    enabled: isImpersonating,
+  });
+  const impersonated = isImpersonating
+    ? (matchRoute({ to: "/escotista/escoteiro/$escoteiroId", fuzzy: true }) as
+        | { escoteiroId: string }
+        | false)
+    : false;
+  const escoteiroName = impersonated
+    ? members?.find((m) => m._id === impersonated.escoteiroId)?.name
+    : undefined;
 
   const isPending =
     !!user &&
@@ -88,67 +110,57 @@ function EscotistaLayout() {
     !!myGroup &&
     myGroup.membershipStatus === "pending";
 
-  if (!ready) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
-          <div className="h-6 w-20 animate-pulse rounded-md border-2 border-black bg-muted" />
-          <div className="h-32 animate-pulse rounded-md border-2 border-black bg-muted" />
-        </div>
-      </div>
-    );
-  }
+  if (!ready) return <AppShellSkeleton />;
+
+  const eyebrow = [myGroup?.name, formatGroupIdentity(myGroup?.number, myGroup?.regiao)]
+    .filter(Boolean)
+    .join(" · ");
+
+  const header = isImpersonating ? (
+    <PageHeader
+      back={<BackLink link={<Link to="/escotista" />} ariaLabel="Voltar ao painel" />}
+      eyebrow="Visualizando como escotista"
+      title={escoteiroName ?? "Escoteiro"}
+    />
+  ) : tab ? (
+    <PageHeader
+      eyebrow={eyebrow || (isPending ? "Escotista" : undefined)}
+      eyebrowTestId="escotista-context"
+      title={isPending ? "Paxtools" : tab.title}
+      avatar={<ViewerAvatar />}
+    />
+  ) : null;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
-        <header className="flex items-center justify-between">
-          {isImpersonating ? (
-            <button
-              type="button"
-              onClick={() => void navigate({ to: "/escotista" })}
-              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="size-4" />
-              Voltar
-            </button>
-          ) : (
-            <h1 className="text-lg font-black uppercase text-foreground">Paxtools</h1>
-          )}
-          <AuthButton />
-        </header>
-
-        {isPending && myGroup ? (
-          <PendingApprovalScreen
-            groupName={myGroup.name}
-            groupNumber={myGroup.number}
-            groupRegiao={myGroup.regiao}
-          />
-        ) : (
-          <Suspense
-            fallback={
-              <div className="space-y-4">
-                <div className="h-32 animate-pulse rounded-md border-2 border-black bg-muted" />
-                <div className="h-24 animate-pulse rounded-md border-2 border-black bg-muted" />
-              </div>
-            }
-          >
-            <Outlet />
-          </Suspense>
-        )}
-        <Footer />
-      </div>
-      {!isImpersonating && !isPending && (
-        <EscotistaBottomNav isAdmin={!!myGroup?.isAdmin} />
+    <AppShell
+      header={header}
+      tabBar={
+        !isImpersonating && !isPending ? (
+          <EscotistaBottomNav isAdmin={!!myGroup?.isAdmin} />
+        ) : undefined
+      }
+    >
+      {isPending && myGroup ? (
+        <PendingApprovalScreen
+          groupName={myGroup.name}
+          groupNumber={myGroup.number}
+          groupRegiao={myGroup.regiao}
+        />
+      ) : (
+        <Suspense
+          fallback={
+            <div className="space-y-4">
+              <div className="h-32 animate-pulse rounded-[10px] border-2 border-[#141414] bg-[#EEE9DC]" />
+              <div className="h-24 animate-pulse rounded-[10px] border-2 border-[#141414] bg-[#EEE9DC]" />
+            </div>
+          }
+        >
+          <Outlet />
+        </Suspense>
       )}
-    </div>
+    </AppShell>
   );
 }
-
-const PRIMARY_INACTIVE =
-  "flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 py-2 text-[11px] font-extrabold text-muted-foreground transition-all hover:bg-white/50 hover:text-foreground";
-const PRIMARY_ACTIVE =
-  "flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-md border-2 border-black bg-primary px-0.5 py-2 text-[11px] font-extrabold text-white shadow-[2px_2px_0px_0px_#000] transition-all";
 
 function EscotistaBottomNav({ isAdmin }: { isAdmin: boolean }) {
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -156,64 +168,42 @@ function EscotistaBottomNav({ isAdmin }: { isAdmin: boolean }) {
   const onSecondaryRoute = SECONDARY_ITEMS.some((item) =>
     Boolean(matchRoute({ to: item.to, fuzzy: true })),
   );
-  const secondary = SECONDARY_ITEMS.filter(
-    (item) => !item.adminOnly || isAdmin,
-  );
+  const secondary = SECONDARY_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+  const moreActive = sheetOpen || onSecondaryRoute;
 
   return (
-    <nav
-      data-testid="escotista-bottom-nav"
-      className="fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-lg gap-1 border-t-2 border-black bg-muted p-1"
-    >
-      {NAV_ITEMS.map((item) => {
-        if (item.kind === "link") {
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.label}
-              to={item.to}
-              className={PRIMARY_INACTIVE}
-              activeProps={{ className: PRIMARY_ACTIVE }}
-              activeOptions={{ exact: item.exact ?? false }}
-            >
-              <Icon className="size-5" />
-              {item.label}
-            </Link>
-          );
-        }
-        if (item.kind === "sheet") {
-          const Icon = item.icon;
-          const moreActive = sheetOpen || onSecondaryRoute;
-          return (
-            <Sheet key={item.label} open={sheetOpen} onOpenChange={setSheetOpen}>
-              <SheetTrigger
-                className={moreActive ? PRIMARY_ACTIVE : PRIMARY_INACTIVE}
-              >
-                <Icon className="size-5" />
-                {item.label}
-              </SheetTrigger>
-              <SheetContent title="Mais opções">
-                {secondary.map((dest) => {
-                  const DestIcon = dest.icon;
-                  return (
-                    <SheetClose asChild key={dest.to}>
-                      <Link
-                        to={dest.to}
-                        className="flex items-center gap-3 rounded-md border-2 border-black bg-white px-4 py-3 text-sm font-bold text-foreground shadow-[2px_2px_0px_0px_#000] transition-all hover:bg-muted"
-                      >
-                        <DestIcon className="size-5" />
-                        {dest.label}
-                      </Link>
-                    </SheetClose>
-                  );
-                })}
-              </SheetContent>
-            </Sheet>
-          );
-        }
-        const _exhaustive: never = item;
-        return _exhaustive;
-      })}
-    </nav>
+    <TabBar testId="escotista-bottom-nav">
+      {NAV_ITEMS.map((item) => (
+        <TabLink
+          key={item.to}
+          to={item.to}
+          label={item.label}
+          icon={item.icon}
+          exact={item.exact}
+        />
+      ))}
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetTrigger className={tabItemClass(moreActive)}>
+          <MoreHorizontal className={moreActive ? TAB_ICON_ACTIVE_CLASS : TAB_ICON_CLASS} />
+          Mais
+        </SheetTrigger>
+        <SheetContent title="Mais opções">
+          {secondary.map((dest) => {
+            const DestIcon = dest.icon;
+            return (
+              <SheetClose asChild key={dest.to}>
+                <Link
+                  to={dest.to}
+                  className="flex min-h-[52px] items-center gap-3 rounded-[10px] border-2 border-[#141414] bg-white px-4 text-[15px] font-extrabold text-[#141414] shadow-[2px_2px_0_#141414] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+                >
+                  <DestIcon className="size-6" />
+                  {dest.label}
+                </Link>
+              </SheetClose>
+            );
+          })}
+        </SheetContent>
+      </Sheet>
+    </TabBar>
   );
 }

@@ -2,23 +2,28 @@ import { useMemo } from "react";
 import { convexQuery } from "@convex-dev/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Search, Users, X } from "lucide-react";
+import { Users } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
-import { formatGroupIdentity } from "@/lib/group-identity";
+import { EIXO_COLORS, eixoMeta } from "@/data/eixo-colors";
 import {
-  AvatarStack,
-  defaultRamoGroup,
-  EIXOS,
-  ListBox,
-  RAMO_GROUP_LABEL,
-  RowChevron,
-  SectionHeading,
   catalogFor,
-  eixoMeta,
-  matchEntry,
+  filterCatalog,
+  isListing,
   plural,
   type CatalogEntry,
   type RamoGroup,
+} from "@/lib/specialty-catalog";
+import { EmptyState } from "@/components/ui/empty-state";
+import { EixoFilterChips, FilterChip } from "@/components/ui/filter-chips";
+import { KpiGrid, KpiTile } from "@/components/ui/kpi-tile";
+import { DashedRowButton, ListRow, RowChevron, RowSnippet } from "@/components/ui/list-row";
+import { AvatarStack } from "@/components/ui/person-avatar";
+import { SearchInput } from "@/components/ui/search-input";
+import { ListBox, Note, SectionHeading } from "@/components/ui/section";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import {
+  RAMO_GROUP_LABEL,
+  defaultRamoGroup,
 } from "@/components/escotista/especialidades/ui";
 
 type CatalogSearch = {
@@ -56,9 +61,6 @@ function EspecialidadesCatalog() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const { data: user } = useSuspenseQuery(convexQuery(api.users.viewer, {}));
-  const { data: myGroup } = useSuspenseQuery(
-    convexQuery(api.groups.getMyGroup, {}),
-  );
   const grupo = search.grupo ?? defaultRamoGroup(user);
   const { data: summary } = useSuspenseQuery(
     convexQuery(api.specialties.getGroupSpecialtySummary, { ramoGroup: grupo }),
@@ -84,148 +86,80 @@ function EspecialidadesCatalog() {
 
   const query = search.q ?? "";
   const filter = search.f;
-  const listing = !!query.trim() || !!filter;
+  const listing = isListing(query, filter);
+  const eixoFilter = filter && filter !== "ativas" ? filter : null;
 
   const results = useMemo(() => {
     if (!listing) return [];
-    let pool: CatalogEntry[] = catalog;
-    if (filter === "ativas") {
-      pool = (summary?.specialties ?? [])
-        .map((s) => byId.get(s.specialtyId))
-        .filter((e): e is CatalogEntry => !!e);
-    } else if (filter) {
-      pool = pool.filter((e) => e.eixoId === filter);
-    }
-    return pool.flatMap((entry) => {
-      const m = matchEntry(entry, query);
-      return m.matched ? [{ entry, snippet: m.snippet }] : [];
-    });
-  }, [listing, catalog, filter, summary, byId, query]);
+    const pool: CatalogEntry[] =
+      filter === "ativas"
+        ? (summary?.specialties ?? [])
+            .map((s) => byId.get(s.specialtyId))
+            .filter((e): e is CatalogEntry => !!e)
+        : catalog;
+    return filterCatalog(pool, { query, eixoId: eixoFilter });
+  }, [listing, catalog, filter, eixoFilter, summary, byId, query]);
 
   const withActivity = (summary?.specialties ?? []).filter((s) =>
     byId.has(s.specialtyId),
   );
-  const identity = formatGroupIdentity(myGroup?.number, myGroup?.regiao);
-  const eyebrow = [
-    summary?.observedSectionName ?? myGroup?.name ?? null,
-    identity,
-  ]
-    .filter(Boolean)
-    .join(" · ");
 
   return (
-    <div className="text-[#141414]">
-      <header className="mb-3">
-        {eyebrow && (
-          <p className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-[#8A887F]">
-            {eyebrow}
-          </p>
-        )}
-        <h1 className="text-[28px] font-black leading-[1.05] tracking-[-0.02em]">
-          Especialidades
-        </h1>
-      </header>
-
+    <div>
       {summary && summary.ramoGroups.length > 1 && (
-        <div
-          role="tablist"
-          aria-label="Catálogo"
-          className="mb-3 flex gap-1 rounded-[10px] border-2 border-[#141414] bg-[#EEE9DC] p-1"
-        >
-          {summary.ramoGroups.map((g) => {
-            const on = g === grupo;
-            return (
-              <button
-                key={g}
-                type="button"
-                role="tab"
-                aria-selected={on}
-                onClick={() => setSearch({ grupo: g, f: undefined })}
-                className={`min-h-11 flex-1 rounded-md border-2 px-2 text-[13px] font-extrabold ${
-                  on
-                    ? "border-[#141414] bg-white shadow-[2px_2px_0_#141414]"
-                    : "border-transparent text-[#4A4A44]"
-                }`}
-              >
-                {RAMO_GROUP_LABEL[g]}
-              </button>
-            );
-          })}
-        </div>
+        <SegmentedControl
+          ariaLabel="Catálogo"
+          size="sm"
+          className="mb-3"
+          value={grupo}
+          onChange={(g) => setSearch({ grupo: g, f: undefined })}
+          options={summary.ramoGroups.map((g) => ({ value: g, label: RAMO_GROUP_LABEL[g] }))}
+        />
       )}
 
-      <label className="mb-2.5 flex min-h-12 items-center gap-2.5 rounded-[10px] border-2 border-[#141414] bg-white px-3 focus-within:ring-2 focus-within:ring-[#0E6B4E]/40">
-        <Search className="size-[22px] shrink-0 text-[#8A887F]" strokeWidth={2.5} />
-        <input
-          type="search"
-          inputMode="search"
-          value={query}
-          onChange={(e) => setSearch({ q: e.target.value || undefined })}
-          placeholder="Buscar por nome ou requisito"
-          aria-label="Buscar por nome ou requisito"
-          className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#8A887F]"
-        />
-        {query && (
-          <button
-            type="button"
-            onClick={() => setSearch({ q: undefined })}
-            aria-label="Limpar busca"
-            className="-mr-2 grid size-11 place-items-center text-[#4A4A44]"
-          >
-            <X className="size-5" />
-          </button>
-        )}
-      </label>
+      <SearchInput
+        className="mb-2.5"
+        value={query}
+        onChange={(q) => setSearch({ q: q || undefined })}
+        placeholder="Buscar por nome ou requisito"
+        testId="catalog-search"
+      />
 
-      <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
-        <FilterChip on={!filter} onClick={() => setSearch({ f: undefined })}>
-          Todas
-        </FilterChip>
-        <FilterChip
-          on={filter === "ativas"}
-          onClick={() => setSearch({ f: filter === "ativas" ? undefined : "ativas" })}
-        >
-          <Users className="size-4" strokeWidth={2.5} />
-          Com atividade na tropa
-        </FilterChip>
-        {EIXOS.map((e) => (
+      <EixoFilterChips
+        className="mb-3"
+        value={eixoFilter}
+        onChange={(id) => setSearch({ f: id ?? undefined })}
+        before={
           <FilterChip
-            key={e.id}
-            on={filter === e.id}
-            onClick={() => setSearch({ f: filter === e.id ? undefined : e.id })}
+            on={filter === "ativas"}
+            onClick={() => setSearch({ f: filter === "ativas" ? undefined : "ativas" })}
+            testId="chip-ativas"
           >
-            <span
-              className="size-2.5 rounded-full border-2 border-current"
-              style={{ background: e.color }}
-            />
-            {e.name}
+            <Users className="size-4" strokeWidth={2.5} />
+            Com atividade na tropa
           </FilterChip>
-        ))}
-      </div>
+        }
+      />
 
       {!summary ? (
-        <p className="rounded-[10px] border-2 border-dashed border-[#8A887F] p-5 text-center text-sm text-[#4A4A44]">
-          Sem acesso aos escoteiros deste grupo.
-        </p>
+        <EmptyState>Sem acesso aos escoteiros deste grupo.</EmptyState>
       ) : listing ? (
         <>
           <SectionHeading
+            className="mt-1"
             label={
               filter === "ativas"
                 ? "Com atividade"
-                : filter
-                  ? eixoMeta(filter).name
+                : eixoFilter
+                  ? eixoMeta(eixoFilter).name
                   : "Resultados"
             }
             meta={plural(results.length, "especialidade", "especialidades")}
           />
           {results.length === 0 ? (
-            <p className="rounded-[10px] border-2 border-dashed border-[#8A887F] p-5 text-center text-sm text-[#4A4A44]">
-              <b className="block text-[15px] text-[#141414]">Nada encontrado</b>
-              Tente outro termo ou limpe o filtro.
-            </p>
+            <EmptyState title="Nada encontrado">Tente outro termo ou limpe o filtro.</EmptyState>
           ) : (
-            <ListBox>
+            <ListBox testId="catalog-results">
               {results.map(({ entry, snippet }) => (
                 <SpecialtyRow
                   key={entry.id}
@@ -240,43 +174,25 @@ function EspecialidadesCatalog() {
         </>
       ) : (
         <>
-          <div className="mb-1.5 grid grid-cols-2 gap-2">
-            <div className="rounded-[10px] border-2 border-[#141414] bg-[#F4C430] px-3 py-2.5">
-              <p className="text-[26px] font-black leading-none">
-                {summary.totals.earned}
-              </p>
-              <p className="mt-1 text-[12px] font-extrabold uppercase tracking-[0.06em] text-[#4A4A44]">
-                Conquistadas na tropa
-              </p>
-            </div>
-            <div className="rounded-[10px] border-2 border-[#141414] bg-white px-3 py-2.5">
-              <p className="text-[26px] font-black leading-none">
-                {summary.totals.inProgress}
-              </p>
-              <p className="mt-1 text-[12px] font-extrabold uppercase tracking-[0.06em] text-[#4A4A44]">
-                Em andamento
-              </p>
-            </div>
-          </div>
-          <p className="mb-3 text-[12px] text-[#8A887F]">
+          <KpiGrid className="mb-1.5">
+            <KpiTile tone="gold" value={summary.totals.earned} label="Conquistadas na tropa" />
+            <KpiTile value={summary.totals.inProgress} label="Em andamento" />
+          </KpiGrid>
+          <Note className="mb-3 mt-0">
             {plural(summary.escoteiroCount, "escoteiro", "escoteiros")} ·{" "}
             {summary.observedSectionName
               ? `seção observada: ${summary.observedSectionName} · troque no Painel.`
               : "todas as seções · troque no Painel."}
-          </p>
+          </Note>
 
           <SectionHeading
             label="Na tropa"
             meta={plural(withActivity.length, "especialidade", "especialidades")}
           />
           {withActivity.length === 0 ? (
-            <p className="rounded-[10px] border-2 border-dashed border-[#8A887F] p-5 text-center text-sm text-[#4A4A44]">
-              <b className="block text-[15px] text-[#141414]">
-                Nenhuma atividade ainda
-              </b>
-              Quando um escoteiro marcar ou tiver itens aprovados, a
-              especialidade aparece aqui.
-            </p>
+            <EmptyState title="Nenhuma atividade ainda">
+              Quando um escoteiro marcar ou tiver itens aprovados, a especialidade aparece aqui.
+            </EmptyState>
           ) : (
             <>
               <ListBox>
@@ -290,85 +206,45 @@ function EspecialidadesCatalog() {
                 ))}
               </ListBox>
               {withActivity.length > NA_TROPA_PREVIEW && (
-                <button
-                  type="button"
-                  onClick={() => setSearch({ f: "ativas" })}
-                  className="mt-2 flex min-h-[52px] w-full items-center gap-3 rounded-[10px] border-2 border-dashed border-[#D9D5C9] px-3 text-left text-[15px] font-extrabold text-[#0E6B4E]"
-                >
+                <DashedRowButton onClick={() => setSearch({ f: "ativas" })}>
                   Ver as {withActivity.length} com atividade
                   <span className="ml-auto">
                     <RowChevron />
                   </span>
-                </button>
+                </DashedRowButton>
               )}
             </>
           )}
 
-          <SectionHeading
-            label="Catálogo"
-            meta={`${catalog.length} · por eixo`}
-          />
+          <SectionHeading label="Catálogo" meta={`${catalog.length} · por eixo`} />
           <ListBox>
-            {EIXOS.map((e) => {
+            {EIXO_COLORS.map((e) => {
               const inEixo = catalog.filter((c) => c.eixoId === e.id);
               if (inEixo.length === 0) return null;
               const active = inEixo.filter((c) => activity.has(c.id)).length;
               return (
-                <button
+                <ListRow
                   key={e.id}
-                  type="button"
+                  tall
+                  bar={e.color}
+                  title={e.name}
+                  subtitle={`${plural(inEixo.length, "especialidade", "especialidades")}${
+                    active > 0 ? ` · ${active} com atividade` : ""
+                  }`}
+                  chevron
                   onClick={() => setSearch({ f: e.id })}
-                  className="flex min-h-16 w-full items-center gap-3 border-t-[1.5px] border-[#D9D5C9] py-2.5 pr-3 text-left first:border-t-0"
-                >
-                  <span
-                    className="w-2 self-stretch"
-                    style={{ background: e.color }}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[15px] font-extrabold leading-tight">
-                      {e.name}
-                    </span>
-                    <span className="mt-0.5 block text-[12px] font-semibold text-[#8A887F]">
-                      {plural(inEixo.length, "especialidade", "especialidades")}
-                      {active > 0 && ` · ${active} com atividade`}
-                    </span>
-                  </span>
-                  <RowChevron />
-                </button>
+                />
               );
             })}
           </ListBox>
-          <p className="mt-2 text-[12px] text-[#8A887F]">
+          <Note>
             A busca cobre o nome <i>e</i> o texto dos{" "}
-            {grupo === "younger" ? "itens" : "sugestões das etapas"} — os
-            resultados mostram o trecho que casou.
-          </p>
+            {grupo === "younger" ? "itens" : "sugestões das etapas"} — os resultados mostram o
+            trecho que casou.
+          </Note>
         </>
       )}
     </div>
-  );
-}
-
-function FilterChip({
-  on,
-  onClick,
-  children,
-}: {
-  on: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={on}
-      onClick={onClick}
-      className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-[#141414] px-3 text-[14px] font-extrabold ${
-        on ? "bg-[#141414] text-white" : "bg-white text-[#141414]"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -386,47 +262,39 @@ function SpecialtyRow({
   const eixo = eixoMeta(entry.eixoId);
   const total = activity ? activity.earnedCount + activity.inProgressCount : 0;
   return (
-    <Link
-      to="/escotista/especialidades/$specialtyId"
-      params={{ specialtyId: entry.id }}
-      search={{ grupo }}
-      className="flex min-h-16 w-full items-center gap-3 border-t-[1.5px] border-[#D9D5C9] py-2.5 pr-3 text-left first:border-t-0 hover:bg-black/[0.02]"
-    >
-      <span className="w-2 self-stretch" style={{ background: eixo.color }} />
-      <span className="min-w-0 flex-1">
-        <span className="block text-[15px] font-extrabold leading-tight">
-          {entry.name}
-        </span>
-        <span className="mt-0.5 block text-[12px] font-semibold text-[#8A887F]">
-          {entry.itemCount != null
-            ? `${entry.itemCount} itens`
-            : "3 etapas"}{" "}
-          · {eixo.name}
-        </span>
-        {snippet && (
-          <span className="mt-1 line-clamp-2 block border-l-[3px] border-[#D9D5C9] pl-2 text-[12px] text-[#4A4A44]">
-            {snippet}
-          </span>
-        )}
-        {activity && total > 0 && (
-          <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] font-bold text-[#8A887F]">
-            {activity.earnedCount > 0 && (
-              <b className="text-[#0E6B4E]">
-                {activity.earnedCount}{" "}
-                {activity.earnedCount === 1 ? "conquistou" : "conquistaram"}
-              </b>
-            )}
-            {activity.earnedCount > 0 && activity.inProgressCount > 0 && "·"}
-            {activity.inProgressCount > 0 && (
-              <span className="text-[#6B4A00]">
-                {activity.inProgressCount} em andamento
-              </span>
-            )}
-            <AvatarStack people={activity.avatars} total={total} />
-          </span>
-        )}
-      </span>
-      <RowChevron />
-    </Link>
+    <ListRow
+      tall
+      bar={eixo.color}
+      title={entry.name}
+      subtitle={`${entry.itemCount != null ? `${entry.itemCount} itens` : "3 etapas"} · ${eixo.name}`}
+      extra={
+        <>
+          {snippet && <RowSnippet>{snippet}</RowSnippet>}
+          {activity && total > 0 && (
+            <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] font-bold text-[#8A887F]">
+              {activity.earnedCount > 0 && (
+                <b className="text-[#0E6B4E]">
+                  {activity.earnedCount}{" "}
+                  {activity.earnedCount === 1 ? "conquistou" : "conquistaram"}
+                </b>
+              )}
+              {activity.earnedCount > 0 && activity.inProgressCount > 0 && "·"}
+              {activity.inProgressCount > 0 && (
+                <span className="text-[#6B4A00]">{activity.inProgressCount} em andamento</span>
+              )}
+              <AvatarStack people={activity.avatars} total={total} />
+            </span>
+          )}
+        </>
+      }
+      chevron
+      link={
+        <Link
+          to="/escotista/especialidades/$specialtyId"
+          params={{ specialtyId: entry.id }}
+          search={{ grupo }}
+        />
+      }
+    />
   );
 }

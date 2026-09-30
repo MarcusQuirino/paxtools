@@ -9,25 +9,18 @@ import {
   OLDER_SPECIALTY_BY_ID,
   type ProjectStep,
 } from "@/data/specialty-data/older";
-import {
-  BACK_CLASS,
-  BackIcon,
-  EMERALD,
-  AMBER_INK,
-  FichaLink,
-  LevelPill,
-  ListBox,
-  ListHeader,
-  MiniBar,
-  PersonAvatar,
-  RowChevron,
-  SubBar,
-  defaultRamoGroup,
-  eixoMeta,
-  findCatalogEntry,
-  plural,
-  type RamoGroup,
-} from "@/components/escotista/especialidades/ui";
+import { eixoMeta } from "@/data/eixo-colors";
+import { AMBER, AMBER_INK, EMERALD } from "@/lib/design-tokens";
+import { findCatalogEntry, plural, type RamoGroup } from "@/lib/specialty-catalog";
+import { BackLink, PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ListRow } from "@/components/ui/list-row";
+import { PersonAvatar } from "@/components/ui/person-avatar";
+import { MiniBar } from "@/components/ui/progress-ring";
+import { Card, ListBox, ListHeader, Note } from "@/components/ui/section";
+import { LevelPill, Pill } from "@/components/ui/status-pill";
+import { defaultRamoGroup } from "@/components/escotista/especialidades/ui";
+import { LevelBoxes, StepHeader } from "@/components/especialidades/pieces";
 import {
   PendingRelato,
   Suggestions,
@@ -63,23 +56,17 @@ function SpecialtyDetail() {
   );
 
   const back = (
-    <Link
-      to="/escotista/especialidades"
-      search={{ grupo }}
-      aria-label="Voltar ao catálogo"
-      className={BACK_CLASS}
-    >
-      <BackIcon />
-    </Link>
+    <BackLink
+      link={<Link to="/escotista/especialidades" search={{ grupo }} />}
+      ariaLabel="Voltar ao catálogo"
+    />
   );
 
   if (!entry || !roster) {
     return (
-      <div className="text-[#141414]">
-        <SubBar back={back} crumb="Especialidades" title="Não encontrada" />
-        <p className="mt-3 rounded-[10px] border-2 border-dashed border-[#8A887F] p-5 text-center text-sm text-[#4A4A44]">
-          Esta especialidade não existe neste catálogo.
-        </p>
+      <div>
+        <PageHeader back={back} eyebrow="Especialidades" title="Não encontrada" />
+        <EmptyState className="mt-3">Esta especialidade não existe neste catálogo.</EmptyState>
       </div>
     );
   }
@@ -89,38 +76,24 @@ function SpecialtyDetail() {
     roster.escoteiroCount - roster.earnedCount - roster.inProgressCount;
 
   return (
-    <div className="text-[#141414]">
-      <SubBar
+    <div>
+      <PageHeader
         back={back}
-        crumb={`${eixo.name} · ${GROUP_CRUMB[grupo]}`}
+        eyebrow={`${eixo.name} · ${GROUP_CRUMB[grupo]}`}
         crumbColor={eixo.color}
         title={entry.name}
       />
 
-      <div
-        className="mb-4 mt-2 rounded-[10px] border-2 border-[#141414] bg-white p-3.5"
-        style={{ borderLeftWidth: 8, borderLeftColor: eixo.color }}
-      >
-        <p className="text-[14px] leading-[1.45] text-[#4A4A44]">
-          {entry.description}
-        </p>
+      <Card accent={eixo.color} className="mb-4 mt-2">
+        <p className="text-[14px] leading-[1.45] text-[#4A4A44]">{entry.description}</p>
         {roster.kind === "younger" && entry.itemCount != null && (
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div className="rounded-md border-2 border-[#141414] bg-[#E3E8F8] px-2.5 py-2 text-[12px] font-bold text-[#4A4A44]">
-              <b className="block text-[14px] text-[#141414]">Nível 1</b>
-              {entry.itemCount / 2} de {entry.itemCount} itens
-            </div>
-            <div className="rounded-md border-2 border-[#141414] bg-[#F4C430] px-2.5 py-2 text-[12px] font-bold text-[#4A4A44]">
-              <b className="block text-[14px] text-[#141414]">Nível 2</b>
-              {entry.itemCount} de {entry.itemCount} itens
-            </div>
-          </div>
+          <LevelBoxes total={entry.itemCount} />
         )}
         {roster.kind === "older" && (
           <p className="mt-2 text-[13px] leading-snug text-[#4A4A44]">
-            Projeto em três etapas — <b>Conhecer → Fazer → Compartilhar</b>.
-            Cada etapa é um relato aprovado separadamente, em qualquer ordem; a
-            especialidade é conquistada com as três aprovadas.
+            Projeto em três etapas — <b>Conhecer → Fazer → Compartilhar</b>. Cada etapa é um
+            relato aprovado separadamente, em qualquer ordem; a especialidade é conquistada com
+            as três aprovadas.
           </p>
         )}
         <div className="mt-3 flex items-baseline justify-between gap-3 text-[14px] font-extrabold">
@@ -130,11 +103,11 @@ function SpecialtyDetail() {
           <span className="text-right text-[12px] font-bold text-[#8A887F]">
             <b style={{ color: EMERALD }}>{roster.earnedCount}</b>{" "}
             {roster.earnedCount === 1 ? "conquistou" : "conquistaram"} ·{" "}
-            <b style={{ color: AMBER_INK }}>{roster.inProgressCount}</b> em
-            andamento · {Math.max(0, notStarted)} sem começar
+            <b style={{ color: AMBER_INK }}>{roster.inProgressCount}</b> em andamento ·{" "}
+            {Math.max(0, notStarted)} sem começar
           </span>
         </div>
-      </div>
+      </Card>
 
       {roster.kind === "younger" ? (
         <>
@@ -159,10 +132,7 @@ function SpecialtyDetail() {
                   </span>
                   <p className="flex-1 text-[14px] leading-[1.4]">{text}</p>
                   <span className="min-w-[52px] shrink-0 pt-0.5 text-right text-[12px] font-extrabold text-[#8A887F]">
-                    <b
-                      className="block text-[15px]"
-                      style={{ color: hot ? EMERALD : "#141414" }}
-                    >
+                    <b className="block text-[15px]" style={{ color: hot ? EMERALD : "#141414" }}>
                       {c.approvedCount}
                     </b>
                     têm
@@ -208,47 +178,35 @@ function SpecialtyDetail() {
                     }`
                   : `${p.approvedCount} de ${total} itens`;
               return (
-                <FichaLink
+                <ListRow
                   key={p._id}
-                  escoteiroId={p._id}
-                  specialtyId={entry.id}
-                  className="flex min-h-[60px] w-full items-center gap-2.5 border-t-[1.5px] border-[#D9D5C9] px-3 py-2.5 text-left hover:bg-black/[0.02]"
-                >
-                  <PersonAvatar id={p._id} name={p.name} image={p.image} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[15px] font-extrabold leading-tight">
-                      {p.name ?? "Escoteiro"}
-                    </span>
-                    <span
-                      className="mt-0.5 block text-[12px] font-semibold"
-                      style={{ color: p.pendingCount > 0 ? AMBER_INK : "#8A887F" }}
-                    >
-                      {status}
-                    </span>
-                    {p.level < 2 && (
+                  tall
+                  leading={<PersonAvatar id={p._id} name={p.name} image={p.image} />}
+                  title={p.name ?? "Escoteiro"}
+                  subtitle={status}
+                  subtitleTone={p.pendingCount > 0 ? "pending" : "muted"}
+                  extra={
+                    p.level < 2 ? (
                       <MiniBar
                         pct={(p.approvedCount / total) * 100}
-                        color={p.pendingCount > 0 ? "#F5B300" : EMERALD}
+                        color={p.pendingCount > 0 ? AMBER : EMERALD}
                       />
-                    )}
-                  </span>
-                  <LevelPill level={p.level} />
-                  <RowChevron />
-                </FichaLink>
+                    ) : undefined
+                  }
+                  trailing={<LevelPill level={p.level} />}
+                  chevron
+                  link={<Link to="/especialidades" search={{ escoteiroId: p._id, specialty: entry.id }} />}
+                />
               );
             })}
           </ListBox>
-          <p className="text-[12px] text-[#8A887F]">
-            Mais perto de conquistar primeiro. Cada linha abre a ficha daquele
-            escoteiro nesta especialidade.
-          </p>
+          <Note>
+            Mais perto de conquistar primeiro. Cada linha abre a ficha daquele escoteiro nesta
+            especialidade.
+          </Note>
         </>
       ) : (
-        <OlderDetail
-          specialtyId={entry.id}
-          roster={roster}
-          stepTint={eixo.tint}
-        />
+        <OlderDetail specialtyId={entry.id} roster={roster} stepTint={eixo.tint} />
       )}
     </div>
   );
@@ -288,32 +246,24 @@ function OlderDetail({
         const c = roster.steps[step];
         const pending = roster.pendingReports.filter((r) => r.step === step);
         return (
-          <section
-            key={step}
-            className="mb-3 overflow-hidden rounded-[10px] border-2 border-[#141414] bg-white"
-          >
-            <div
-              className="flex items-center gap-2.5 border-b-2 border-[#141414] px-3 py-2.5"
-              style={{ background: stepTint }}
-            >
-              <span className="grid size-7 place-items-center rounded-full border-2 border-[#141414] bg-[#0E6B4E] text-[13px] font-black text-white">
-                {i + 1}
-              </span>
-              <h3 className="text-[16px] font-black">
-                {PROJECT_STEP_LABELS[step]}
-              </h3>
-              <span className="ml-auto text-[12px] font-extrabold text-[#4A4A44]">
-                <b style={{ color: EMERALD }}>{c.approvedCount}</b>{" "}
-                {c.approvedCount === 1 ? "aprovado" : "aprovados"}
-                {c.pendingCount > 0 && (
-                  <span style={{ color: AMBER_INK }}>
-                    {" "}
-                    · {c.pendingCount}{" "}
-                    {c.pendingCount === 1 ? "pendente" : "pendentes"}
-                  </span>
-                )}
-              </span>
-            </div>
+          <ListBox key={step} className="mb-3">
+            <StepHeader
+              ordinal={i + 1}
+              label={PROJECT_STEP_LABELS[step]}
+              tint={stepTint}
+              right={
+                <span className="text-[12px] font-extrabold text-[#4A4A44]">
+                  <b style={{ color: EMERALD }}>{c.approvedCount}</b>{" "}
+                  {c.approvedCount === 1 ? "aprovado" : "aprovados"}
+                  {c.pendingCount > 0 && (
+                    <span style={{ color: AMBER_INK }}>
+                      {" "}
+                      · {c.pendingCount} {c.pendingCount === 1 ? "pendente" : "pendentes"}
+                    </span>
+                  )}
+                </span>
+              }
+            />
             <Suggestions items={suggestions[step]} />
             {pending.map((r) => (
               <PendingRelato
@@ -325,7 +275,7 @@ function OlderDetail({
                 review={review}
               />
             ))}
-          </section>
+          </ListBox>
         );
       })}
 
@@ -344,60 +294,49 @@ function OlderDetail({
           </p>
         )}
         {roster.people.map((p) => {
-          const pendingSteps = PROJECT_STEPS.filter(
-            (s) => p.steps[s] === "pending",
-          );
+          const pendingSteps = PROJECT_STEPS.filter((s) => p.steps[s] === "pending");
           const status = p.earned
             ? "Conquistada · 3 etapas aprovadas"
             : pendingSteps.length > 0
               ? `${pendingSteps.map((s) => PROJECT_STEP_LABELS[s]).join(", ")} aguardando aprovação`
               : `${p.approvedCount} de 3 etapas`;
           return (
-            <FichaLink
+            <ListRow
               key={p._id}
-              escoteiroId={p._id}
-              specialtyId={specialtyId}
-              className="flex min-h-[60px] w-full items-center gap-2.5 border-t-[1.5px] border-[#D9D5C9] px-3 py-2.5 text-left hover:bg-black/[0.02]"
-            >
-              <PersonAvatar id={p._id} name={p.name} image={p.image} />
-              <span className="min-w-0 flex-1">
-                <span className="block text-[15px] font-extrabold leading-tight">
-                  {p.name ?? "Escoteiro"}
+              tall
+              leading={<PersonAvatar id={p._id} name={p.name} image={p.image} />}
+              title={p.name ?? "Escoteiro"}
+              subtitle={status}
+              subtitleTone={pendingSteps.length > 0 && !p.earned ? "pending" : "muted"}
+              trailing={
+                <span className="flex shrink-0 gap-1" aria-hidden>
+                  {PROJECT_STEPS.map((s) => (
+                    <Pill
+                      key={s}
+                      tone={
+                        p.steps[s] === "approved"
+                          ? "emerald"
+                          : p.steps[s] === "pending"
+                            ? "amber"
+                            : "paper"
+                      }
+                      className="px-[7px] normal-case tracking-normal"
+                    >
+                      {STEP_SHORT[s]}
+                    </Pill>
+                  ))}
                 </span>
-                <span
-                  className="mt-0.5 block text-[12px] font-semibold"
-                  style={{
-                    color: pendingSteps.length > 0 && !p.earned ? AMBER_INK : "#8A887F",
-                  }}
-                >
-                  {status}
-                </span>
-              </span>
-              <span className="flex shrink-0 gap-1" aria-hidden>
-                {PROJECT_STEPS.map((s) => (
-                  <span
-                    key={s}
-                    className={`inline-flex items-center rounded-full border-2 border-[#141414] px-[7px] py-0.5 text-[11px] font-black ${
-                      p.steps[s] === "approved"
-                        ? "bg-[#0E6B4E] text-white"
-                        : p.steps[s] === "pending"
-                          ? "bg-[#F5B300]"
-                          : "bg-white"
-                    }`}
-                  >
-                    {STEP_SHORT[s]}
-                  </span>
-                ))}
-              </span>
-              <RowChevron />
-            </FichaLink>
+              }
+              chevron
+              link={<Link to="/especialidades" search={{ escoteiroId: p._id, specialty: specialtyId }} />}
+            />
           );
         })}
       </ListBox>
-      <p className="text-[12px] text-[#8A887F]">
-        Cada etapa é um relato do jovem; aprove ou rejeite aqui ou na ficha do
-        escoteiro, que mostra os três relatos completos.
-      </p>
+      <Note>
+        Cada etapa é um relato do jovem; aprove ou rejeite aqui ou na ficha do escoteiro, que
+        mostra os três relatos completos.
+      </Note>
     </>
   );
 }
