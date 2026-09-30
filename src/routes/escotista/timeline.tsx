@@ -3,7 +3,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { usePaginatedQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useAuthGate } from "@/hooks/use-auth-gate";
-import { Button } from "@/components/ui/button";
+import { ListBox } from "@/components/ui/section";
+import { ListRow } from "@/components/ui/list-row";
+import { EmptyState } from "@/components/ui/empty-state";
+import { HardButton } from "@/components/ui/hard-button";
 import {
   Check,
   X,
@@ -13,7 +16,6 @@ import {
   UserMinus,
   Shield,
   Tag,
-  ScrollText,
 } from "lucide-react";
 
 export const Route = createFileRoute("/escotista/timeline")({
@@ -30,18 +32,34 @@ type EventType =
   | "ramoChange"
   | "accessChange";
 
+/**
+ * Semantic icon tiles: emerald = approved / progressed / joined, red =
+ * rejected / banned, gold = the ramo's recognition (Lis de Ouro etc.),
+ * neutral sand for administrative changes. No per-type rainbow.
+ */
+const TINT = {
+  emerald: { background: "#DDF3E8", color: "#0E6B4E" },
+  red: { background: "#FCE4E4", color: "#C62828" },
+  gold: { background: "#F4C430", color: "#141414" },
+  neutral: { background: "#EEE9DC", color: "#4A4A44" },
+} as const;
+
 const TYPE_META: Record<
   EventType,
-  { icon: React.ComponentType<{ className?: string }>; tint: string }
+  {
+    icon: React.ComponentType<{ className?: string }>;
+    tint: keyof typeof TINT;
+    label: string;
+  }
 > = {
-  approval: { icon: Check, tint: "bg-emerald-100 text-emerald-800" },
-  rejection: { icon: X, tint: "bg-red-100 text-red-800" },
-  levelUp: { icon: TrendingUp, tint: "bg-blue-100 text-blue-800" },
-  lisDeOuro: { icon: Award, tint: "bg-amber-100 text-amber-800" },
-  memberJoin: { icon: UserPlus, tint: "bg-emerald-100 text-emerald-800" },
-  memberBan: { icon: UserMinus, tint: "bg-red-100 text-red-800" },
-  accessChange: { icon: Shield, tint: "bg-purple-100 text-purple-800" },
-  ramoChange: { icon: Tag, tint: "bg-sky-100 text-sky-800" },
+  approval: { icon: Check, tint: "emerald", label: "Aprovação" },
+  rejection: { icon: X, tint: "red", label: "Rejeição" },
+  levelUp: { icon: TrendingUp, tint: "emerald", label: "Nova etapa" },
+  lisDeOuro: { icon: Award, tint: "gold", label: "Reconhecimento" },
+  memberJoin: { icon: UserPlus, tint: "emerald", label: "Entrada" },
+  memberBan: { icon: UserMinus, tint: "red", label: "Banimento" },
+  accessChange: { icon: Shield, tint: "neutral", label: "Acesso" },
+  ramoChange: { icon: Tag, tint: "neutral", label: "Ramo" },
 };
 
 function formatWhen(ts: number): string {
@@ -87,52 +105,33 @@ function TimelinePage() {
 
   if (loadingInitial || chasingPages) {
     return (
-      <div className="space-y-2">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div
-            key={i}
-            className="h-14 animate-pulse rounded-md border-2 border-black bg-muted"
-          />
-        ))}
-      </div>
+      <div className="h-72 animate-pulse rounded-[10px] border-2 border-[#141414] bg-[#EEE9DC]" />
     );
   }
 
   if (results.length === 0) {
     return (
-      <div
-        data-testid="timeline-empty"
-        className="flex flex-col items-center justify-center py-12 text-center"
-      >
-        <ScrollText className="size-12 text-muted-foreground/40 mb-3" />
-        <h2 className="font-semibold text-lg">Sem atividade ainda</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          As ações do grupo aparecerão aqui conforme acontecem.
-        </p>
-      </div>
+      <EmptyState title="Sem atividade ainda" testId="timeline-empty">
+        As ações do grupo aparecerão aqui conforme acontecem.
+      </EmptyState>
     );
   }
 
   return (
-    <div data-testid="timeline-feed" className="space-y-2">
-      {results.map((e) => (
-        <TimelineRow key={e._id} event={e} />
-      ))}
+    <div className="space-y-3">
+      <ListBox testId="timeline-feed">
+        {results.map((e) => (
+          <TimelineRow key={e._id} event={e} />
+        ))}
+      </ListBox>
 
       {status === "CanLoadMore" && (
-        <div className="pt-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full border-black"
-            onClick={() => loadMore(25)}
-          >
-            Carregar mais
-          </Button>
-        </div>
+        <HardButton tone="paper" size="md" full onClick={() => loadMore(25)}>
+          Carregar mais
+        </HardButton>
       )}
       {status === "LoadingMore" && (
-        <div className="h-10 animate-pulse rounded-md border-2 border-black bg-muted" />
+        <div className="h-11 animate-pulse rounded-[10px] border-2 border-[#141414] bg-[#EEE9DC]" />
       )}
     </div>
   );
@@ -156,27 +155,37 @@ function TimelineRow({
   const subject = event.subjectName ?? "membro";
 
   return (
-    <div className="flex items-start gap-3 rounded-md border-2 border-black bg-card px-3 py-2.5 shadow-[2px_2px_0px_0px_#000]">
-      <div
-        className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border-2 border-black ${meta.tint}`}
-      >
-        <Icon className="size-4" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm leading-snug">
-          <span className="font-bold">{actor}</span>{" "}
-          <span className="text-muted-foreground">·</span>{" "}
-          <span className="font-semibold">{subject}</span>
-        </p>
-        {event.summary && (
-          <p className="text-xs text-muted-foreground truncate">
+    <ListRow
+      data={{ type: event.type }}
+      leading={
+        <span
+          className="grid size-9 shrink-0 place-items-center self-start rounded-md border-2 border-[#141414]"
+          style={TINT[meta.tint]}
+          role="img"
+          aria-label={meta.label}
+        >
+          <Icon className="size-[18px]" />
+        </span>
+      }
+      title={
+        <>
+          {actor}
+          <span className="font-semibold text-[#8A887F]"> · </span>
+          {subject}
+        </>
+      }
+      subtitle={
+        event.summary ? (
+          <span className="line-clamp-2 text-[#4A4A44]" title={event.summary}>
             {event.summary}
-          </p>
-        )}
-      </div>
-      <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
-        {formatWhen(event._creationTime)}
-      </span>
-    </div>
+          </span>
+        ) : undefined
+      }
+      trailing={
+        <span className="shrink-0 self-start pt-0.5 text-[12px] font-bold text-[#8A887F]">
+          {formatWhen(event._creationTime)}
+        </span>
+      }
+    />
   );
 }

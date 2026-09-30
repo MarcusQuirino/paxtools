@@ -1,3 +1,8 @@
+import { ListBox, Section } from "@/components/ui/section";
+import { ListRow } from "@/components/ui/list-row";
+import { MiniBar } from "@/components/ui/progress-ring";
+import { eixoColor } from "@/data/eixo-colors";
+
 type ActivityCoverageView = {
   actionId: string;
   blocoId: string;
@@ -17,37 +22,34 @@ export function MostDone({
 }) {
   const top = activities.slice(0, 5);
   return (
-    <section
-      className="space-y-3 rounded-md border-2 border-black bg-card p-4 shadow-[2px_2px_0px_0px_#000]"
-      data-testid="stats-most-done"
-    >
-      <h3 className="text-sm font-black uppercase">Mais realizadas</h3>
-      <ul className="space-y-2">
+    <Section label="Mais realizadas" meta="top 5">
+      <ListBox testId="stats-most-done">
         {top.map((a) => {
-          const pct = scoutCount === 0 ? 0 : Math.round((a.completedCount / scoutCount) * 100);
+          const pct = scoutCount === 0 ? 0 : Math.min(100, Math.round((a.completedCount / scoutCount) * 100));
+          const color = eixoColor(a.eixoId);
           return (
-            <li key={a.actionId} className="space-y-1">
-              <div className="flex items-center justify-between gap-2 text-xs">
-                <span className="line-clamp-2 font-medium">{a.text}</span>
-                <span className="shrink-0 font-bold text-muted-foreground">
-                  {a.completedCount}/{scoutCount}
-                </span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-primary"
-                  style={{ width: `${Math.min(100, pct)}%` }}
+            <ListRow
+              key={a.actionId}
+              tall
+              bar={color}
+              title={<span className="line-clamp-2 font-semibold">{a.text}</span>}
+              subtitle={`${a.completedCount} de ${scoutCount} · ${a.eixoName}`}
+              extra={
+                <span
                   role="meter"
-                  aria-valuenow={Math.min(100, pct)}
+                  aria-valuenow={pct}
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-label={`${a.text}: ${a.completedCount}/${scoutCount}`}
-                />
-              </div>
-            </li>
+                  className="block"
+                >
+                  <MiniBar pct={pct} color={color} width={140} />
+                </span>
+              }
+            />
           );
         })}
-      </ul>
-    </section>
+      </ListBox>
+    </Section>
   );
 }

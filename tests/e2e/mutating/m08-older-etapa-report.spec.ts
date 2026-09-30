@@ -77,7 +77,7 @@ async function openUrsulaCard(page: Page): Promise<Locator> {
 }
 
 const queueCard = (page: Page, name: string) =>
-  page.locator("div.border-2.border-black").filter({ hasText: name }).first();
+  page.getByTestId("pending-person").filter({ hasText: name }).first();
 
 /**
  * Resolve a scout's queue card, tolerating the reactive-query load race (a
@@ -91,7 +91,7 @@ async function scoutCard(page: Page, name: string): Promise<Locator> {
 }
 
 async function openQueue(page: Page): Promise<void> {
-  const anyCard = page.locator("div.border-2.border-black").first();
+  const anyCard = page.getByTestId("pending-person").first();
   const empty = page.getByText("Tudo em dia!");
   for (let attempt = 0; attempt < 6; attempt++) {
     await page.goto("/escotista/pending");
@@ -129,23 +129,22 @@ async function approveReport(
   await openQueue(talitaPage);
   const card = await scoutCard(talitaPage, URSULA_NAME);
   if (!(await card.count())) return false;
-  await talitaPage
-    .getByRole("button", { name: new RegExp(URSULA_NAME) })
-    .first()
-    .click();
-  const reportCard = card
-    .locator("div.border-2.border-amber-300")
-    .filter({ hasText: stepLabel });
+  // A relato row's checkbox is named "Relato · <especialidade> · <etapa>: …".
+  const reportCheck = card.getByRole("checkbox", {
+    name: new RegExp(`^Relato · ${SPECIALTY_NAME} · ${stepLabel}:`),
+  });
   try {
-    // Auto-waits for the report card + button to mount; times out (→ false) if
-    // Úrsula has no pending report for this step (already approved).
-    await reportCard
-      .getByRole("button", { name: /^Aprovar/ })
-      .click({ timeout: 10_000 });
+    // Auto-waits for the row to mount; times out (→ false) if Úrsula has no
+    // pending report for this step (already approved).
+    await reportCheck.click({ timeout: 10_000 });
   } catch {
     return false;
   }
-  await expect(reportCard).toHaveCount(0, { timeout: 15_000 });
+  await talitaPage
+    .getByTestId("pending-action-bar")
+    .getByRole("button", { name: /^Aprovar/ })
+    .click();
+  await expect(reportCheck).toHaveCount(0, { timeout: 15_000 });
   return true;
 }
 

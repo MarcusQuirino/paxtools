@@ -10,8 +10,8 @@
  * Care with Bruno's seed: he carries 2 seeded PENDING ações on his frontier
  * bloco (Consumo Responsável → fixed:0 + fixed:1) that other read specs assert
  * on. We mark a DIFFERENT unchecked ação (variable:0) and reject only that one
- * (deselect-all, then re-select just our row) so the seeded queue material
- * stays intact.
+ * (the queue starts with nothing selected; we tick just our row) so the seeded
+ * queue material stays intact.
  *
  * Renata is a SHARED approver login (M2 also drives her queue concurrently), so
  * every queue assertion is scoped to Bruno's card — never a global count.
@@ -35,11 +35,9 @@ const BRUNO_NAME = /Bruno Sá/i;
 const expandBloco = (p: Page) =>
   p.getByRole("button", { name: BLOCO_TRIGGER }).first().click();
 
-/** Bruno's card in Renata's queue, scoped to its bordered container. */
+/** Bruno's card in Renata's queue (one `pending-person` box per escoteiro). */
 function brunoCard(page: Page): Locator {
-  return page
-    .getByRole("button", { name: BRUNO_NAME })
-    .locator('xpath=ancestor::div[contains(@class,"bg-card")][1]');
+  return page.getByTestId("pending-person").filter({ hasText: BRUNO_NAME });
 }
 
 test("escoteiro marks a new ação → escotista rejects it → row removed, seed intact", async ({
@@ -70,19 +68,20 @@ test("escoteiro marks a new ação → escotista rejects it → row removed, see
     const card = brunoCard(renataPage);
     const trigger = renataPage.getByRole("button", { name: BRUNO_NAME });
     await expect(trigger).toBeVisible({ timeout: 15_000 });
-    await trigger.click(); // expand
 
     const newItem = card.getByRole("checkbox", { name: NEW_ACTION_LABEL });
     await expect(newItem).toBeVisible();
 
-    // All items start selected — deselect all (first checkbox = select-all),
-    // then re-select just our new row so the reject touches only it.
-    await card.getByRole("checkbox").first().click();
+    // Nothing starts selected (the action bar spans every escoteiro) — tick
+    // just our new row so the reject touches only it.
     await expect(newItem).not.toBeChecked();
     await newItem.click();
     await expect(newItem).toBeChecked();
 
-    await card.getByRole("button", { name: /^Rejeitar/ }).click();
+    await renataPage
+      .getByTestId("pending-action-bar")
+      .getByRole("button", { name: /^Rejeitar/ })
+      .click();
 
     // The new row is gone from Bruno's card; the card survives (seed remains).
     await expect(

@@ -62,7 +62,7 @@ async function openDashboard(page: Page): Promise<void> {
 }
 
 const queueCard = (page: Page, name: string) =>
-  page.locator("div.border-2.border-black").filter({ hasText: name }).first();
+  page.getByTestId("pending-person").filter({ hasText: name }).first();
 
 /**
  * Resolve a scout's queue card, tolerating the reactive-query load race (a
@@ -76,7 +76,7 @@ async function scoutCard(page: Page, name: string): Promise<Locator> {
 }
 
 async function openQueue(page: Page): Promise<void> {
-  const anyCard = page.locator("div.border-2.border-black").first();
+  const anyCard = page.getByTestId("pending-person").first();
   const empty = page.getByText("Tudo em dia!");
   for (let attempt = 0; attempt < 6; attempt++) {
     await page.goto("/escotista/pending");
@@ -153,11 +153,13 @@ test("completing the manual IRR requisitos earns Pilar the Cruzeiro do Sul troph
     await openQueue(marinaPage);
     const pilarCard = await scoutCard(marinaPage, PILAR_NAME);
     if (await pilarCard.count()) {
+      // Tapping her card header selects all of Pilar's pending rows.
       await marinaPage
         .getByRole("button", { name: new RegExp(PILAR_NAME) })
         .first()
         .click();
-      await pilarCard
+      await marinaPage
+        .getByTestId("pending-action-bar")
         .getByRole("button", { name: /^Aprovar \(\d+\)/ })
         .click();
       // All of Pilar's pending items approved → her card leaves the queue.

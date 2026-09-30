@@ -10,14 +10,12 @@ import { MostDone } from "@/components/escotista/stats/most-done";
 import { GapList } from "@/components/escotista/stats/gap-list";
 import { Acompanhamento } from "@/components/escotista/stats/acompanhamento";
 import { AiSuggestionsCard } from "@/components/escotista/ai-suggestions-card";
+import { Section, SectionHeading } from "@/components/ui/section";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { EmptyState } from "@/components/ui/empty-state";
+import { EixoFilterChips, FilterChip, FilterChips } from "@/components/ui/filter-chips";
 
-type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
-const RAMO_LABELS: Record<Ramo, string> = {
-  lobinho: "Lobinho",
-  escoteiro: "Escoteiro",
-  senior: "Sênior",
-  pioneiro: "Pioneiro",
-};
+import { RAMO_LABELS, RAMOS, type Ramo } from "@/lib/ramos";
 
 export const Route = createFileRoute("/escotista/stats")({
   component: StatsPage,
@@ -29,80 +27,36 @@ function StatsPage() {
 
   const myRamos = (viewer?.escotistaRamos ?? []) as Ramo[];
   const isAdmin = viewer?.isAdmin === true;
-  const allRamos: Ramo[] = ["lobinho", "escoteiro", "senior", "pioneiro"];
-  const selectableRamos = isAdmin ? allRamos : myRamos;
+  const selectableRamos = isAdmin ? RAMOS : myRamos;
   const [ramo, setRamo] = useState<Ramo | undefined>(selectableRamos[0]);
 
   if (!ready) {
     return (
-      <div className="space-y-4">
-        <div className="h-24 animate-pulse rounded-md border-2 border-black bg-muted" />
-      </div>
+      <div className="h-24 animate-pulse rounded-[10px] border-2 border-[#141414] bg-[#EEE9DC]" />
     );
   }
 
   if (selectableRamos.length === 0) {
-    return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
-        Você ainda não acompanha nenhum ramo.
-      </p>
-    );
+    return <EmptyState>Você ainda não acompanha nenhum ramo.</EmptyState>;
   }
 
+  const current = ramo ?? selectableRamos[0]!;
   return (
-    <div className="space-y-4" data-testid="stats-page">
-      <RamoSwitcher
-        ramos={selectableRamos}
-        value={ramo ?? selectableRamos[0]!}
-        onChange={setRamo}
-        labels={RAMO_LABELS}
-      />
-      <StatsBody key={ramo ?? selectableRamos[0]!} ramo={ramo ?? selectableRamos[0]!} />
-    </div>
-  );
-}
-
-function RamoSwitcher({
-  ramos,
-  value,
-  onChange,
-  labels,
-}: {
-  ramos: Ramo[];
-  value: Ramo;
-  onChange: (r: Ramo) => void;
-  labels: Record<Ramo, string>;
-}) {
-  if (ramos.length <= 1) {
-    return (
-      <h2 className="text-lg font-black uppercase text-foreground">
-        {labels[value]}
-      </h2>
-    );
-  }
-  return (
-    <div
-      className="flex flex-wrap gap-1 rounded-md border-2 border-black bg-muted p-1"
-      role="tablist"
-      aria-label="Ramo"
-      data-testid="stats-ramo-switcher"
-    >
-      {ramos.map((r) => (
-        <button
-          key={r}
-          type="button"
-          role="tab"
-          aria-selected={r === value}
-          onClick={() => onChange(r)}
-          className={`flex-1 rounded-md px-2 py-1.5 text-sm font-bold transition-all ${
-            r === value
-              ? "border-2 border-black bg-primary text-white shadow-[2px_2px_0px_0px_#000]"
-              : "text-muted-foreground hover:bg-white/50"
-          }`}
-        >
-          {labels[r]}
-        </button>
-      ))}
+    <div data-testid="stats-page">
+      {selectableRamos.length > 1 ? (
+        <div data-testid="stats-ramo-switcher">
+          <SegmentedControl
+            ariaLabel="Ramo"
+            size="sm"
+            value={current}
+            onChange={setRamo}
+            options={selectableRamos.map((r) => ({ value: r, label: RAMO_LABELS[r] }))}
+          />
+        </div>
+      ) : (
+        <SectionHeading className="mt-0" label={RAMO_LABELS[current]} meta="seu ramo" />
+      )}
+      <StatsBody key={current} ramo={current} />
     </div>
   );
 }
@@ -119,70 +73,55 @@ function StatsBody({ ramo }: { ramo: Ramo }) {
 
   if (coverage.scoutCount === 0) {
     return (
-      <p className="py-8 text-center text-sm text-muted-foreground" data-testid="stats-empty">
+      <EmptyState className="mt-4" testId="stats-empty">
         Nenhum {RAMO_LABELS[ramo].toLowerCase()} neste ramo ainda.
-      </p>
+      </EmptyState>
     );
   }
 
-  const chipClass = (active: boolean) =>
-    `rounded-md px-2 py-1.5 text-sm font-bold transition-all ${
-      active
-        ? "border-2 border-black bg-primary text-white shadow-[2px_2px_0px_0px_#000]"
-        : "text-muted-foreground hover:bg-white/50"
-    }`;
-
   return (
-    <div className="space-y-6" data-testid="stats-sections">
+    <div className="mt-5" data-testid="stats-sections">
       <CoverageBars eixos={coverage.eixos} />
-      <StageDistribution ramo={ramo} distribution={coverage.stageDistribution} scoutCount={coverage.scoutCount} />
-      <MostDone activities={coverage.mostDone} scoutCount={coverage.scoutCount} />
-      <div className="space-y-2" data-testid="stats-filters">
-        <div className="flex flex-wrap gap-1 rounded-md border-2 border-black bg-muted p-1">
-          <button
-            type="button"
-            onClick={() => setEixoFilter("all")}
-            className={chipClass(eixoFilter === "all")}
-          >
-            Todas as áreas
-          </button>
-          {coverage.eixos.map((e) => (
-            <button
-              key={e.eixoId}
-              type="button"
-              onClick={() => setEixoFilter(e.eixoId)}
-              className={chipClass(eixoFilter === e.eixoId)}
-            >
-              {e.eixoName}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-1 rounded-md border-2 border-black bg-muted p-1">
-          {(
-            [
-              ["all", "Todas"],
-              ["fixed", "Fixas"],
-              ["variable", "Variáveis"],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setTypeFilter(value)}
-              className={chipClass(typeFilter === value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <GapList
-        topGapsFixed={coverage.topGapsFixed}
-        neglectedVariable={coverage.neglectedVariable}
+      <StageDistribution
+        ramo={ramo}
+        distribution={coverage.stageDistribution}
         scoutCount={coverage.scoutCount}
-        eixoFilter={eixoFilter}
-        typeFilter={typeFilter}
       />
+      <MostDone activities={coverage.mostDone} scoutCount={coverage.scoutCount} />
+      <Section label="Lacunas" meta="o que falta à tropa">
+        <div className="mb-3 space-y-2" data-testid="stats-filters">
+          <EixoFilterChips
+            allLabel="Todas as áreas"
+            value={eixoFilter === "all" ? null : eixoFilter}
+            onChange={(id) => setEixoFilter(id ?? "all")}
+          />
+          <FilterChips ariaLabel="Filtrar por tipo">
+            {(
+              [
+                ["all", "Fixas e variáveis"],
+                ["fixed", "Fixas"],
+                ["variable", "Variáveis"],
+              ] as const
+            ).map(([value, label]) => (
+              <FilterChip
+                key={value}
+                on={typeFilter === value}
+                onClick={() => setTypeFilter(value)}
+                testId={`chip-tipo-${value}`}
+              >
+                {label}
+              </FilterChip>
+            ))}
+          </FilterChips>
+        </div>
+        <GapList
+          topGapsFixed={coverage.topGapsFixed}
+          neglectedVariable={coverage.neglectedVariable}
+          scoutCount={coverage.scoutCount}
+          eixoFilter={eixoFilter}
+          typeFilter={typeFilter}
+        />
+      </Section>
       <Acompanhamento scouts={scouts} />
       <AiSuggestionsCard ramo={ramo} />
     </div>

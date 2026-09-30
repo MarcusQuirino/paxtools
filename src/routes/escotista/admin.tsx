@@ -4,9 +4,6 @@ import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Check,
   X,
@@ -14,17 +11,43 @@ import {
   ShieldOff,
   Ban,
   UserCog,
-  Inbox,
   Lock,
   TreePine,
 } from "lucide-react";
 import { RamoPicker } from "@/components/onboarding/ramo-picker";
 import { RAMO_LABELS, type Ramo } from "@/lib/ramos";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Card, Note, Section } from "@/components/ui/section";
+import { ListRow } from "@/components/ui/list-row";
+import { EmptyState } from "@/components/ui/empty-state";
+import { HardButton } from "@/components/ui/hard-button";
+import { Pill } from "@/components/ui/status-pill";
+import { PersonAvatar } from "@/components/ui/person-avatar";
 
 export const Route = createFileRoute("/escotista/admin")({
   component: AdminPage,
 });
+
+/**
+ * A ListBox rendered as a <ul>: e2e reads rows as list items. Each <li>
+ * carries the 1.5px line-soft divider (ListRow's own divider is off, since
+ * every row is the first child of its <li>).
+ */
+function RowList({ children, testId }: { children: React.ReactNode; testId?: string }) {
+  return (
+    <ul
+      data-testid={testId}
+      className="overflow-hidden rounded-[10px] border-2 border-[#141414] bg-white"
+    >
+      {children}
+    </ul>
+  );
+}
+
+/** Member action buttons: 44px, one line in a 2-col grid at 390px. */
+const ACTION_BTN = "whitespace-nowrap px-2 text-[14px]";
+
+const LI = "border-t-[1.5px] border-[#D9D5C9] first:border-t-0";
 
 function AdminPage() {
   const { data: user } = useSuspenseQuery(convexQuery(api.users.viewer, {}));
@@ -44,25 +67,25 @@ function AdminPage() {
 
   if (!user || !myGroup?.isAdmin) {
     return (
-      <div className="rounded-md border-2 border-black bg-card p-6 text-center space-y-2 shadow-[4px_4px_0px_0px_#000]">
-        <Lock className="size-8 text-muted-foreground mx-auto" aria-hidden />
-        <h2 className="font-black uppercase">Acesso restrito</h2>
-        <p className="text-sm text-muted-foreground">
-          Apenas administradores do grupo podem ver esta página.
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void navigate({ to: "/escotista" })}
-        >
+      <Card className="space-y-3 p-4">
+        <div className="flex items-center gap-3">
+          <Lock className="size-6 shrink-0 text-[#4A4A44]" aria-hidden />
+          <div>
+            <h2 className="text-[16px] font-black">Acesso restrito</h2>
+            <p className="text-[13px] text-[#4A4A44]">
+              Apenas administradores do grupo podem ver esta página.
+            </p>
+          </div>
+        </div>
+        <HardButton tone="paper" size="md" full onClick={() => void navigate({ to: "/escotista" })}>
           Voltar ao painel
-        </Button>
-      </div>
+        </HardButton>
+      </Card>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div>
       <PendingSection pending={pending} />
       <MembersSection members={members} sections={sections} selfId={user._id} />
     </div>
@@ -90,63 +113,51 @@ function PendingSection({ pending }: { pending: PendingMember[] }) {
   });
 
   return (
-    <section className="rounded-md border-2 border-black bg-card p-4 space-y-3 shadow-[3px_3px_0px_0px_#065f46]">
-      <div className="flex items-center justify-between">
-        <h2 className="font-black uppercase text-sm">Solicitações pendentes</h2>
-        <Badge variant="outline">{pending.length}</Badge>
-      </div>
-
+    <Section label="Solicitações pendentes" meta={pending.length} first>
       {pending.length === 0 ? (
-        <div className="flex flex-col items-center py-4 text-center text-muted-foreground">
-          <Inbox className="size-8 mb-2 opacity-50" aria-hidden />
-          <p className="text-sm">Sem solicitações no momento.</p>
-        </div>
+        <EmptyState>Sem solicitações no momento.</EmptyState>
       ) : (
-        <ul className="space-y-2">
-          {pending.map((m) => (
-            <li
-              key={m._id}
-              className="flex items-center gap-3 rounded-md border-2 border-black p-2 shadow-[2px_2px_0px_0px_#000]"
-            >
-              <Avatar className="size-9 border-2 border-black">
-                <AvatarImage src={m.image ?? undefined} />
-                <AvatarFallback className="text-xs font-bold">
-                  {m.name?.charAt(0)?.toUpperCase() ?? "?"}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold truncate">
-                  {m.name ?? "Sem nome"}
-                </p>
-                <p className="text-[11px] font-medium text-muted-foreground truncate">
-                  {m.role === "escotista" ? "Escotista" : "Escoteiro"}
-                  {" · "}
-                  {ramosLabel(m)}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="bg-emerald-700 text-white border-black hover:bg-emerald-800"
-                onClick={() => approve({ userId: m._id })}
-                disabled={approving}
-              >
-                <Check className="size-4" aria-hidden />
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="bg-destructive text-white border-black hover:bg-destructive/80"
-                onClick={() => reject({ userId: m._id })}
-                disabled={rejecting}
-              >
-                <X className="size-4" aria-hidden />
-              </Button>
-            </li>
-          ))}
-        </ul>
+        <RowList testId="admin-pending">
+          {pending.map((m) => {
+            const name = m.name ?? "Sem nome";
+            return (
+              <li key={m._id} className={LI}>
+                <ListRow
+                  className="border-t-0"
+                  leading={<PersonAvatar id={m._id} name={m.name} image={m.image} size={40} />}
+                  title={<span className="block truncate">{name}</span>}
+                  subtitle={`${m.role === "escotista" ? "Escotista" : "Escoteiro"} · ${ramosLabel(m)}`}
+                  trailing={
+                    <span className="flex shrink-0 gap-2">
+                      <HardButton
+                        tone="primary"
+                        size="md"
+                        className="w-11 px-0"
+                        onClick={() => approve({ userId: m._id })}
+                        disabled={approving}
+                        aria-label={`Aprovar ${name}`}
+                      >
+                        <Check aria-hidden strokeWidth={3} />
+                      </HardButton>
+                      <HardButton
+                        tone="paper"
+                        size="md"
+                        className="w-11 px-0"
+                        onClick={() => reject({ userId: m._id })}
+                        disabled={rejecting}
+                        aria-label={`Rejeitar ${name}`}
+                      >
+                        <X aria-hidden strokeWidth={3} />
+                      </HardButton>
+                    </span>
+                  }
+                />
+              </li>
+            );
+          })}
+        </RowList>
       )}
-    </section>
+    </Section>
   );
 }
 
@@ -162,7 +173,7 @@ type Member = {
   sectionId: Id<"sections"> | null;
 };
 
-type Section = { _id: Id<"sections">; name: string; ramo: Ramo };
+type SectionRow = { _id: Id<"sections">; name: string; ramo: Ramo };
 
 function MembersSection({
   members,
@@ -170,23 +181,18 @@ function MembersSection({
   selfId,
 }: {
   members: Member[];
-  sections: Section[];
+  sections: SectionRow[];
   selfId: Id<"users">;
 }) {
   return (
-    <section className="rounded-md border-2 border-black bg-card p-4 space-y-3 shadow-[3px_3px_0px_0px_#065f46]">
-      <h2 className="font-black uppercase text-sm">Membros</h2>
-      <ul className="space-y-2">
+    <Section label="Membros" meta={members.length}>
+      <RowList testId="admin-members">
         {members.map((m) => (
-          <MemberRow
-            key={m._id}
-            member={m}
-            sections={sections}
-            isSelf={m._id === selfId}
-          />
+          <MemberRow key={m._id} member={m} sections={sections} isSelf={m._id === selfId} />
         ))}
-      </ul>
-    </section>
+      </RowList>
+      <Note>Toque em um membro para ver as ações.</Note>
+    </Section>
   );
 }
 
@@ -196,9 +202,10 @@ function MemberRow({
   isSelf,
 }: {
   member: Member;
-  sections: Section[];
+  sections: SectionRow[];
   isSelf: boolean;
 }) {
+  const [open, setOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<"role" | "admin" | "ban" | null>(null);
   const [busyAction, setBusyAction] = useState(false);
   const [editingRamos, setEditingRamos] = useState(false);
@@ -234,125 +241,121 @@ function MemberRow({
   };
 
   const dlg = dialogProps(pendingAction, member);
+  const isEscotista = member.role === "escotista";
+  const sectionName =
+    !isEscotista && sections.length > 0
+      ? ` · ${sections.find((s) => s._id === member.sectionId)?.name ?? "sem seção"}`
+      : "";
 
   return (
-    <li className="rounded-md border-2 border-black p-2 space-y-2 shadow-[2px_2px_0px_0px_#000]">
-      <div className="flex items-center gap-3 flex-wrap">
-        <Avatar className="size-9 border-2 border-black">
-          <AvatarImage src={member.image ?? undefined} />
-          <AvatarFallback className="text-xs font-bold">
-            {member.name?.charAt(0)?.toUpperCase() ?? "?"}
-          </AvatarFallback>
-        </Avatar>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold truncate">
+    <li className={LI} data-testid="admin-member">
+      <ListRow
+        className="border-t-0"
+        onClick={() => setOpen((v) => !v)}
+        testId="member-toggle"
+        data={{ open: String(open) }}
+        leading={<PersonAvatar id={member._id} name={member.name} image={member.image} size={40} />}
+        title={
+          <>
             {member.name ?? "Sem nome"}
             {isSelf && (
-              <span className="ml-2 text-[11px] font-normal text-muted-foreground">
-                (você)
-              </span>
+              <span className="ml-1.5 text-[12px] font-bold text-[#8A887F]">(você)</span>
             )}
-            {member.isAdmin && (
-              <Badge variant="outline" className="ml-2 text-[10px]">
-                admin
-              </Badge>
+          </>
+        }
+        subtitle={`${isEscotista ? "Escotista" : "Escoteiro"} · ${ramosLabel(member)}${sectionName}`}
+        trailing={member.isAdmin ? <Pill tone="ink">admin</Pill> : undefined}
+        chevron
+      />
+
+      {open && (
+        <div className="space-y-3 border-t-[1.5px] border-[#D9D5C9] bg-[#F4F1E8] p-3">
+          <div className="grid grid-cols-2 gap-2">
+            <HardButton
+              tone={editingRamos ? "primary" : "paper"}
+              size="md"
+              className={ACTION_BTN}
+              onClick={() => setEditingRamos((v) => !v)}
+              disabled={busyAction}
+              aria-pressed={editingRamos}
+              aria-label={
+                isEscotista ? "Editar ramos atribuídos" : "Editar ramo e seção do escoteiro"
+              }
+            >
+              <TreePine aria-hidden />
+              {isEscotista ? "Ramos" : "Ramo e seção"}
+            </HardButton>
+
+            {isEscotista && !isSelf && (
+              <HardButton
+                tone="paper"
+                size="md"
+                className={ACTION_BTN}
+                onClick={() => setPendingAction("admin")}
+                disabled={busyAction}
+              >
+                {member.isAdmin ? <ShieldOff aria-hidden /> : <ShieldCheck aria-hidden />}
+                {member.isAdmin ? "Remover admin" : "Tornar admin"}
+              </HardButton>
             )}
-          </p>
-          <p className="text-[11px] font-medium text-muted-foreground truncate">
-            {member.role === "escotista" ? "Escotista" : "Escoteiro"}
-            {" · "}
-            {ramosLabel(member)}
-            {member.role !== "escotista" && sections.length > 0
-              ? ` · ${sections.find((s) => s._id === member.sectionId)?.name ?? "sem seção"}`
-              : ""}
-          </p>
-        </div>
 
-        <div className="flex items-center gap-1">
-          <Button
-            size="sm"
-            variant={editingRamos ? "default" : "outline"}
-            onClick={() => setEditingRamos((v) => !v)}
-            disabled={busyAction}
-            title={
-              member.role === "escotista"
-                ? "Editar ramos atribuídos"
-                : "Editar ramo e seção do escoteiro"
-            }
-          >
-            <TreePine className="size-4" aria-hidden />
-          </Button>
+            {!isSelf && (
+              <HardButton
+                tone="paper"
+                size="md"
+                className={ACTION_BTN}
+                onClick={() => setPendingAction("role")}
+                disabled={busyAction}
+              >
+                <UserCog aria-hidden />
+                Trocar papel
+              </HardButton>
+            )}
 
-          {member.role === "escotista" && !isSelf && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setPendingAction("admin")}
-              disabled={busyAction}
-              title={member.isAdmin ? "Remover admin" : "Tornar admin"}
-            >
-              {member.isAdmin ? (
-                <ShieldOff className="size-4" aria-hidden />
-              ) : (
-                <ShieldCheck className="size-4" aria-hidden />
-              )}
-            </Button>
-          )}
+            {!isSelf && (
+              <HardButton
+                tone="danger"
+                size="md"
+                className={ACTION_BTN}
+                onClick={() => setPendingAction("ban")}
+                disabled={busyAction}
+                aria-label="Banir do grupo"
+              >
+                <Ban aria-hidden />
+                Banir
+              </HardButton>
+            )}
+          </div>
 
-          {!isSelf && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setPendingAction("role")}
-              disabled={busyAction}
-              title="Trocar papel"
-            >
-              <UserCog className="size-4" aria-hidden />
-            </Button>
-          )}
-
-          {!isSelf && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-red-600 border-red-300 hover:bg-red-50"
-              onClick={() => setPendingAction("ban")}
-              disabled={busyAction}
-              title="Banir do grupo"
-            >
-              <Ban className="size-4" aria-hidden />
-            </Button>
+          {editingRamos && (
+            <>
+              <RamoEditor
+                member={member}
+                busy={busyAction}
+                onSaveRamo={(ramo) =>
+                  runAction(async () => {
+                    await setRamo({ userId: member._id, ramo });
+                    setEditingRamos(false);
+                  })
+                }
+                onSaveRamos={(ramos) =>
+                  runAction(async () => {
+                    await setRamos({ userId: member._id, ramos });
+                    setEditingRamos(false);
+                  })
+                }
+              />
+              {!isEscotista && <SectionPicker member={member} sections={sections} />}
+            </>
           )}
         </div>
-      </div>
-
-      {editingRamos && (
-        <>
-          <RamoEditor
-            member={member}
-            busy={busyAction}
-            onSaveRamo={(ramo) =>
-              runAction(async () => {
-                await setRamo({ userId: member._id, ramo });
-                setEditingRamos(false);
-              })
-            }
-            onSaveRamos={(ramos) =>
-              runAction(async () => {
-                await setRamos({ userId: member._id, ramos });
-                setEditingRamos(false);
-              })
-            }
-          />
-          {member.role !== "escotista" && (
-            <SectionPicker member={member} sections={sections} />
-          )}
-        </>
       )}
 
       <ConfirmDialog
         open={pendingAction !== null}
-        onOpenChange={(open) => { if (!open) setPendingAction(null); }}
+        onOpenChange={(o) => {
+          if (!o) setPendingAction(null);
+        }}
         title={dlg?.title ?? ""}
         description={dlg?.description ?? ""}
         confirmLabel={dlg?.confirmLabel ?? "Confirmar"}
@@ -368,9 +371,7 @@ function MemberRow({
               }),
             );
           } else if (pendingAction === "admin") {
-            void runAction(() =>
-              setAdmin({ userId: member._id, isAdmin: !member.isAdmin }),
-            );
+            void runAction(() => setAdmin({ userId: member._id, isAdmin: !member.isAdmin }));
           } else if (pendingAction === "ban") {
             void runAction(() => ban({ userId: member._id }));
           }
@@ -438,24 +439,24 @@ function RamoEditor({
   const canSave = isEscotista ? ramos.length > 0 : !!ramo;
 
   return (
-    <div className="border-t pt-2 space-y-2">
+    <div className="space-y-2">
       {isEscotista ? (
         <RamoPicker mode="multi" value={ramos} onChange={setRamos} />
       ) : (
         <RamoPicker mode="single" value={ramo} onChange={setRamo} />
       )}
-      <div className="flex justify-end">
-        <Button
-          size="sm"
-          onClick={() => {
-            if (isEscotista) void onSaveRamos(ramos);
-            else if (ramo) void onSaveRamo(ramo);
-          }}
-          disabled={!canSave || busy}
-        >
-          Salvar ramo{isEscotista ? "s" : ""}
-        </Button>
-      </div>
+      <HardButton
+        tone="primary"
+        size="md"
+        full
+        onClick={() => {
+          if (isEscotista) void onSaveRamos(ramos);
+          else if (ramo) void onSaveRamo(ramo);
+        }}
+        disabled={!canSave || busy}
+      >
+        Salvar ramo{isEscotista ? "s" : ""}
+      </HardButton>
     </div>
   );
 }
@@ -470,7 +471,7 @@ function SectionPicker({
   sections,
 }: {
   member: Member;
-  sections: Section[];
+  sections: SectionRow[];
 }) {
   const [error, setError] = useState("");
   const setSectionFn = useConvexMutation(api.groups.setMemberSection);
@@ -484,13 +485,16 @@ function SectionPicker({
   const selectId = `member-section-${member._id}`;
 
   return (
-    <div className="border-t pt-2 space-y-1">
-      <label htmlFor={selectId} className="text-xs font-medium">
+    <div className="space-y-1 border-t-[1.5px] border-[#D9D5C9] pt-3">
+      <label
+        htmlFor={selectId}
+        className="block text-[12px] font-extrabold uppercase tracking-[0.08em] text-[#4A4A44]"
+      >
         Seção
       </label>
       <select
         id={selectId}
-        className="h-9 w-full rounded-md border-2 border-black bg-white px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-1 disabled:opacity-50"
+        className="min-h-11 w-full rounded-md border-2 border-[#141414] bg-white px-3 text-[15px] font-bold outline-none focus-visible:ring-2 focus-visible:ring-[#0E6B4E]/40 disabled:opacity-50"
         value={member.sectionId ?? ""}
         disabled={!member.ramo || isPending}
         onChange={(e) => {
@@ -512,16 +516,16 @@ function SectionPicker({
         ))}
       </select>
       {!member.ramo && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[12px] text-[#4A4A44]">
           Defina o ramo antes de escolher a seção.
         </p>
       )}
       {member.ramo && options.length === 0 && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[12px] text-[#4A4A44]">
           Nenhuma seção deste ramo. Crie uma em Ajustes.
         </p>
       )}
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p className="text-[12px] font-bold text-[#C62828]">{error}</p>}
     </div>
   );
 }

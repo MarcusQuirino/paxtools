@@ -86,6 +86,9 @@ async function setScoutRamo(admin: Page, scoutName: string, ramoLabel: string) {
   );
   const row = admin.getByRole("listitem").filter({ hasText: scoutName });
   await expect(row).toBeVisible({ timeout: 15_000 });
+  // Member actions open from the row itself (idempotent).
+  const toggle = row.getByTestId("member-toggle");
+  if ((await toggle.getAttribute("data-open")) !== "true") await toggle.click();
   await row.getByRole("button", { name: "Editar ramo e seção do escoteiro" }).click();
   // Pick the target ramo (accessible name is "<Label> <age range>").
   await row.getByRole("button", { name: new RegExp(`^${ramoLabel}\\b`) }).click();

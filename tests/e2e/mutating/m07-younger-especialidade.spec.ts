@@ -74,7 +74,7 @@ async function openFelipeCard(page: Page): Promise<Locator> {
 
 /** One escoteiro's pending-queue card, scoped by name (never global). */
 const queueCard = (page: Page, name: string) =>
-  page.locator("div.border-2.border-black").filter({ hasText: name }).first();
+  page.getByTestId("pending-person").filter({ hasText: name }).first();
 
 /**
  * Resolve a scout's queue card, tolerating the reactive-query load race: the
@@ -90,7 +90,7 @@ async function scoutCard(page: Page, name: string): Promise<Locator> {
 
 /** Open Marina's pending queue, waiting for either cards or the empty state. */
 async function openQueue(page: Page): Promise<void> {
-  const anyCard = page.locator("div.border-2.border-black").first();
+  const anyCard = page.getByTestId("pending-person").first();
   const empty = page.getByText("Tudo em dia!");
   for (let attempt = 0; attempt < 6; attempt++) {
     await page.goto("/escotista/pending");
@@ -132,16 +132,16 @@ test("younger especialidade item approval levels Felipe up to Nível 1", async (
     const felipeCard = await scoutCard(marinaPage, FELIPE_NAME);
 
     if (await felipeCard.count()) {
-      // Expand Felipe's card and approve his Acampamento item(s).
+      // Tick Felipe's Acampamento item row(s) and approve from the action bar.
+      const specItems = felipeCard.getByRole("checkbox", {
+        name: new RegExp(`^Especialidade ${SPECIALTY_NAME}`),
+      });
+      await expect(specItems.first()).toBeVisible({ timeout: 15_000 });
+      for (const cb of await specItems.all()) await cb.click();
       await marinaPage
-        .getByRole("button", { name: new RegExp(FELIPE_NAME) })
-        .first()
+        .getByTestId("pending-action-bar")
+        .getByRole("button", { name: /^Aprovar/ })
         .click();
-      const specSection = felipeCard
-        .locator("div.border-2.border-amber-300")
-        .filter({ hasText: SPECIALTY_NAME });
-      await expect(specSection).toBeVisible({ timeout: 15_000 });
-      await specSection.getByRole("button", { name: /Aprovar/ }).click();
       // Felipe had exactly one pending item → his card leaves the queue.
       await expect(felipeCard).toHaveCount(0, { timeout: 15_000 });
     }
@@ -165,15 +165,15 @@ test("younger especialidade item approval levels Felipe up to Nível 1", async (
     await openQueue(marinaPage);
     const felipeCard2 = await scoutCard(marinaPage, FELIPE_NAME);
     if (await felipeCard2.count()) {
+      const specItems2 = felipeCard2.getByRole("checkbox", {
+        name: new RegExp(`^Especialidade ${SPECIALTY_NAME}`),
+      });
+      await expect(specItems2.first()).toBeVisible({ timeout: 15_000 });
+      for (const cb of await specItems2.all()) await cb.click();
       await marinaPage
-        .getByRole("button", { name: new RegExp(FELIPE_NAME) })
-        .first()
+        .getByTestId("pending-action-bar")
+        .getByRole("button", { name: /^Rejeitar/ })
         .click();
-      const specSection2 = felipeCard2
-        .locator("div.border-2.border-amber-300")
-        .filter({ hasText: SPECIALTY_NAME });
-      await expect(specSection2).toBeVisible({ timeout: 15_000 });
-      await specSection2.getByRole("button", { name: /Rejeitar/ }).click();
       await expect(felipeCard2).toHaveCount(0, { timeout: 15_000 });
     }
 

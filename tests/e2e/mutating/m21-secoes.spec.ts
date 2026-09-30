@@ -129,6 +129,9 @@ async function placeScout(p: Page, sectionName: string | null): Promise<void> {
 
   const select = row.getByLabel("Seção", { exact: true });
   if ((await select.count()) === 0) {
+    // Member actions open from the row itself (idempotent).
+    const toggle = row.getByTestId("member-toggle");
+    if ((await toggle.getAttribute("data-open")) !== "true") await toggle.click();
     await row
       .getByRole("button", { name: "Editar ramo e seção do escoteiro" })
       .click();

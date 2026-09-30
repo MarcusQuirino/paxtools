@@ -1,619 +1,332 @@
-import { useState, useMemo, useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
-import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { toast } from "sonner";
+import { ConvexError } from "convex/values";
+import { Check } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Badge } from "@/components/ui/badge";
-import { Check, X, ChevronDown, Inbox } from "lucide-react";
-import {
-  getEixosForRamo,
-  parseActionId,
-  type Ramo,
-} from "@/data/progression-data";
-import { getRamoRules } from "@/data/progression-rules";
+import { ListBox } from "@/components/ui/section";
+import { KpiGrid, KpiTile } from "@/components/ui/kpi-tile";
+import { StatusPill } from "@/components/ui/status-pill";
+import { EmptyState } from "@/components/ui/empty-state";
+import { HardButton } from "@/components/ui/hard-button";
+import { ActionCheck } from "@/components/ui/action-check";
+import { PersonAvatar } from "@/components/ui/person-avatar";
+import { eixoColor } from "@/data/eixo-colors";
+import { RAMO_LABELS } from "@/lib/ramos";
 import { notifyLevelUps } from "@/lib/level-up-toast";
-import { YOUNGER_SPECIALTY_BY_ID } from "@/data/specialty-data/younger";
 import {
-  OLDER_SPECIALTY_BY_ID,
-  PROJECT_STEP_LABELS,
-  type ProjectStep,
-} from "@/data/specialty-data/older";
+  buildPendingItems,
+  hasBulk,
+  planSelection,
+  type PendingEntry,
+  type PendingItem,
+} from "@/components/escotista/pending-items";
+import {
+  progressLabel,
+  useScoutProgress,
+} from "@/components/escotista/use-scout-progress";
 
 export const Route = createFileRoute("/escotista/pending")({
   component: PendingApprovalsPage,
 });
 
-function getActionLabel(actionId: string): string {
-  const parsed = parseActionId(actionId);
-  if (!parsed) return actionId;
-  const eixos = getEixosForRamo(parsed.ramo);
-  for (const eixo of eixos) {
-    for (const bloco of eixo.blocos) {
-      if (bloco.id === parsed.blocoId) {
-        const actions =
-          parsed.type === "fixed" ? bloco.fixedActions : bloco.variableActions;
-        return actions[parsed.index]?.text ?? actionId;
-      }
-    }
-  }
-  return actionId;
+function errorMessage(err: unknown): string {
+  if (err instanceof ConvexError && typeof err.data === "string") return err.data;
+  if (err instanceof Error) return err.message;
+  return "Não foi possível concluir";
 }
-
-function getBlocoName(blocoId: string, ramo: Ramo | null): string {
-  const eixos = getEixosForRamo(ramo);
-  for (const eixo of eixos) {
-    for (const bloco of eixo.blocos) {
-      if (bloco.id === blocoId) return bloco.name;
-    }
-  }
-  return blocoId;
-}
-
-function getEixoForBloco(blocoId: string, ramo: Ramo | null) {
-  const eixos = getEixosForRamo(ramo);
-  for (const eixo of eixos) {
-    for (const bloco of eixo.blocos) {
-      if (bloco.id === blocoId) return eixo;
-    }
-  }
-  return null;
-}
-
-type PendingItem = {
-  key: string;
-  type: "action" | "irr" | "custom";
-  id: string;
-  text: string;
-  blocoId?: string;
-  eixoColor?: string;
-};
 
 function PendingApprovalsPage() {
   const { data: pendingData } = useSuspenseQuery(
     convexQuery(api.approvals.getPendingForGroup, {}),
   );
+  const progress = useScoutProgress();
 
-  const bulkActionFn = useConvexMutation(api.approvals.bulkAction);
-  const { mutate: bulkAction, isPending: isBulkPending } = useMutation({
-    mutationFn: bulkActionFn,
-    onSuccess: notifyLevelUps,
-  });
-
-  if (pendingData.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <Inbox className="size-12 text-muted-foreground/40 mb-3" />
-        <h2 className="font-semibold text-lg">Tudo em dia!</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Não há itens pendentes de aprovação.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {pendingData.map((entry) => (
-        <EscoteiroPendingCard
-          key={entry.escoteiro._id}
-          entry={entry}
-          onBulkAction={bulkAction}
-          isBulkPending={isBulkPending}
-        />
-      ))}
-    </div>
+  const people = useMemo(
+    () =>
+      (pendingData as PendingEntry[]).map((entry) => ({
+        entry,
+        items: buildPendingItems(entry),
+      })),
+    [pendingData],
   );
-}
+  const allItems = useMemo(() => people.flatMap((p) => p.items), [people]);
 
-type PendingEntry = {
-  escoteiro: {
-    _id: Id<"users">;
-    name?: string | null;
-    image?: string | null;
-    ramo: Ramo | null;
-  };
-  pendingActions: {
-    _id: Id<"actionCompletions">;
-    actionId: string;
-  }[];
-  pendingIrrItems: {
-    _id: Id<"irrCompletions">;
-    itemId: string;
-  }[];
-  pendingCustomActions: {
-    _id: Id<"customActions">;
-    blocoId: string;
-    text: string;
-  }[];
-  /** New specialty item completions (#42). One row per item. */
-  pendingSpecialtyItems?: {
-    _id: Id<"specialtyItemCompletions">;
-    specialtyId: string;
-    itemIndex: number;
-    ramoGroup: "younger" | "older";
-  }[];
-  /** Older-group project-step submissions (#43). One row per pending step. */
-  pendingSpecialtyReports?: {
-    _id: Id<"specialtyProjectReports">;
-    specialtyId: string;
-    step: ProjectStep;
-    text: string;
-    ramoGroup: "younger" | "older";
-  }[];
-  totalPending: number;
-};
-
-/** One card per pending project step showing the submitted report text + approve/reject. */
-function PendingSpecialtyReportCard({
-  reportId,
-  specialtyId,
-  step,
-  text,
-}: {
-  reportId: Id<"specialtyProjectReports">;
-  specialtyId: string;
-  step: ProjectStep;
-  text: string;
-}) {
-  const specialtyName = OLDER_SPECIALTY_BY_ID.get(specialtyId)?.name ?? specialtyId;
-
-  const approveFn = useConvexMutation(api.specialties.approveSpecialtyStep);
-  const rejectFn = useConvexMutation(api.specialties.rejectSpecialtyStep);
-  const { mutate: approve, isPending: isApproving } = useMutation({
-    mutationFn: approveFn,
-    onSuccess: notifyLevelUps,
-  });
-  const { mutate: reject, isPending: isRejecting } = useMutation({
-    mutationFn: rejectFn,
-  });
-  const isBusy = isApproving || isRejecting;
-
-  return (
-    <div className="rounded-md border-2 border-amber-300 bg-amber-50 p-3 space-y-2">
-      <p className="text-xs font-black uppercase tracking-widest text-amber-800">
-        {specialtyName} · {PROJECT_STEP_LABELS[step] ?? step}
-      </p>
-      <p className="text-sm text-foreground whitespace-pre-wrap px-1 border-l-2 border-amber-300">
-        {text}
-      </p>
-      <div className="flex gap-2 pt-1">
-        <Button
-          size="sm"
-          className="flex-1 bg-emerald-700 text-white border-black hover:bg-emerald-800"
-          disabled={isBusy}
-          onClick={() => approve({ reportId })}
-        >
-          <Check className="size-3 mr-1" />
-          Aprovar
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="flex-1 bg-destructive text-white border-black hover:bg-destructive/80"
-          disabled={isBusy}
-          onClick={() => reject({ reportId })}
-        >
-          <X className="size-3 mr-1" />
-          Rejeitar
-        </Button>
-      </div>
-    </div>
+  // Nothing is selected by default: the action bar spans every escoteiro, so
+  // an "all selected" default would make one tap approve the whole queue.
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  // Keys of items that left the queue (approved elsewhere) drop out on their own.
+  const selected = useMemo(
+    () => new Set(allItems.filter((i) => picked.has(i.key)).map((i) => i.key)),
+    [allItems, picked],
   );
-}
+  const [busy, setBusy] = useState(false);
 
-/** One card per (escoteiro, specialty) showing pending items and approve/reject buttons. */
-function PendingSpecialtyCard({
-  escoteiroId,
-  specialtyId,
-  ramoGroup,
-  pendingItems,
-}: {
-  escoteiroId: Id<"users">;
-  specialtyId: string;
-  ramoGroup: "younger" | "older";
-  pendingItems: { _id: Id<"specialtyItemCompletions">; itemIndex: number }[];
-}) {
-  const specialty = ramoGroup === "younger" ? YOUNGER_SPECIALTY_BY_ID.get(specialtyId) : null;
-  const specialtyName = specialty?.name ?? specialtyId;
+  const bulkAction = useConvexMutation(api.approvals.bulkAction);
+  const approveItems = useConvexMutation(api.specialties.approveSpecialtyItems);
+  const rejectItems = useConvexMutation(api.specialties.rejectSpecialtyItems);
+  const approveStep = useConvexMutation(api.specialties.approveSpecialtyStep);
+  const rejectStep = useConvexMutation(api.specialties.rejectSpecialtyStep);
 
-  const approveItemsFn = useConvexMutation(api.specialties.approveSpecialtyItems);
-  const rejectItemsFn = useConvexMutation(api.specialties.rejectSpecialtyItems);
-  const { mutate: approveItems, isPending: isApproving } = useMutation({
-    mutationFn: approveItemsFn,
-    onSuccess: notifyLevelUps,
-  });
-  const { mutate: rejectItems, isPending: isRejecting } = useMutation({
-    mutationFn: rejectItemsFn,
-  });
-
-  const isBusy = isApproving || isRejecting;
-
-  return (
-    <div className="rounded-md border-2 border-amber-300 bg-amber-50 p-3 space-y-2">
-      <p className="text-xs font-black uppercase tracking-widest text-amber-800">
-        Especialidade: {specialtyName}
-      </p>
-      <div className="space-y-1">
-        {pendingItems.map((item) => {
-          const itemText = specialty?.items[item.itemIndex];
-          return (
-            <div key={item._id} className="text-sm text-foreground px-1">
-              <span className="font-bold">{item.itemIndex + 1}.</span>{" "}
-              {itemText ?? `Item ${item.itemIndex + 1}`}
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex gap-2 pt-1">
-        <Button
-          size="sm"
-          className="flex-1 bg-emerald-700 text-white border-black hover:bg-emerald-800"
-          disabled={isBusy}
-          onClick={() =>
-            approveItems({
-              escoteiroId,
-              specialtyId,
-              ramoGroup,
-              itemIds: pendingItems.map((i) => i._id),
-            })
-          }
-        >
-          <Check className="size-3 mr-1" />
-          Aprovar ({pendingItems.length})
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="flex-1 bg-destructive text-white border-black hover:bg-destructive/80"
-          disabled={isBusy}
-          onClick={() =>
-            rejectItems({
-              escoteiroId,
-              specialtyId,
-              ramoGroup,
-              itemIds: pendingItems.map((i) => i._id),
-            })
-          }
-        >
-          <X className="size-3 mr-1" />
-          Rejeitar
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function EscoteiroPendingCard({
-  entry,
-  onBulkAction,
-  isBulkPending,
-}: {
-  entry: PendingEntry;
-  onBulkAction: (args: {
-    action: "approve" | "reject";
-    actionIds: Id<"actionCompletions">[];
-    irrIds: Id<"irrCompletions">[];
-    customActionIds: Id<"customActions">[];
-  }) => void;
-  isBulkPending: boolean;
-}) {
-  const ramo = entry.escoteiro.ramo;
-  const irr = getRamoRules(ramo).irr;
-  // Build a flat list of all pending items with unique keys
-  const allItems = useMemo(() => {
-    const items: PendingItem[] = [];
-
-    for (const action of entry.pendingActions) {
-      const parsed = parseActionId(action.actionId);
-      const blocoId = parsed?.blocoId ?? "";
-      items.push({
-        key: `action:${action._id}`,
-        type: "action",
-        id: action._id,
-        text: getActionLabel(action.actionId),
-        blocoId,
-        eixoColor: getEixoForBloco(blocoId, ramo)?.color,
-      });
-    }
-
-    for (const l of entry.pendingIrrItems) {
-      const label =
-        irr.items.find((i) => i.id === l.itemId)?.text ??
-        l.itemId.replace("irr_", "").replace(/_/g, " ");
-      items.push({
-        key: `irr:${l._id}`,
-        type: "irr",
-        id: l._id,
-        text: label,
-      });
-    }
-
-    for (const c of entry.pendingCustomActions) {
-      items.push({
-        key: `custom:${c._id}`,
-        type: "custom",
-        id: c._id,
-        text: c.text,
-        blocoId: c.blocoId,
-        eixoColor: getEixoForBloco(c.blocoId, ramo)?.color,
-      });
-    }
-
-    return items;
-  }, [entry, ramo, irr]);
-
-  // All items selected by default
-  const [deselected, setDeselected] = useState<Set<string>>(new Set());
-
-  const selectedCount = allItems.length - deselected.size;
-  const allSelected = deselected.size === 0;
-  const noneSelected = deselected.size === allItems.length;
-
-  const toggleItem = useCallback((key: string) => {
-    setDeselected((prev) => {
+  const toggle = useCallback((key: string) => {
+    setPicked((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const setMany = useCallback((keys: string[], on: boolean) => {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      for (const k of keys) {
+        if (on) next.add(k);
+        else next.delete(k);
       }
       return next;
     });
   }, []);
 
-  const toggleAll = useCallback(() => {
-    if (allSelected) {
-      setDeselected(new Set(allItems.map((i) => i.key)));
-    } else {
-      setDeselected(new Set());
+  const run = async (action: "approve" | "reject") => {
+    const plan = planSelection(allItems, selected);
+    const calls: Promise<unknown>[] = [];
+    if (hasBulk(plan)) {
+      calls.push(
+        bulkAction({
+          action,
+          actionIds: plan.bulk.actionIds as Id<"actionCompletions">[],
+          irrIds: plan.bulk.irrIds as Id<"irrCompletions">[],
+          customActionIds: plan.bulk.customActionIds as Id<"customActions">[],
+        }),
+      );
     }
-  }, [allSelected, allItems]);
-
-  const getSelectedIds = useCallback(() => {
-    const actionIds: Id<"actionCompletions">[] = [];
-    const irrIds: Id<"irrCompletions">[] = [];
-    const customActionIds: Id<"customActions">[] = [];
-
-    for (const item of allItems) {
-      if (deselected.has(item.key)) continue;
-      if (item.type === "action")
-        actionIds.push(item.id as Id<"actionCompletions">);
-      else if (item.type === "irr")
-        irrIds.push(item.id as Id<"irrCompletions">);
-      else if (item.type === "custom")
-        customActionIds.push(item.id as Id<"customActions">);
-    }
-
-    return { actionIds, irrIds, customActionIds };
-  }, [allItems, deselected]);
-
-  const handleBulk = useCallback(
-    (action: "approve" | "reject") => {
-      const ids = getSelectedIds();
-      onBulkAction({ action, ...ids });
-    },
-    [getSelectedIds, onBulkAction],
-  );
-
-  // Group items by section for display
-  const actionsByBloco = useMemo(() => {
-    const map = new Map<
-      string,
-      { items: PendingItem[]; eixoColor?: string }
-    >();
-    for (const item of allItems) {
-      if (item.type !== "action" && item.type !== "custom") continue;
-      const blocoId = item.blocoId ?? "";
-      const group = map.get(blocoId) ?? {
-        items: [],
-        eixoColor: item.eixoColor,
+    for (const g of plan.specialtyItems) {
+      const args = {
+        escoteiroId: g.escoteiroId as Id<"users">,
+        specialtyId: g.specialtyId,
+        ramoGroup: g.ramoGroup,
+        itemIds: g.itemIds as Id<"specialtyItemCompletions">[],
       };
-      group.items.push(item);
-      map.set(blocoId, group);
+      calls.push(action === "approve" ? approveItems(args) : rejectItems(args));
     }
-    return map;
-  }, [allItems]);
-
-  const irrItems = allItems.filter((i) => i.type === "irr");
-
-  // New specialty items grouped by (ramoGroup, specialtyId)
-  const specialtyItemGroups = useMemo(() => {
-    const groups = new Map<
-      string,
-      { ramoGroup: "younger" | "older"; items: { _id: Id<"specialtyItemCompletions">; itemIndex: number }[] }
-    >();
-    for (const item of entry.pendingSpecialtyItems ?? []) {
-      const key = `${item.ramoGroup}:${item.specialtyId}`;
-      const group = groups.get(key) ?? { ramoGroup: item.ramoGroup, items: [] };
-      group.items.push({ _id: item._id, itemIndex: item.itemIndex });
-      groups.set(key, group);
+    for (const id of plan.reportIds) {
+      const args = { reportId: id as Id<"specialtyProjectReports"> };
+      calls.push(action === "approve" ? approveStep(args) : rejectStep(args));
     }
-    return Array.from(groups.entries()).map(([key, { ramoGroup, items }]) => ({
-      specialtyId: key.slice(ramoGroup.length + 1),
-      ramoGroup,
-      items,
-    }));
-  }, [entry.pendingSpecialtyItems]);
+    if (calls.length === 0) return;
+
+    setBusy(true);
+    const results = await Promise.allSettled(calls);
+    setBusy(false);
+    let failed = 0;
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        if (action === "approve") notifyLevelUps(r.value);
+      } else {
+        failed++;
+        toast.error(errorMessage(r.reason));
+      }
+    }
+    if (failed === 0) setPicked(new Set());
+  };
+
+  if (people.length === 0) {
+    return (
+      <EmptyState title="Tudo em dia!" testId="pending-empty">
+        Não há itens pendentes de aprovação.
+      </EmptyState>
+    );
+  }
+
+  const n = selected.size;
+  const allOn = n === allItems.length;
 
   return (
-    <Collapsible>
-      <div className="rounded-md border-2 border-black bg-card overflow-hidden shadow-[3px_3px_0px_0px_#000]">
-        <CollapsibleTrigger className="w-full px-4 py-3 flex items-center gap-3 hover:bg-muted/50 transition-colors">
-          <Avatar className="size-9 border-2 border-black">
-            <AvatarImage src={entry.escoteiro.image ?? undefined} />
-            <AvatarFallback className="text-xs font-bold">
-              {entry.escoteiro.name?.charAt(0)?.toUpperCase() ?? "?"}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0 text-left">
-            <p className="text-sm font-bold truncate">
-              {entry.escoteiro.name ?? "Sem nome"}
-            </p>
-          </div>
-          <Badge
-            variant="outline"
-            className="text-amber-800 border-amber-600 bg-amber-50 text-xs"
-          >
-            {entry.totalPending} pendente{entry.totalPending !== 1 ? "s" : ""}
-          </Badge>
-          <ChevronDown className="size-4 text-foreground" />
-        </CollapsibleTrigger>
+    <div className="space-y-4 pb-20">
+      <KpiGrid>
+        <KpiTile tone="gold" value={allItems.length} label="Aguardando" testId="kpi-itens" />
+        <KpiTile value={people.length} label="Escoteiros" testId="kpi-escoteiros" />
+      </KpiGrid>
 
-        <CollapsibleContent>
-          <div className="border-t-2 border-black px-4 py-3 space-y-3">
-            {/* Select all toggle */}
-            <label className="flex items-center gap-2 cursor-pointer py-1 px-1">
-              <Checkbox
-                checked={allSelected}
-                onCheckedChange={toggleAll}
-              />
-              <span className="text-xs font-bold text-muted-foreground">
-                {allSelected
-                  ? "Todos selecionados"
-                  : `${selectedCount}/${allItems.length} selecionados`}
-              </span>
-            </label>
-
-            {/* Actions grouped by bloco */}
-            {Array.from(actionsByBloco.entries()).map(
-              ([blocoId, { items, eixoColor }]) => (
-                <div key={blocoId} className="space-y-0.5">
-                  <p
-                    className="text-xs font-black uppercase tracking-widest"
-                    style={{ color: eixoColor }}
-                  >
-                    {getBlocoName(blocoId, ramo)}
-                  </p>
-                  {items.map((item) => (
-                    <SelectableItem
-                      key={item.key}
-                      text={item.text}
-                      selected={!deselected.has(item.key)}
-                      onToggle={() => toggleItem(item.key)}
-                    />
-                  ))}
-                </div>
-              ),
-            )}
-
-            {/* IRR (recognition) items — named for the escoteiro's ramo */}
-            {irrItems.length > 0 && (
-              <div className="space-y-0.5">
-                <p className="text-xs font-black uppercase tracking-widest text-primary">
-                  {irr.name}
-                </p>
-                {irrItems.map((item) => (
-                  <SelectableItem
-                    key={item.key}
-                    text={item.text}
-                    selected={!deselected.has(item.key)}
-                    onToggle={() => toggleItem(item.key)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* New specialty item completions (#42) — separate from bulk flow */}
-            {specialtyItemGroups.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-black uppercase tracking-widest text-primary">
-                  Itens de Especialidade
-                </p>
-                {specialtyItemGroups.map(({ specialtyId, ramoGroup, items }) => (
-                  <PendingSpecialtyCard
-                    key={`${ramoGroup}:${specialtyId}`}
-                    escoteiroId={entry.escoteiro._id}
-                    specialtyId={specialtyId}
-                    ramoGroup={ramoGroup}
-                    pendingItems={items}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Older-group project-step submissions (#43) */}
-            {(entry.pendingSpecialtyReports ?? []).length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-black uppercase tracking-widest text-primary">
-                  Projetos de Especialidade
-                </p>
-                {(entry.pendingSpecialtyReports ?? []).map((report) => (
-                  <PendingSpecialtyReportCard
-                    key={report._id}
-                    reportId={report._id}
-                    specialtyId={report.specialtyId}
-                    step={report.step}
-                    text={report.text}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Bulk action buttons — ações, IRR and ações personalizadas */}
-            <div className="pt-2 border-t-2 border-black flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1 bg-emerald-700 text-white border-black hover:bg-emerald-800"
-                onClick={() => handleBulk("approve")}
-                disabled={noneSelected || isBulkPending}
-              >
-                <Check className="size-4 mr-1" />
-                Aprovar ({selectedCount})
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1 bg-destructive text-white border-black hover:bg-destructive/80"
-                onClick={() => handleBulk("reject")}
-                disabled={noneSelected || isBulkPending}
-              >
-                <X className="size-4 mr-1" />
-                Rejeitar ({selectedCount})
-              </Button>
-            </div>
-          </div>
-        </CollapsibleContent>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[12px] font-bold text-[#8A887F]">
+          {n === 0
+            ? "Toque para selecionar."
+            : `${n} de ${allItems.length} selecionados`}
+        </p>
+        <HardButton
+          tone="ghost"
+          size="sm"
+          className="-mr-2 whitespace-nowrap"
+          onClick={() => setMany(allItems.map((i) => i.key), !allOn)}
+        >
+          {allOn ? "Limpar seleção" : "Selecionar tudo"}
+        </HardButton>
       </div>
-    </Collapsible>
+
+      <div className="space-y-3">
+        {people.map(({ entry, items }) => (
+          <PersonCard
+            key={entry.escoteiro._id}
+            entry={entry}
+            items={items}
+            subtitle={
+              progressLabel(progress.get(entry.escoteiro._id)) ??
+              (entry.escoteiro.ramo ? RAMO_LABELS[entry.escoteiro.ramo] : "")
+            }
+            selected={selected}
+            onToggle={toggle}
+            onSetMany={setMany}
+          />
+        ))}
+      </div>
+
+      {/* Shown once something is selected (frame 5): Aprovar is the screen's
+          one 4px CTA; Rejeitar is the paper secondary. */}
+      {n > 0 && (
+        <div
+          className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 px-4"
+          data-testid="pending-action-bar"
+        >
+          <div className="mx-auto flex max-w-lg gap-2">
+            <HardButton
+              tone="primary"
+              size="lg"
+              className="flex-1"
+              disabled={busy}
+              onClick={() => void run("approve")}
+            >
+              <Check aria-hidden strokeWidth={3} />
+              Aprovar ({n})
+            </HardButton>
+            <HardButton
+              tone="paper"
+              size="lg"
+              disabled={busy}
+              onClick={() => void run("reject")}
+            >
+              Rejeitar
+            </HardButton>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
-function SelectableItem({
-  text,
+function PersonCard({
+  entry,
+  items,
+  subtitle,
+  selected,
+  onToggle,
+  onSetMany,
+}: {
+  entry: PendingEntry;
+  items: PendingItem[];
+  subtitle: string;
+  selected: ReadonlySet<string>;
+  onToggle: (key: string) => void;
+  onSetMany: (keys: string[], on: boolean) => void;
+}) {
+  const name = entry.escoteiro.name ?? "Sem nome";
+  const picked = items.filter((i) => selected.has(i.key)).length;
+  const all = picked === items.length;
+  const toggleAll = () => onSetMany(items.map((i) => i.key), !all);
+
+  return (
+    <ListBox testId="pending-person">
+      <div className="flex min-h-16 items-center gap-3 border-b-2 border-[#141414] py-2.5 pl-3 pr-3">
+        <ActionCheck
+          state={all ? "selected" : "open"}
+          onClick={toggleAll}
+          ariaLabel={`Selecionar tudo de ${name}`}
+        />
+        {/* The name is a second, larger target for the same "select all". */}
+        <button
+          type="button"
+          onClick={toggleAll}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        >
+          <PersonAvatar
+            id={entry.escoteiro._id}
+            name={entry.escoteiro.name}
+            image={entry.escoteiro.image}
+            size={36}
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[16px] font-black leading-tight">{name}</span>
+            <span className="mt-0.5 block text-[12px] font-bold text-[#8A887F]">
+              {picked > 0 && !all ? `${picked} de ${items.length} selecionados` : subtitle}
+            </span>
+          </span>
+          <StatusPill state="pending">
+            {entry.totalPending}
+            <span className="sr-only"> pendente{entry.totalPending !== 1 ? "s" : ""}</span>
+          </StatusPill>
+        </button>
+      </div>
+      {items.map((item) => (
+        <PendingRow
+          key={item.key}
+          item={item}
+          selected={selected.has(item.key)}
+          onToggle={() => onToggle(item.key)}
+        />
+      ))}
+    </ListBox>
+  );
+}
+
+function PendingRow({
+  item,
   selected,
   onToggle,
 }: {
-  text: string;
+  item: PendingItem;
   selected: boolean;
   onToggle: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <div className="flex items-start gap-3 py-1.5 px-1 hover:bg-muted/40 rounded-md transition-colors">
-      <Checkbox
-        checked={selected}
-        onCheckedChange={onToggle}
-        aria-label={text}
-        className="mt-0.5 shrink-0"
+    <div
+      className="flex min-h-14 items-start gap-3 border-t-[1.5px] border-[#D9D5C9] py-2.5 pl-3 pr-3 first:border-t-0"
+      data-testid="pending-item"
+      data-kind={item.kind}
+      data-selected={selected}
+    >
+      <ActionCheck
+        state={selected ? "selected" : "open"}
+        onClick={onToggle}
+        ariaLabel={`${item.ctx}: ${item.text}`}
       />
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className={`text-sm flex-1 text-left ${expanded ? "" : "line-clamp-2"} ${!selected ? "text-muted-foreground line-through" : ""}`}
-        title={expanded ? "Recolher" : "Expandir"}
+        className="min-w-0 flex-1 pt-0.5 text-left"
       >
-        {text}
+        <span className="mb-0.5 flex items-start gap-1.5 text-[12px] font-extrabold uppercase tracking-[0.05em] text-[#8A887F]">
+          {item.eixoId && (
+            <span
+              className="mt-[3px] size-2 shrink-0 rounded-full"
+              style={{ background: eixoColor(item.eixoId) }}
+              aria-hidden
+            />
+          )}
+          <span className="leading-tight">{item.ctx}</span>
+        </span>
+        <span
+          className={`block text-[15px] leading-snug text-[#141414] ${
+            item.kind === "report" ? "whitespace-pre-wrap" : ""
+          } ${expanded ? "" : "line-clamp-3"}`}
+        >
+          {item.text}
+        </span>
       </button>
     </div>
   );

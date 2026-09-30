@@ -3,9 +3,10 @@
  * 19-adjacent.
  *
  * The painel (`/escotista`, `getGroupStats`) lists EXACTLY the escoteiros in
- * the escotista's accompanied ramos (admins see all). Each escoteiro card
- * carries a favorite control and a "Ver progressão" link into the read-only
- * impersonation view (`/escotista/escoteiro/<id>`, story 40 read side).
+ * the escotista's accompanied ramos (admins see all). Each escoteiro row is a
+ * "Ver progressão de <nome>" link into the read-only impersonation view
+ * (`/escotista/escoteiro/<id>`, story 40 read side) with a sibling favorite
+ * star.
  *
  * Empirically-derived approved-escoteiro counts in `__TEST__ Grupo QA`
  * (sim troop + catalog, pending members excluded, no ramo-less escoteiros):
@@ -20,7 +21,7 @@ import { adminTest, escotistaTest, testAs, expect } from "../../fixtures/auth";
 const marinaTest = testAs("sim-escotista-lobinho-1"); // single-ramo lobinho
 const veraTest = testAs("sim-escotista-pioneiro-1"); // single-ramo pioneiro
 
-/** One "Ver progressão" link renders per escoteiro card — the countable row. */
+/** One "Ver progressão de …" row link per escoteiro — the countable row. */
 const memberCards = (page: import("@playwright/test").Page) =>
   page.getByRole("link", { name: "Ver progressão" });
 

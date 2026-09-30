@@ -6,7 +6,11 @@ import { toast } from "sonner";
 import { ConvexError } from "convex/values";
 import { Sparkles, RefreshCw } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
-import { Button } from "@/components/ui/button";
+import { HardButton } from "@/components/ui/hard-button";
+import { Card, ListBox, Note, SectionHeading } from "@/components/ui/section";
+import { ListRow } from "@/components/ui/list-row";
+import { Pill } from "@/components/ui/status-pill";
+import { eixoColor } from "@/data/eixo-colors";
 import type { Ramo } from "@/data/progression-data";
 
 /**
@@ -49,67 +53,63 @@ export function AiSuggestionsCard({ ramo }: { ramo?: Ramo }) {
   const hasResult = !!cached;
 
   return (
-    <section
-      className="rounded-md border-2 border-black bg-card p-4 shadow-[2px_2px_0px_0px_#000] space-y-3"
-      data-testid="stats-ai-suggestions"
-    >
-      <header className="flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-1.5 text-base font-black uppercase text-foreground">
-          <Sparkles className="size-4" />
-          Sugestões da IA
-          <span className="rounded border border-black px-1 text-[10px] font-bold uppercase">
-            beta
+    <section data-testid="stats-ai-suggestions">
+      <SectionHeading
+        label={
+          <span className="inline-flex items-center gap-2">
+            Sugestões da IA
+            <Pill tone="paper">beta</Pill>
           </span>
-        </h2>
-        <Button
-          type="button"
-          size="sm"
+        }
+      />
+      <Card className="space-y-3">
+        {!hasResult && !loading && (
+          <p className="text-[15px] text-[#4A4A44]">
+            Gere ideias de jogos e dinâmicas a partir da cobertura deste ramo.
+          </p>
+        )}
+        {hasResult && <p className="text-[15px] leading-snug">{cached.overview}</p>}
+        <HardButton
+          tone="paper"
+          size="md"
+          full
           onClick={() => void onGenerate()}
           disabled={loading}
         >
           {loading ? (
-            <RefreshCw className="size-4 animate-spin" />
+            <RefreshCw className="animate-spin" aria-hidden />
           ) : hasResult ? (
-            <RefreshCw className="size-4" />
+            <RefreshCw aria-hidden />
           ) : (
-            <Sparkles className="size-4" />
+            <Sparkles aria-hidden />
           )}
           {loading ? "Gerando…" : hasResult ? "Gerar de novo" : "Gerar sugestões"}
-        </Button>
-      </header>
-
-      {!hasResult && !loading && (
-        <p className="text-sm text-muted-foreground">
-          Gere ideias de jogos e dinâmicas a partir da cobertura deste ramo.
-        </p>
-      )}
+        </HardButton>
+      </Card>
 
       {hasResult && (
-        <div className="space-y-3">
-          <p className="text-sm text-foreground">{cached.overview}</p>
-          <ul className="space-y-2">
+        <>
+          <ListBox className="mt-3">
             {cached.perEixoIdeas.map((e) => (
-              <li
+              <ListRow
                 key={e.eixoId}
-                className="rounded-md border-2 border-black bg-muted p-2"
-              >
-                <p className="text-xs font-black uppercase text-muted-foreground">
-                  {e.eixoName}
-                </p>
-                <p className="text-sm text-foreground">{e.idea}</p>
-                {e.groundedOn.length > 0 && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Baseado em: {e.groundedOn.join("; ")}
-                  </p>
-                )}
-              </li>
+                bar={eixoColor(e.eixoId)}
+                title={<span className="font-semibold">{e.idea}</span>}
+                subtitle={e.eixoName}
+                extra={
+                  e.groundedOn.length > 0 ? (
+                    <span className="mt-1 block text-[12px] text-[#4A4A44]">
+                      Baseado em: {e.groundedOn.join("; ")}
+                    </span>
+                  ) : undefined
+                }
+              />
             ))}
-          </ul>
-          <p className="text-[11px] text-muted-foreground">
-            Gerado em{" "}
-            {new Date(cached.generatedAt).toLocaleString("pt-BR")}
-          </p>
-        </div>
+          </ListBox>
+          <Note>
+            Gerado em {new Date(cached.generatedAt).toLocaleString("pt-BR")}
+          </Note>
+        </>
       )}
     </section>
   );

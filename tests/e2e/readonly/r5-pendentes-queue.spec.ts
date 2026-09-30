@@ -1,18 +1,18 @@
 /**
  * R5 — Pending approvals queue read side. PRD stories 35 (read), 37 (read).
  *
- * `/escotista/pending` (`getPendingForGroup`) renders one collapsible card per
- * visible escoteiro who has ≥1 pending item, scoped to the escotista's ramos
- * (admins see all). Younger especialidade item completions and older
- * especialidade project-step reports render as their own card kinds inside the
- * expanded card (story 37).
+ * `/escotista/pending` (`getPendingForGroup`) renders one always-expanded card
+ * per visible escoteiro who has ≥1 pending item, scoped to the escotista's
+ * ramos (admins see all). Every pending row — ação, IRR, personalizada,
+ * younger especialidade item, older especialidade relato — is one selectable
+ * row with a context line ("Especialidade X · item N", "Relato · X · Etapa")
+ * feeding the one sticky Aprovar/Rejeitar bar (story 37).
  *
  * Empirically-derived card counts (escoteiros with totalPending > 0):
  *   lobinho 6 · escoteiro 6 · senior 5 · pioneiro 2 · all four 19.
  * (escoteiro includes the catalog `progression` user's 2 seeded pendings.)
  *
- * READ-ONLY: expanding a collapsible is client-only UI state (no server
- * write). Never toggles a checkbox, approves, or rejects.
+ * READ-ONLY: never selects a row, approves, or rejects.
  */
 
 import { adminTest, escotistaTest, testAs, expect } from "../../fixtures/auth";
@@ -20,7 +20,7 @@ import { adminTest, escotistaTest, testAs, expect } from "../../fixtures/auth";
 const marinaTest = testAs("sim-escotista-lobinho-1"); // single-ramo lobinho
 const veraTest = testAs("sim-escotista-pioneiro-1"); // single-ramo pioneiro
 
-/** Each card header carries exactly one "N pendente(s)" badge — the row unit. */
+/** Each card header carries exactly one "N pendente(s)" pill — the row unit. */
 const pendingCards = (page: import("@playwright/test").Page) =>
   page.getByText(/^\d+ pendentes?$/);
 
@@ -74,33 +74,35 @@ adminTest("admin queue shows every ramo's pendings", async ({ page }) => {
 // ── Card composition: younger especialidade items vs older project reports ───
 
 marinaTest(
-  "younger especialidade items render as their own card kind",
+  "younger especialidade items render as selectable item rows",
   async ({ page }) => {
     await page.goto("/escotista/pending");
 
     // Cecília Moraes has 2 pending younger especialidade items (#42).
-    const trigger = page.getByRole("button", { name: /Cecília Moraes/ });
-    await expect(trigger).toBeVisible({ timeout: 10_000 });
-    await trigger.click();
+    const card = page.getByTestId("pending-person").filter({ hasText: "Cecília Moraes" });
+    await expect(card).toBeVisible({ timeout: 10_000 });
 
-    await expect(page.getByText("Itens de Especialidade")).toBeVisible();
-    await expect(page.getByText(/^Especialidade:/)).toBeVisible();
+    const specRows = card.locator('[data-testid="pending-item"][data-kind="specItem"]');
+    await expect(specRows).toHaveCount(2);
+    await expect(specRows.first()).toContainText(/Especialidade .+ · item \d+/i);
+    // Unselected by default — nothing is approved by a stray tap on the bar.
+    await expect(specRows.first().getByRole("checkbox")).not.toBeChecked();
   },
 );
 
 escotistaTest(
-  "older especialidade project reports render as their own card kind",
+  "older especialidade project reports render as relato rows",
   async ({ page }) => {
     await page.goto("/escotista/pending");
 
     // Rafael Bastos (senior) has a pending older especialidade step report (#43).
-    const trigger = page.getByRole("button", { name: /Rafael Bastos/ });
-    await expect(trigger).toBeVisible({ timeout: 10_000 });
-    await trigger.click();
+    const card = page.getByTestId("pending-person").filter({ hasText: "Rafael Bastos" });
+    await expect(card).toBeVisible({ timeout: 10_000 });
 
-    await expect(page.getByText("Projetos de Especialidade")).toBeVisible();
-    // The seeded report body confirms a report card (not a checklist) rendered.
-    await expect(page.getByText(/dados de demonstração/)).toBeVisible();
+    const report = card.locator('[data-testid="pending-item"][data-kind="report"]');
+    await expect(report.first()).toContainText(/Relato · /i);
+    // The seeded report body confirms the relato text itself rendered.
+    await expect(card.getByText(/dados de demonstração/)).toBeVisible();
   },
 );
 
@@ -115,7 +117,8 @@ veraTest("pioneiro escotista queue scoped and renders a report card", async ({
   await expect(pendingCards(page)).toHaveCount(2);
 
   // Eloá Pacheco has a pending older especialidade report.
-  const eloa = page.getByRole("button", { name: /Eloá Pacheco/ });
-  await eloa.click();
-  await expect(page.getByText("Projetos de Especialidade")).toBeVisible();
+  const eloa = page.getByTestId("pending-person").filter({ hasText: "Eloá Pacheco" });
+  await expect(
+    eloa.locator('[data-testid="pending-item"][data-kind="report"]').first(),
+  ).toBeVisible();
 });

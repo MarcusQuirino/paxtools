@@ -1,4 +1,7 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Link } from "@tanstack/react-router";
+import { ListBox, Note, Section } from "@/components/ui/section";
+import { ListRow } from "@/components/ui/list-row";
+import { PersonAvatar } from "@/components/ui/person-avatar";
 
 type ScoutRow = {
   _id: string;
@@ -11,43 +14,32 @@ type ScoutRow = {
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
+/** Fewest blocos first (server order) — each row opens the escoteiro. */
 export function Acompanhamento({ scouts }: { scouts: ScoutRow[] }) {
   const now = Date.now();
   return (
-    <section
-      className="space-y-3 rounded-md border-2 border-black bg-card p-4 shadow-[2px_2px_0px_0px_#000]"
-      data-testid="stats-acompanhamento"
-    >
-      <div>
-        <h3 className="text-sm font-black uppercase">Acompanhamento</h3>
-        <p className="text-[11px] text-muted-foreground">
-          Para apoiar quem precisa — não é um ranking.
-        </p>
-      </div>
-      <ul className="space-y-2">
+    <Section label="Acompanhamento" meta={scouts.length}>
+      <Note className="mb-2 mt-0">Para apoiar quem precisa — não é um ranking.</Note>
+      <ListBox testId="stats-acompanhamento">
         {scouts.map((s) => {
           const isNew = now - s.joinedAt < THIRTY_DAYS_MS;
           return (
-            <li
+            <ListRow
               key={s._id}
-              className="flex items-center gap-3 rounded-md border-2 border-black bg-muted/40 p-2"
-            >
-              <Avatar className="size-9 border-2 border-black">
-                <AvatarFallback className="text-xs font-bold">
-                  {s.name?.charAt(0)?.toUpperCase() ?? "?"}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold">{s.name ?? "Sem nome"}</p>
-                <p className="text-[11px] text-muted-foreground">
-                  {s.stageName} · {s.completedBlockCount} blocos
-                  {isNew ? " · novo membro" : ""}
-                </p>
-              </div>
-            </li>
+              leading={<PersonAvatar id={s._id} name={s.name} size={36} />}
+              title={s.name ?? "Sem nome"}
+              subtitle={`${s.stageName} · ${s.completedBlockCount} ${s.completedBlockCount === 1 ? "bloco" : "blocos"}${isNew ? " · novo membro" : ""}`}
+              chevron
+              link={
+                <Link
+                  to="/escotista/escoteiro/$escoteiroId"
+                  params={{ escoteiroId: s._id }}
+                />
+              }
+            />
           );
         })}
-      </ul>
-    </section>
+      </ListBox>
+    </Section>
   );
 }

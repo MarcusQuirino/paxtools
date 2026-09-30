@@ -102,6 +102,17 @@ function memberRow(page: Page, name: string) {
   return membersSection(page).locator("li", { hasText: name });
 }
 
+/**
+ * Member actions live in a panel that opens when the row is tapped
+ * (`member-toggle`, `data-open`). Idempotent: opens only if closed.
+ */
+async function openMember(page: Page, name: string) {
+  const toggle = memberRow(page, name).getByTestId("member-toggle");
+  await expect(toggle).toBeVisible({ timeout: LOAD });
+  if ((await toggle.getAttribute("data-open")) !== "true") await toggle.click();
+  await expect(toggle).toHaveAttribute("data-open", "true");
+}
+
 /** Open the admin page (re-authing if needed) and wait for the Membros list. */
 async function gotoAdmin(page: Page) {
   await loadReady(page, "/escotista/admin", ADMIN_EMAIL, () =>
@@ -116,6 +127,7 @@ async function confirmRowAction(
   buttonName: string,
   confirmLabel: string,
 ) {
+  await openMember(page, name);
   await memberRow(page, name).getByRole("button", { name: buttonName }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
@@ -173,6 +185,7 @@ test("M12a: promoting Bruno unlocks his admin surface; demote re-locks it", asyn
     await expect(memberRow(adminPage, BRUNO)).toBeVisible({ timeout: LOAD });
 
     // Promote (idempotent: skip if a previous run left him admin).
+    await openMember(adminPage, BRUNO);
     if (
       (await memberRow(adminPage, BRUNO)
         .getByRole("button", { name: "Tornar admin" })
@@ -211,6 +224,7 @@ test("M12a: promoting Bruno unlocks his admin surface; demote re-locks it", asyn
     // Safety net: ensure Bruno ends non-admin.
     try {
       await gotoAdmin(adminPage);
+      await openMember(adminPage, BRUNO);
       const demote = memberRow(adminPage, BRUNO).getByRole("button", {
         name: "Remover admin",
       });
@@ -358,8 +372,10 @@ test("M12d: adding lobinho to Hugo expands his painel visibility; revert restore
 
   const addLobinho = async () => {
     const row = memberRow(adminPage, HUGO);
+    await openMember(adminPage, HUGO);
     await row.getByRole("button", { name: "Editar ramos atribuídos" }).click();
-    await row.getByRole("button", { name: "Lobinho" }).click();
+    // ^Lobinho: the row toggle's name also carries the ramos ("… · Lobinho").
+    await row.getByRole("button", { name: /^Lobinho/ }).click();
     await row.getByRole("button", { name: /^Salvar ramos/ }).click();
     await expect(memberRow(adminPage, HUGO)).toContainText("Lobinho", {
       timeout: LOAD,
@@ -368,8 +384,9 @@ test("M12d: adding lobinho to Hugo expands his painel visibility; revert restore
 
   const removeLobinho = async () => {
     const row = memberRow(adminPage, HUGO);
+    await openMember(adminPage, HUGO);
     await row.getByRole("button", { name: "Editar ramos atribuídos" }).click();
-    await row.getByRole("button", { name: "Lobinho" }).click(); // deselect
+    await row.getByRole("button", { name: /^Lobinho/ }).click(); // deselect
     await row.getByRole("button", { name: /^Salvar ramos/ }).click();
   };
 

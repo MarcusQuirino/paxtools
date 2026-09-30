@@ -2,8 +2,8 @@
  * M4 (PRD #58 story 35, bulk side) — the escotista bulk-approve affordance.
  * Quésia Torres (sim-troop-senior-2) carries 2 seeded PENDING ações on her
  * frontier bloco (Consumo Responsável → variable:0 + variable:1). Talita Novaes
- * (sim-escotista-senior-1) expands Quésia's queue card and bulk-approves both
- * with one "Aprovar (N)" click → both flip to approved → Quésia's card leaves
+ * (sim-escotista-senior-1) taps Quésia's queue card header (selects all her
+ * items) and bulk-approves both with one "Aprovar (N)" click → both flip to approved → Quésia's card leaves
  * the queue (totalPending → 0).
  *
  * CLEANUP (achieved: full self-restore).
@@ -22,7 +22,6 @@
  */
 
 import { test, expect } from "@playwright/test";
-import type { Locator, Page } from "@playwright/test";
 
 const SEEDED_IDS = [
   "senior:consumo-responsavel:variable:0",
@@ -34,12 +33,6 @@ const QUESIA_STATE = "tests/.auth/sim-troop-senior-2.json";
 const TALITA_STATE = "tests/.auth/sim-escotista-senior-1--m04.json";
 const QUESIA_NAME = /Quésia Torres/i;
 
-/** Quésia's card in Talita's queue, scoped to its bordered container. */
-function quesiaCard(page: Page): Locator {
-  return page
-    .getByRole("button", { name: QUESIA_NAME })
-    .locator('xpath=ancestor::div[contains(@class,"bg-card")][1]');
-}
 
 test("escotista bulk-approves an escoteiro's pending ações, then cleans up", async ({
   browser,
@@ -65,11 +58,14 @@ test("escotista bulk-approves an escoteiro's pending ações, then cleans up", a
       );
     }
 
-    // 2. Expand her card and bulk-approve everything selected (her 2 seeded).
-    const card = quesiaCard(talitaPage);
+    // 2. Tap her card header (selects all her items) and bulk-approve (her 2
+    //    seeded) from the sticky action bar.
     await trigger.click();
-    await expect(card.getByRole("button", { name: /^Aprovar/ })).toBeVisible();
-    await card.getByRole("button", { name: /^Aprovar/ }).click();
+    const approve = talitaPage
+      .getByTestId("pending-action-bar")
+      .getByRole("button", { name: /^Aprovar/ });
+    await expect(approve).toBeVisible();
+    await approve.click();
 
     // 3. Both approved → her card leaves the queue.
     await expect(
@@ -78,11 +74,10 @@ test("escotista bulk-approves an escoteiro's pending ações, then cleans up", a
 
     // 4a. Cleanup — Talita impersonation direct-toggle removes the approvals.
     await talitaPage.goto("/escotista");
-    const painelCard = talitaPage
-      .locator(".bg-card")
-      .filter({ hasText: QUESIA_NAME })
-      .first();
-    await painelCard.getByRole("link", { name: "Ver progressão" }).click();
+    await talitaPage
+      .getByRole("link", { name: /Ver progressão de Quésia Torres/i })
+      .first()
+      .click();
     await talitaPage
       .getByRole("button", { name: BLOCO_TRIGGER })
       .first()

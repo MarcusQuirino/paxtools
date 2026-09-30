@@ -1,6 +1,13 @@
+import { KpiTile } from "@/components/ui/kpi-tile";
+import { Section } from "@/components/ui/section";
 import { getRamoRules } from "@/data/progression-rules";
 import type { Ramo } from "@/data/progression-data";
+import { cn } from "@/lib/utils";
 
+/**
+ * Scouts per etapa as KPI tiles (2×2 for 4 etapas, 3 across for 3). The count
+ * sits in its own span so it reads as the tile's number; the share is meta.
+ */
 export function StageDistribution({
   ramo,
   distribution,
@@ -12,30 +19,31 @@ export function StageDistribution({
 }) {
   const etapas = getRamoRules(ramo).etapas;
   return (
-    <section
-      className="space-y-3 rounded-md border-2 border-black bg-card p-4 shadow-[2px_2px_0px_0px_#000]"
-      data-testid="stats-stage-distribution"
-    >
-      <h3 className="text-sm font-black uppercase">Distribuição por etapa</h3>
+    <Section label="Distribuição por etapa" meta={`${scoutCount} no ramo`}>
       <div
-        className="grid gap-2"
-        style={{ gridTemplateColumns: `repeat(${etapas.length}, minmax(0, 1fr))` }}
+        className={cn("grid gap-2", etapas.length === 3 ? "grid-cols-3" : "grid-cols-2")}
+        data-testid="stats-stage-distribution"
       >
         {etapas.map((s) => {
           const count = distribution[s.id] ?? 0;
-          const pct = scoutCount === 0 ? 0 : Math.min(100, Math.round((count / scoutCount) * 100));
+          const pct =
+            scoutCount === 0 ? 0 : Math.min(100, Math.round((count / scoutCount) * 100));
           return (
-            <div
+            <KpiTile
               key={s.id}
-              className="rounded-md border-2 border-black bg-muted p-2 text-center"
-            >
-              <p className="text-xl font-black">{count}</p>
-              <p className="text-[10px] font-bold text-muted-foreground">{s.name}</p>
-              <p className="text-[10px] text-muted-foreground">{pct}%</p>
-            </div>
+              value={
+                <>
+                  <span>{count}</span>
+                  <span className="ml-1.5 text-[13px] font-extrabold text-[#8A887F]">
+                    {pct}%
+                  </span>
+                </>
+              }
+              label={s.name}
+            />
           );
         })}
       </div>
-    </section>
+    </Section>
   );
 }

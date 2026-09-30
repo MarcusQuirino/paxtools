@@ -177,14 +177,17 @@ export async function runApprovalRoundtrip(
 
     // The queue is a live Convex query with several seeded cards; on slower
     // (mobile) runs a reactive re-render can detach the bulk button mid-click.
-    // Retry the whole expand→approve→verify — a repeat "Aprovar" is a no-op
+    // Retry the whole select→approve→verify — a repeat "Aprovar" is a no-op
     // (bulkAction skips already-approved rows), so this stays scoped to THIS
-    // scout and idempotent. Only the expanded card contributes a visible
-    // "Aprovar (n)" (collapsed cards are hidden from the a11y tree).
-    const approveBtn = approverPage.getByRole("button", { name: /^Aprovar \(/ });
+    // scout and idempotent. Nothing starts selected, so the sticky action bar
+    // (and its "Aprovar (n)") only exists once this scout's header is tapped
+    // (which selects all of their rows).
+    const approveBtn = approverPage
+      .getByTestId("pending-action-bar")
+      .getByRole("button", { name: /^Aprovar \(/ });
     await expect(async () => {
       if ((await approveBtn.count()) === 0) {
-        await card.click(); // expand only this scout's card
+        await card.click(); // select all of this scout's rows
       }
       await expect(approveBtn).toHaveCount(1, { timeout: 2_000 });
       await approveBtn.click({ timeout: 2_000 });
