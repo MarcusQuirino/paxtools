@@ -1,15 +1,16 @@
 /**
  * R3 — Plan (/plan): empty state + a seeded plano rendered in BOTH views.
  *
- * The plan page (src/routes/plan.tsx) has two view modes toggled by
- * `ViewToggle`: "Por Área" (byArea, the default — grouped in eixo/bloco
- * accordions) and "Minha Ordem" (ordered, a flat position-sorted list).
+ * The plan page (src/routes/plan.tsx) has two view modes switched by a
+ * SegmentedControl (role="tab"): "Por área" (byArea, the default — items
+ * listed directly, grouped per bloco in `plan-group-<blocoId>` sections) and
+ * "Minha ordem" (ordered, a flat position-sorted list, `?view=ordem`).
  *
  * Seed facts (convex/testing.ts):
  *   - `escoteiro-approved` (approvedTest) has ZERO plannedItems → the empty
- *     state pre-empts the whole dashboard (the `items.length === 0` early
- *     return renders <EmptyState/> BEFORE the ViewToggle), so an empty plan
- *     has no per-view toggle at all — it is a single, view-independent state.
+ *     state (`plan-empty`) pre-empts the whole dashboard (the early return
+ *     renders <EmptyState/> BEFORE the view tabs), so an empty plan has no
+ *     per-view switch at all — it is a single, view-independent state.
  *   - `sim-troop-senior-9` (Xavier Dutra, sênior) has a seeded plano of four
  *     items at positions 0..3 (the `sc.plan` block in seedSimRamo):
  *       0  action:senior:criatividade-inovacao:variable:2  (frontier variable)
@@ -25,7 +26,7 @@
  * the gated page renders, and the polling `expect` picks the content up once
  * that settles (same pattern as the r5 authed specs).
  *
- * READ-ONLY: opens views/blocos only. No toggling checkboxes/stars, no drag.
+ * READ-ONLY: switches views only. No toggling checkboxes/stars, no drag.
  */
 
 import type { Page, TestInfo, Locator } from "@playwright/test";
@@ -75,66 +76,53 @@ const SPECIALTY_NAME = "Cultura e Arte";
 const CUSTOM_TEXT =
   "Projeto pessoal: organizar uma atividade de criatividade e inovação para a seção";
 
-/**
- * Open a byArea bloco accordion, converging on the expanded state. Radix
- * animations plus Convex live re-renders make these triggers "unstable" under
- * load, so we `force`-click (bypassing the stability gate) and re-check
- * `aria-expanded` rather than trusting a single click.
- */
-async function expandBloco(page: Page, name: RegExp): Promise<void> {
-  const trigger = page.getByRole("button", { name });
-  await expect(trigger).toBeVisible();
-  for (let i = 0; i < 6; i++) {
-    if ((await trigger.getAttribute("aria-expanded")) === "true") return;
-    await trigger.click({ force: true }).catch(() => {});
-    await page.waitForTimeout(400);
-  }
-}
-
 approvedTest("empty plan shows the empty state and no view toggle", async ({
   page,
 }, testInfo) => {
-  const emptyState = page.getByText("Seu plano está vazio");
+  const emptyState = page.getByTestId("plan-empty");
   await openPlan(page, testInfo, emptyState);
 
-  // The empty-state copy renders (also the authed-ready anchor).
-  await expect(emptyState).toBeVisible();
+  // The empty-state copy renders (emptyState is also the authed-ready anchor).
+  await expect(emptyState).toContainText("Seu plano está vazio");
 
-  // With an empty plan the ViewToggle is never mounted — there is no
-  // "Por Área"/"Minha Ordem" split to switch between.
-  await expect(page.getByRole("button", { name: "Por Área" })).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Minha Ordem" }),
-  ).toHaveCount(0);
+  // With an empty plan the view tabs are never mounted — there is no
+  // "Por área"/"Minha ordem" split to switch between.
+  await expect(page.getByRole("tab", { name: "Por área" })).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "Minha ordem" })).toHaveCount(0);
 });
 
-xavierTest("seeded plano renders all four items in the 'Por Área' view", async ({
+xavierTest("seeded plano renders all four items in the 'Por área' view", async ({
   page,
 }, testInfo) => {
-  // The frontier bloco's accordion trigger is the authed-ready anchor.
-  const frontier = page.getByRole("button", { name: /Criatividade e Inovação/i });
+  // The frontier bloco's plan group is the authed-ready anchor.
+  const frontier = page.getByTestId("plan-group-criatividade-inovacao");
   await openPlan(page, testInfo, frontier);
-  // Default view is byArea — no toggle click needed.
+  // Default view is byArea — no toggle click needed; items are listed
+  // directly under their bloco group (no expansion).
+  await expect(page.getByRole("tab", { name: "Por área" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
 
   // Frontier bloco with the two planned ações + the approved custom.
-  await expandBloco(page, /Criatividade e Inovação/i);
-  await expect(page.locator(`[id="${RAW_VARIABLE}"]`)).toBeVisible();
-  await expect(page.locator(`[id="${RAW_FIXED}"]`)).toBeVisible();
-  await expect(page.getByText(CUSTOM_TEXT)).toBeVisible();
+  await expect(frontier.locator(`[id="${RAW_VARIABLE}"]`)).toBeVisible();
+  await expect(frontier.locator(`[id="${RAW_FIXED}"]`)).toBeVisible();
+  await expect(frontier.getByText(CUSTOM_TEXT)).toBeVisible();
 
   // The especialidade item lives in a different bloco/eixo.
-  await expandBloco(page, /Herança Cultural/i);
-  await expect(page.getByText(SPECIALTY_NAME)).toBeVisible();
+  await expect(
+    page.getByTestId("plan-group-heranca-cultural").getByText(SPECIALTY_NAME),
+  ).toBeVisible();
 });
 
-xavierTest("seeded plano renders in position order in the 'Minha Ordem' view", async ({
+xavierTest("seeded plano renders in position order in the 'Minha ordem' view", async ({
   page,
 }, testInfo) => {
-  const orderedToggle = page.getByRole("button", { name: "Minha Ordem" });
+  const orderedToggle = page.getByRole("tab", { name: "Minha ordem" });
   await openPlan(page, testInfo, orderedToggle);
 
-  // `force` bypasses Playwright's stability gate (Radix/Convex re-renders keep
-  // the toggle "unstable" under load); a view switch is safe to dispatch.
+  // `force` bypasses Playwright's stability gate (Convex re-renders keep the
+  // tab "unstable" under load); a view switch is safe to dispatch.
   await orderedToggle.click({ force: true });
 
   // All four items present (ordered view renders itemKeys / plain text).

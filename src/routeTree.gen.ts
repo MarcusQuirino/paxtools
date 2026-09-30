@@ -21,6 +21,7 @@ import { Route as EscotistaTimelineRouteImport } from './routes/escotista/timeli
 import { Route as EscotistaStatsRouteImport } from './routes/escotista/stats'
 import { Route as EscotistaPendingRouteImport } from './routes/escotista/pending'
 import { Route as EscotistaAdminRouteImport } from './routes/escotista/admin'
+import { Route as BlocoBlocoIdRouteImport } from './routes/bloco.$blocoId'
 import { Route as EscotistaEspecialidadesIndexRouteImport } from './routes/escotista/especialidades.index'
 import { Route as EscotistaEspecialidadesSpecialtyIdRouteImport } from './routes/escotista/especialidades.$specialtyId'
 import { Route as EscotistaEscoteiroEscoteiroIdRouteImport } from './routes/escotista/escoteiro.$escoteiroId'
@@ -85,6 +86,11 @@ const EscotistaAdminRoute = EscotistaAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => EscotistaRouteRoute,
 } as any)
+const BlocoBlocoIdRoute = BlocoBlocoIdRouteImport.update({
+  id: '/bloco/$blocoId',
+  path: '/bloco/$blocoId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EscotistaEspecialidadesIndexRoute =
   EscotistaEspecialidadesIndexRouteImport.update({
     id: '/especialidades/',
@@ -112,6 +118,7 @@ export interface FileRoutesByFullPath {
   '/plan': typeof PlanRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
+  '/bloco/$blocoId': typeof BlocoBlocoIdRoute
   '/escotista/admin': typeof EscotistaAdminRoute
   '/escotista/pending': typeof EscotistaPendingRoute
   '/escotista/stats': typeof EscotistaStatsRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByTo {
   '/plan': typeof PlanRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
+  '/bloco/$blocoId': typeof BlocoBlocoIdRoute
   '/escotista/admin': typeof EscotistaAdminRoute
   '/escotista/pending': typeof EscotistaPendingRoute
   '/escotista/stats': typeof EscotistaStatsRoute
@@ -146,6 +154,7 @@ export interface FileRoutesById {
   '/plan': typeof PlanRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
+  '/bloco/$blocoId': typeof BlocoBlocoIdRoute
   '/escotista/admin': typeof EscotistaAdminRoute
   '/escotista/pending': typeof EscotistaPendingRoute
   '/escotista/stats': typeof EscotistaStatsRoute
@@ -165,6 +174,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/settings'
     | '/signin'
+    | '/bloco/$blocoId'
     | '/escotista/admin'
     | '/escotista/pending'
     | '/escotista/stats'
@@ -181,6 +191,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/settings'
     | '/signin'
+    | '/bloco/$blocoId'
     | '/escotista/admin'
     | '/escotista/pending'
     | '/escotista/stats'
@@ -198,6 +209,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/settings'
     | '/signin'
+    | '/bloco/$blocoId'
     | '/escotista/admin'
     | '/escotista/pending'
     | '/escotista/stats'
@@ -216,6 +228,7 @@ export interface RootRouteChildren {
   PlanRoute: typeof PlanRoute
   SettingsRoute: typeof SettingsRoute
   SigninRoute: typeof SigninRoute
+  BlocoBlocoIdRoute: typeof BlocoBlocoIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -304,6 +317,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EscotistaAdminRouteImport
       parentRoute: typeof EscotistaRouteRoute
     }
+    '/bloco/$blocoId': {
+      id: '/bloco/$blocoId'
+      path: '/bloco/$blocoId'
+      fullPath: '/bloco/$blocoId'
+      preLoaderRoute: typeof BlocoBlocoIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/escotista/especialidades/': {
       id: '/escotista/especialidades/'
       path: '/especialidades'
@@ -363,6 +383,7 @@ const rootRouteChildren: RootRouteChildren = {
   PlanRoute: PlanRoute,
   SettingsRoute: SettingsRoute,
   SigninRoute: SigninRoute,
+  BlocoBlocoIdRoute: BlocoBlocoIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

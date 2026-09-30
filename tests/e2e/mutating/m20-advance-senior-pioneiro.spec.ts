@@ -84,9 +84,9 @@ async function setScoutRamo(admin: Page, scoutName: string, ramoLabel: string) {
   ).toHaveCount(0, { timeout: 15_000 });
 }
 
-/** The scoped OlderSpecialtyCard root (`div.scroll-mt-4`) for a deep-linked card. */
-function olderCard(page: Page, name: string): Locator {
-  return page.locator("div.scroll-mt-4").filter({ hasText: name });
+/** Head card of the deep-linked (pushed) older especialidade detail screen. */
+function olderCard(page: Page): Locator {
+  return page.getByTestId("esp-detail-head");
 }
 
 test("M20 admin advances Vitor sênior→pioneiro: fresh progression, older especialidade carries, visibility flips", async ({
@@ -108,12 +108,12 @@ test("M20 admin advances Vitor sênior→pioneiro: fresh progression, older espe
     await setScoutRamo(admin, VITOR.name, "Pioneiro");
 
     // ── Rule 1: dashboard starts FRESH on the pioneiro ramo ───────────────────
-    await gotoReady(vitor, "/", vitor.getByText("Etapa Atual"), VITOR.email);
+    await gotoReady(vitor, "/", vitor.getByText("Etapa atual"), VITOR.email);
     await expect(
       vitor.getByRole("heading", { name: "Descoberta", exact: true }),
     ).toBeVisible();
-    await expect(vitor.getByText("0/18 blocos", { exact: true })).toBeVisible();
-    await expect(vitor.getByText(/\+6 blocos para/)).toBeVisible();
+    await expect(vitor.getByTestId("stage-meta")).toHaveText(/^0 de 18 blocos concluídos/);
+    await expect(vitor.getByText(/Faltam 6 blocos para/)).toBeVisible();
     await expect(vitor.getByText("Destino", { exact: true })).toBeVisible();
     await expect(vitor.getByText(LOCK_TEXT)).toBeVisible();
     // No sênior etapa names bleed into the pioneiro dashboard.
@@ -124,10 +124,14 @@ test("M20 admin advances Vitor sênior→pioneiro: fresh progression, older espe
 
     // ── Rule 2: older especialidade CARRIES (shared older catalog) ────────────
     // Esportes de Aventura stays Conquistada (3/3 etapas) as a pioneiro.
-    const card = olderCard(vitor, "Esportes de Aventura");
+    const card = olderCard(vitor);
     await gotoReady(vitor, "/especialidades?specialty=esportes-de-aventura", card, VITOR.email);
-    await expect(card).toContainText("3/3 etapas aprovadas");
-    await expect(card).toContainText("Conquistada");
+    await expect(
+      vitor.getByRole("heading", { level: 1, name: "Esportes de Aventura", exact: true }),
+    ).toBeVisible();
+    await expect(vitor.getByTestId("esp-older-status")).toHaveText(
+      "Conquistada · 3 etapas aprovadas",
+    );
 
     // ── Rule 3: visibility flips sênior → pioneiro escotista ──────────────────
     await gotoPainel(vera, VERA.email);
@@ -143,11 +147,11 @@ test("M20 admin advances Vitor sênior→pioneiro: fresh progression, older espe
   } finally {
     // ── Self-clean: restore Vitor to sênior and verify his prior state ────────
     await setScoutRamo(admin, VITOR.name, "Sênior");
-    await gotoReady(vitor, "/", vitor.getByText("Etapa Atual"), VITOR.email);
+    await gotoReady(vitor, "/", vitor.getByText("Etapa atual"), VITOR.email);
     await expect(
       vitor.getByRole("heading", { name: "Conquista", exact: true }),
     ).toBeVisible();
-    await expect(vitor.getByText("8/18 blocos", { exact: true })).toBeVisible();
+    await expect(vitor.getByTestId("stage-meta")).toHaveText(/^8 de 18 blocos concluídos/);
 
     await adminCtx.close();
     await vitorCtx.close();

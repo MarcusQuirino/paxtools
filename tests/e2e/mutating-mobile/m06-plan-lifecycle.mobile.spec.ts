@@ -27,7 +27,7 @@ test("lobinho stars a new item, reorders (persists), restores and unstars", asyn
   testInfo.setTimeout(120_000);
   await runPlanLifecycleFlow(page, {
     newItemActionId: "lobinho:aprendizagem-continua:fixed:0",
-    blocoTrigger: /Aprendizagem Contínua/i,
+    blocoName: /Aprendizagem Contínua/i,
     includeDrag: true,
   });
 });

@@ -1,116 +1,79 @@
-import type { Eixo, CustomAction, CompletionStatus } from "@/data/types";
-import { Accordion } from "@/components/ui/accordion";
-import { Progress } from "@/components/ui/progress";
-import { BlocoCard } from "./bloco-card";
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
+import type { Eixo } from "@/data/types";
+import { eixoColor } from "@/data/eixo-colors";
+import { ListBox } from "@/components/ui/section";
+import { eixoMetaLine, type BlocoSummary } from "@/lib/bloco-summary";
+import { cn } from "@/lib/utils";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { BlocoRow } from "./bloco-card";
 
 type EixoSectionProps = {
   eixo: Eixo;
-  approvedActionIds: Set<string>;
-  pendingActionIds: Set<string>;
-  actionStatusMap: Map<string, CompletionStatus>;
+  summaries: Map<string, BlocoSummary>;
   completedBlockIds: Set<string>;
   pendingBlockIds: Set<string>;
-  /** Blocos satisfied via an earned especialidade (level ≥ 1), computed on read (#44). */
-  earnedSpecialtyBlocoIds?: Set<string>;
-  /** Canonical ids of specialties earned via items (#44), for marking the exact checkbox. */
-  earnedSpecialtyIds?: Set<string>;
-  customActions: CustomAction[];
-  onToggleAction: (actionId: string) => void;
-  onAddCustom: (blocoId: string, text: string) => void;
-  onToggleCustom: (id: Id<"customActions">) => void;
-  onDeleteCustom: (id: Id<"customActions">) => void;
-  plannedKeys?: Set<string>;
-  onTogglePlanned?: (itemKey: string) => void;
-  blocoFilter?: (blocoId: string) => boolean;
-  planOnly?: boolean;
-  lockApproved?: boolean;
-  /** Target scout in the escotista impersonation view (#53) — threads to the
-   * specialty "ver" deep-link. */
   escoteiroId?: Id<"users">;
+  defaultOpen?: boolean;
 };
 
+/**
+ * One eixo on Progressão (Design A frame 1): a static list with a collapsible
+ * header — 8px eixo bar, 16/900 name, "2 de 4 blocos · 1 aguardando" — and one
+ * BlocoRow per bloco. One level only: a bloco opens its own screen.
+ */
 export function EixoSection({
   eixo,
-  approvedActionIds,
-  pendingActionIds,
-  actionStatusMap,
+  summaries,
   completedBlockIds,
   pendingBlockIds,
-  earnedSpecialtyBlocoIds,
-  earnedSpecialtyIds,
-  customActions,
-  onToggleAction,
-  onAddCustom,
-  onToggleCustom,
-  onDeleteCustom,
-  plannedKeys,
-  onTogglePlanned,
-  blocoFilter,
-  planOnly,
-  lockApproved,
   escoteiroId,
+  defaultOpen = true,
 }: EixoSectionProps) {
-  const visibleBlocos = blocoFilter
-    ? eixo.blocos.filter((b) => blocoFilter(b.id))
-    : eixo.blocos;
-  if (visibleBlocos.length === 0) return null;
-  const approvedInEixo = eixo.blocos.filter((b) =>
-    completedBlockIds.has(b.id),
-  ).length;
-  const pendingInEixo = eixo.blocos.filter((b) =>
-    pendingBlockIds.has(b.id),
-  ).length;
-  const total = eixo.blocos.length;
-
-  const approvedPercent = (approvedInEixo / total) * 100;
-  const pendingPercent = (pendingInEixo / total) * 100;
-
+  const [open, setOpen] = useState(defaultOpen);
+  const color = eixoColor(eixo.id);
+  const panelId = `eixo-${eixo.id}-blocos`;
   return (
-    <section className="rounded-md overflow-hidden border-2 border-black bg-card">
-      <div
-        className="px-4 py-3 text-white border-b-2 border-black"
-        style={{ backgroundColor: eixo.color }}
-      >
-        <div className="flex items-center justify-between">
-          <h2 className="font-black text-base uppercase tracking-tight">{eixo.name}</h2>
-          <span className="text-xs font-bold opacity-90">
-            {approvedInEixo}/{total} blocos
-            {pendingInEixo > 0 && ` (+${pendingInEixo} pendente${pendingInEixo > 1 ? "s" : ""})`}
-          </span>
-        </div>
-        <Progress
-          value={approvedPercent}
-          pendingValue={pendingPercent}
-          className="mt-2 border-white/60 bg-white/20 [&>[data-slot=progress-indicator]]:bg-white [&>[data-slot=progress-indicator-pending]]:bg-white/50"
-        />
-      </div>
-
-      <Accordion type="single" collapsible>
-        {visibleBlocos.map((bloco) => (
-          <BlocoCard
-            key={bloco.id}
-            bloco={bloco}
-            approvedActionIds={approvedActionIds}
-            pendingActionIds={pendingActionIds}
-            actionStatusMap={actionStatusMap}
-            customActions={customActions}
-            earnedViaSpecialty={earnedSpecialtyBlocoIds?.has(bloco.id)}
-            earnedSpecialtyIds={earnedSpecialtyIds}
-            color={eixo.color}
-            colorLight={eixo.colorLight}
-            onToggleAction={onToggleAction}
-            onAddCustom={onAddCustom}
-            onToggleCustom={onToggleCustom}
-            onDeleteCustom={onDeleteCustom}
-            plannedKeys={plannedKeys}
-            onTogglePlanned={onTogglePlanned}
-            planOnly={planOnly}
-            lockApproved={lockApproved}
-            escoteiroId={escoteiroId}
+    <ListBox className="mb-3" testId={`eixo-${eixo.id}`}>
+      <h3>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setOpen((o) => !o)}
+          className="flex min-h-14 w-full items-center gap-3 pr-3 text-left hover:bg-black/[0.02]"
+        >
+          <span
+            aria-hidden
+            className="w-2 shrink-0 self-stretch border-r-2 border-[#141414]"
+            style={{ background: color }}
           />
-        ))}
-      </Accordion>
-    </section>
+          <span className="min-w-0 flex-1 py-3">
+            <span className="block text-[16px] font-black leading-[1.15] tracking-[-0.01em]">
+              {eixo.name}
+            </span>
+            <span className="mt-0.5 block text-[12px] font-bold text-[#8A887F]">
+              {eixoMetaLine(eixo, completedBlockIds, pendingBlockIds)}
+            </span>
+          </span>
+          <ChevronDown
+            aria-hidden
+            className={cn("size-6 shrink-0 text-[#4A4A44] transition-transform", open && "rotate-180")}
+            strokeWidth={2.5}
+          />
+        </button>
+      </h3>
+      {open && (
+        <div id={panelId} className="border-t-2 border-[#141414]">
+          {eixo.blocos.map((bloco) => {
+            const summary = summaries.get(bloco.id);
+            if (!summary) return null;
+            return (
+              <BlocoRow key={bloco.id} bloco={bloco} summary={summary} escoteiroId={escoteiroId} />
+            );
+          })}
+        </div>
+      )}
+    </ListBox>
   );
 }

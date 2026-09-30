@@ -1,161 +1,129 @@
 import type { Bloco, CustomAction, CompletionStatus } from "@/data/types";
-import { ActionItem } from "./action-item";
-import { CustomActionInput } from "./custom-action-input";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { eixoTint } from "@/data/eixo-colors";
+import { EMERALD } from "@/lib/design-tokens";
 import { encodePlanKey } from "@/lib/plan-keys";
+import type { BlocoProgress } from "@/lib/completion-logic";
+import { ListBox, ListHeader } from "@/components/ui/section";
+import { ActionItem } from "./action-item";
+import { AddCustomAction, CustomActionRows } from "./custom-action-input";
 
 type ActionChecklistProps = {
   bloco: Bloco;
-  completedActionIds: Set<string>;
+  progress: BlocoProgress;
+  approvedActionIds: Set<string>;
+  pendingActionIds: Set<string>;
   actionStatusMap: Map<string, CompletionStatus>;
   customActions: CustomAction[];
-  hasSpecialtyAlternative: boolean;
-  color: string;
-  colorLight: string;
+  /** Variáveis satisfied by an earned especialidade. */
+  viaSpecialty: boolean;
   onToggleAction: (actionId: string) => void;
   onAddCustom: (blocoId: string, text: string) => void;
   onToggleCustom: (id: Id<"customActions">) => void;
   onDeleteCustom: (id: Id<"customActions">) => void;
   plannedKeys?: Set<string>;
   onTogglePlanned?: (itemKey: string) => void;
-  planOnly?: boolean;
   lockApproved?: boolean;
 };
 
+/**
+ * The bloco screen's two lists (Design A frame 2): "Ações fixas" (eixo-tinted
+ * header, "6/8 · obrigatórias") and "Ações variáveis" ("escolha 2/5", emerald
+ * once met) with the escoteiro's ações personalizadas, then the dashed
+ * "+ Ação personalizada" row.
+ */
 export function ActionChecklist({
   bloco,
-  completedActionIds,
+  progress,
+  approvedActionIds,
+  pendingActionIds,
   actionStatusMap,
   customActions,
-  hasSpecialtyAlternative,
-  color,
-  colorLight,
+  viaSpecialty,
   onToggleAction,
   onAddCustom,
   onToggleCustom,
   onDeleteCustom,
   plannedKeys,
   onTogglePlanned,
-  planOnly,
   lockApproved,
 }: ActionChecklistProps) {
-  const variableDone = bloco.variableActions.filter((a) =>
-    completedActionIds.has(a.id),
-  ).length;
-  const customDone = customActions.filter(
-    (c) => c.blocoId === bloco.id && c.completed,
-  ).length;
-  const totalVariableDone = variableDone + customDone;
+  const checked = (id: string) => approvedActionIds.has(id) || pendingActionIds.has(id);
+  const row = (action: Bloco["fixedActions"][number]) => {
+    const planKey = encodePlanKey({ kind: "action", actionId: action.id });
+    return (
+      <ActionItem
+        key={action.id}
+        id={action.id}
+        text={action.text}
+        checked={checked(action.id)}
+        status={actionStatusMap.get(action.id)}
+        onToggle={() => onToggleAction(action.id)}
+        planned={plannedKeys?.has(planKey)}
+        onTogglePlanned={onTogglePlanned ? () => onTogglePlanned(planKey) : undefined}
+        lockApproved={lockApproved}
+      />
+    );
+  };
 
-  const isPlanned = (actionId: string) =>
-    !planOnly ||
-    !!plannedKeys?.has(encodePlanKey({ kind: "action", actionId }));
-
-  const visibleFixed = bloco.fixedActions.filter((a) => isPlanned(a.id));
-  const visibleVariable = bloco.variableActions.filter((a) => isPlanned(a.id));
-  const visibleCustomCount = customActions.filter(
-    (c) =>
-      c.blocoId === bloco.id &&
-      (!planOnly ||
-        !!plannedKeys?.has(
-          encodePlanKey({ kind: "custom", customActionId: c._id }),
-        )),
-  ).length;
-  const showVariableSection =
-    visibleVariable.length > 0 || visibleCustomCount > 0 || !planOnly;
+  const variableMet = viaSpecialty || progress.variableDone >= bloco.variableRequired;
+  const hasCustom = customActions.some((c) => c.blocoId === bloco.id);
 
   return (
     <div className="space-y-4">
-      {visibleFixed.length > 0 && (
-        <div>
-          <div
-            className="text-xs font-black uppercase tracking-widest px-3 py-2 rounded-t-md text-white border-2 border-black"
-            style={{ backgroundColor: color }}
-          >
-            Ações Fixas
-          </div>
-          <div className="border-2 border-t-0 border-black rounded-b-md divide-y-2 divide-black/20">
-            {visibleFixed.map((action) => {
-              const planKey = encodePlanKey({
-                kind: "action",
-                actionId: action.id,
-              });
-              return (
-                <ActionItem
-                  key={action.id}
-                  id={action.id}
-                  text={action.text}
-                  checked={completedActionIds.has(action.id)}
-                  status={actionStatusMap.get(action.id)}
-                  onToggle={() => onToggleAction(action.id)}
-                  color={color}
-                  planned={plannedKeys?.has(planKey)}
-                  onTogglePlanned={
-                    onTogglePlanned
-                      ? () => onTogglePlanned(planKey)
-                      : undefined
-                  }
-                  lockApproved={lockApproved}
-                />
-              );
-            })}
-          </div>
-        </div>
+      {bloco.fixedActions.length > 0 && (
+        <ListBox testId="bloco-fixed">
+          <ListHeader
+            label="Ações fixas"
+            tint={eixoTint(bloco.eixoId)}
+            meta={
+              <span style={progress.fixedDone === progress.fixedTotal ? { color: EMERALD } : undefined}>
+                <b className="text-[#141414]">{progress.fixedDone}</b>/{progress.fixedTotal} · obrigatórias
+              </span>
+            }
+          />
+          {bloco.fixedActions.map(row)}
+        </ListBox>
       )}
 
-      {showVariableSection && (
       <div>
-        <div
-          className="text-xs font-black uppercase tracking-widest px-3 py-2 rounded-t-md flex items-center justify-between border-2 border-black"
-          style={{ backgroundColor: colorLight, color }}
-        >
-          <span>Ações Variáveis</span>
-          <span className="text-xs font-bold">
-            {hasSpecialtyAlternative
-              ? "✓ substituída por especialidade"
-              : `${totalVariableDone}/${bloco.variableRequired} necessárias`}
-          </span>
-        </div>
-        <div className="border-2 border-t-0 border-black rounded-b-md divide-y-2 divide-black/20">
-          {visibleVariable.map((action) => {
-            const planKey = encodePlanKey({
-              kind: "action",
-              actionId: action.id,
-            });
-            return (
-              <ActionItem
-                key={action.id}
-                id={action.id}
-                text={action.text}
-                checked={completedActionIds.has(action.id)}
-                status={actionStatusMap.get(action.id)}
-                onToggle={() => onToggleAction(action.id)}
-                color={color}
-                planned={plannedKeys?.has(planKey)}
-                onTogglePlanned={
-                  onTogglePlanned
-                    ? () => onTogglePlanned(planKey)
-                    : undefined
-                }
-                lockApproved={lockApproved}
-              />
-            );
-          })}
-          <CustomActionInput
+        <ListBox testId="bloco-variable">
+          <ListHeader
+            label="Ações variáveis"
+            meta={
+              <span style={variableMet ? { color: EMERALD } : undefined}>
+                {viaSpecialty ? (
+                  "substituídas por especialidade"
+                ) : (
+                  <>
+                    escolha{" "}
+                    <b className={variableMet ? undefined : "text-[#141414]"}>
+                      {Math.min(progress.variableDone, bloco.variableRequired)}
+                    </b>
+                    /{bloco.variableRequired}
+                  </>
+                )}
+              </span>
+            }
+          />
+          {bloco.variableActions.map(row)}
+          <CustomActionRows
             blocoId={bloco.id}
             customActions={customActions}
-            color={color}
-            onAdd={onAddCustom}
             onToggle={onToggleCustom}
             onDelete={onDeleteCustom}
             plannedKeys={plannedKeys}
             onTogglePlanned={onTogglePlanned}
-            planOnly={planOnly}
             lockApproved={lockApproved}
           />
-        </div>
+          {bloco.variableActions.length === 0 && !hasCustom && (
+            <p className="px-3.5 py-3 text-[13px] text-[#4A4A44]">
+              Nenhuma ação variável listada — crie uma ação personalizada.
+            </p>
+          )}
+        </ListBox>
+        <AddCustomAction blocoId={bloco.id} onAdd={onAddCustom} />
       </div>
-      )}
     </div>
   );
 }

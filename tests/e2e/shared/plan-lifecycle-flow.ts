@@ -6,8 +6,9 @@
  * `convex/testing.ts seedSimRamo`). The flow:
  *   1. normalize any leftover from a crashed prior run (unstar the item we add),
  *   2. capture the seeded plano's ordered signatures (4 items),
- *   3. STAR a brand-new action (from a bloco NOT in the seeded plano) on the
- *      dashboard and confirm it lands in the plan (5 items),
+ *   3. STAR a brand-new action (from a bloco NOT in the seeded plano) on its
+ *      bloco screen (/bloco/<id>, pushed from the Progressão row) and confirm
+ *      it lands in the plan (5 items),
  *   4. optionally DRAG-swap the first two ordered rows, prove the new order
  *      PERSISTS, then swap back to restore the original order,
  *   5. finally UNSTAR the added item (in `finally`, so a mid-flow failure still
@@ -20,7 +21,8 @@
  * NO page.reload(): the test-auth refresh token is single-use and rotates on
  * every full page load, so a second full load per run (or a rerun) logs the
  * session out. After ONE initial load the whole flow navigates client-side via
- * the bottom tab bar. Persistence is proven by a client re-mount (Progressão → Plano)
+ * the bottom tab bar and bloco-row taps. Persistence is proven by a client
+ * re-mount (Progressão → Plano)
  * that re-reads `api.plan.getMyPlan` from the live Convex subscription — usePlan
  * holds no optimistic state (src/hooks/use-plan.ts), so a re-mount reflects
  * exactly the committed server order.
@@ -35,14 +37,15 @@
 
 import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { blocoIdOf, blocoRow, openBloco } from "./bloco-nav";
 
 export type PlanFlowParams = {
   /** Raw curriculum action id to star as the NEW plan item (a bloco that is
-   *  NOT part of the seeded plano). Its dashboard checkbox uses this id; its
+   *  NOT part of the seeded plano). Its bloco-screen check uses this id; its
    *  plan-ordered row uses the `action:<id>` itemKey. */
   readonly newItemActionId: string;
-  /** Accordion trigger name (regex) for the bloco holding the new item. */
-  readonly blocoTrigger: RegExp;
+  /** Bloco display name (the bloco screen's h1) holding the new item. */
+  readonly blocoName: RegExp;
   /** Whether to exercise the drag-reorder leg (desktop always; mobile if the
    *  touch/pointer drag proves reliable on the target device). */
   readonly includeDrag: boolean;
@@ -52,8 +55,8 @@ export type PlanFlowParams = {
  *  retry re-attempts (a bounce doesn't auth, so it doesn't rotate the on-disk
  *  token — the retry still has a valid token). Once ready, all further nav is
  *  client-side so the single-use refresh token is never re-exchanged. */
-async function initialHome(page: Page, blocoTrigger: RegExp): Promise<void> {
-  const trigger = page.getByRole("button", { name: blocoTrigger }).first();
+async function initialHome(page: Page, blocoId: string): Promise<void> {
+  const trigger = blocoRow(page, blocoId);
   const signin = page.getByRole("button", { name: "Sign in (test)" });
   for (let attempt = 0; attempt < 4; attempt++) {
     await page.goto("/");
@@ -72,25 +75,32 @@ async function initialHome(page: Page, blocoTrigger: RegExp): Promise<void> {
   await trigger.waitFor({ state: "visible", timeout: 12_000 });
 }
 
-/** Client-side nav to the dashboard, converging on the target bloco trigger. */
-async function toHome(page: Page, blocoTrigger: RegExp): Promise<void> {
+/** Client-side nav to the dashboard, converging on the target bloco row. */
+async function toHome(page: Page, blocoId: string): Promise<void> {
   await page.getByRole("link", { name: "Progressão", exact: true }).click();
   await expect(page).not.toHaveURL(/\/plan/, { timeout: 10_000 });
-  await expect(page.getByRole("button", { name: blocoTrigger }).first()).toBeVisible();
+  await expect(blocoRow(page, blocoId)).toBeVisible();
 }
 
-/** Client-side nav to the plan page (ViewToggle present ⇒ non-empty plano). */
+/** Client-side nav Progressão → the target bloco screen (row tap). */
+async function toBloco(page: Page, blocoId: string, blocoName: RegExp): Promise<void> {
+  await toHome(page, blocoId);
+  await openBloco(page, blocoId);
+  await expect(page.getByRole("heading", { level: 1, name: blocoName })).toBeVisible();
+}
+
+/** Client-side nav to the plan page (view tabs present ⇒ non-empty plano). */
 async function toPlan(page: Page): Promise<void> {
   await page.getByRole("link", { name: "Plano" }).click();
-  await expect(page.getByRole("button", { name: "Minha Ordem" })).toBeVisible({
+  await expect(page.getByRole("tab", { name: "Minha ordem" })).toBeVisible({
     timeout: 10_000,
   });
 }
 
-/** Switch the plan into the "Minha Ordem" (ordered) view and wait for the
- *  sortable rows to mount. `force` bypasses the Radix/Convex stability gate. */
+/** Switch the plan into the "Minha ordem" (ordered) view and wait for the
+ *  sortable rows to mount. `force` bypasses the Convex stability gate. */
 async function switchToOrdered(page: Page): Promise<void> {
-  const toggle = page.getByRole("button", { name: "Minha Ordem" });
+  const toggle = page.getByRole("tab", { name: "Minha ordem" });
   await expect(toggle).toBeVisible();
   await toggle.click({ force: true });
   await expect(
@@ -131,24 +141,16 @@ async function dragRow(page: Page, from: number, to: number): Promise<void> {
   await page.waitForTimeout(800);
 }
 
-/** Set the new item's star to `desired` from the dashboard (assumes we are
- *  already on the authed dashboard). Idempotent — used to normalize leftover
- *  state at the start and to clean up at the end. */
+/** Set the new item's star to `desired` from its bloco screen (assumes we are
+ *  already on it). Idempotent — used to normalize leftover state at the start
+ *  and to clean up at the end. */
 async function setStar(
   page: Page,
   actionId: string,
-  blocoTrigger: RegExp,
   desired: boolean,
 ): Promise<void> {
-  const trigger = page.getByRole("button", { name: blocoTrigger }).first();
-  await expect(trigger).toBeVisible();
-  for (let i = 0; i < 6; i++) {
-    if ((await trigger.getAttribute("aria-expanded")) === "true") break;
-    await trigger.click({ force: true }).catch(() => {});
-    await page.waitForTimeout(400);
-  }
   const star = page
-    .locator(`label:has([id="${actionId}"])`)
+    .locator(`[data-action-row="${actionId}"]`)
     .getByRole("button", { name: /plano/i });
   await expect(star).toBeVisible();
   // Converge on the desired pressed state: Convex live re-renders can drop a
@@ -163,15 +165,18 @@ async function setStar(
 
 export async function runPlanLifecycleFlow(
   page: Page,
-  { newItemActionId, blocoTrigger, includeDrag }: PlanFlowParams,
+  { newItemActionId, blocoName, includeDrag }: PlanFlowParams,
 ): Promise<void> {
   const newKey = `action:${newItemActionId}`;
   const newAnchor = page.locator(`[id="${newKey}"]`);
+  const blocoId = blocoIdOf(newItemActionId);
 
-  await initialHome(page, blocoTrigger);
+  await initialHome(page, blocoId);
+  await openBloco(page, blocoId);
+  await expect(page.getByRole("heading", { level: 1, name: blocoName })).toBeVisible();
 
   // 1. Normalize: a crashed prior run may have left the new item starred.
-  await setStar(page, newItemActionId, blocoTrigger, false);
+  await setStar(page, newItemActionId, false);
 
   // 2. Seeded plano baseline (this persona has a 4-item seeded plan).
   await toPlan(page);
@@ -181,8 +186,8 @@ export async function runPlanLifecycleFlow(
 
   try {
     // 3. Star a brand-new item and confirm it lands in the plan.
-    await toHome(page, blocoTrigger);
-    await setStar(page, newItemActionId, blocoTrigger, true);
+    await toBloco(page, blocoId, blocoName);
+    await setStar(page, newItemActionId, true);
     await toPlan(page);
     await switchToOrdered(page);
     await expect(newAnchor).toBeVisible();
@@ -196,22 +201,22 @@ export async function runPlanLifecycleFlow(
 
       await dragRow(page, 0, 1);
       // Re-mount from server state (see file header — no full reload).
-      await toHome(page, blocoTrigger);
+      await toHome(page, blocoId);
       await toPlan(page);
       await switchToOrdered(page);
       expect(await readOrder(page)).toEqual(expectedSwap);
 
       // Swapping the first two again restores the pre-drag order.
       await dragRow(page, 0, 1);
-      await toHome(page, blocoTrigger);
+      await toHome(page, blocoId);
       await toPlan(page);
       await switchToOrdered(page);
       expect(await readOrder(page)).toEqual(withAdded);
     }
   } finally {
     // 5. Unstar the added item — cleanup runs even on a mid-flow failure.
-    await toHome(page, blocoTrigger);
-    await setStar(page, newItemActionId, blocoTrigger, false);
+    await toBloco(page, blocoId, blocoName);
+    await setStar(page, newItemActionId, false);
   }
 
   // The seeded plano is back to exactly its 4 items.

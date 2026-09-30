@@ -111,13 +111,13 @@ test("M19 admin advances Gabriela escoteiro→sênior: fresh progression, especi
     await setScoutRamo(admin, GABRIELA.name, "Sênior");
 
     // ── Rule 1: dashboard starts FRESH on the sênior ramo (3-etapa shape) ─────
-    await gotoReady(gabriela, "/", gabriela.getByText("Etapa Atual"), GABRIELA.email);
+    await gotoReady(gabriela, "/", gabriela.getByText("Etapa atual"), GABRIELA.email);
     await expect(
       gabriela.getByRole("heading", { name: "Escalada", exact: true }),
     ).toBeVisible();
-    await expect(gabriela.getByText("0/18 blocos", { exact: true })).toBeVisible();
-    // Three-etapa progression: first threshold is +6 blocos to Conquista.
-    await expect(gabriela.getByText(/\+6 blocos para/)).toBeVisible();
+    await expect(gabriela.getByTestId("stage-meta")).toHaveText(/^0 de 18 blocos concluídos/);
+    // Three-etapa progression: first threshold is 6 blocos to Conquista.
+    await expect(gabriela.getByText(/Faltam 6 blocos para/)).toBeVisible();
     await expect(gabriela.getByText("Conquista", { exact: true })).toBeVisible();
     await expect(gabriela.getByText(LOCK_TEXT)).toBeVisible();
     // No escoteiro etapa names bleed into the sênior dashboard.
@@ -152,11 +152,11 @@ test("M19 admin advances Gabriela escoteiro→sênior: fresh progression, especi
   } finally {
     // ── Self-clean: restore Gabriela to escoteiro and verify her prior state ──
     await setScoutRamo(admin, GABRIELA.name, "Escoteiro");
-    await gotoReady(gabriela, "/", gabriela.getByText("Etapa Atual"), GABRIELA.email);
+    await gotoReady(gabriela, "/", gabriela.getByText("Etapa atual"), GABRIELA.email);
     await expect(
       gabriela.getByRole("heading", { name: "Trilha", exact: true }),
     ).toBeVisible();
-    await expect(gabriela.getByText("7/18 blocos", { exact: true })).toBeVisible();
+    await expect(gabriela.getByTestId("stage-meta")).toHaveText(/^7 de 18 blocos concluídos/);
     // Especialidades back to the younger (item-checklist) UI.
     await gotoReady(
       gabriela,

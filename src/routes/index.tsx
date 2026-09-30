@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -5,14 +6,19 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useAuthGate } from "@/hooks/use-auth-gate";
 import { useProgression } from "@/hooks/use-progression";
-import { usePlan } from "@/hooks/use-plan";
+import { AppShellSkeleton } from "@/components/layout/app-shell";
 import { StageBanner } from "@/components/progression/stage-banner";
-import { OverallProgress } from "@/components/progression/overall-progress";
 import { EixoSection } from "@/components/progression/eixo-section";
+import { BlocoRow } from "@/components/progression/bloco-card";
 import { RecognitionSection } from "@/components/progression/recognition-section";
 import { EscoteiroShell } from "@/components/progression/escoteiro-shell";
+import { ListBox, Section } from "@/components/ui/section";
 import { notifyLevelUps } from "@/lib/level-up-toast";
-import type { Eixo } from "@/data/types";
+import {
+  LAST_BLOCO_KEY,
+  pickContinueBloco,
+  summarizeAll,
+} from "@/lib/bloco-summary";
 
 export const Route = createFileRoute("/")({
   loader: async ({ context }) => {
@@ -31,21 +37,8 @@ export const Route = createFileRoute("/")({
 function Home() {
   const { ready } = useAuthGate("escoteiro");
 
-  // Show skeleton while loading OR while the user needs onboarding/redirect.
-  if (!ready) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
-          <header className="flex items-center justify-between">
-            <div className="h-6 w-20 animate-pulse rounded bg-muted" />
-            <div className="size-8 animate-pulse rounded-full bg-muted" />
-          </header>
-          <div className="h-32 animate-pulse rounded-md border-2 border-black bg-muted" />
-          <div className="h-24 animate-pulse rounded-md border-2 border-black bg-muted" />
-        </div>
-      </div>
-    );
-  }
+  // Skeleton while loading OR while the user needs onboarding/redirect.
+  if (!ready) return <AppShellSkeleton rows={3} />;
 
   return (
     <EscoteiroShell title="Progressão">
@@ -54,18 +47,36 @@ function Home() {
   );
 }
 
+/** Last bloco screen the escoteiro opened (client-only, read after hydration). */
+function useLastVisitedBloco(enabled: boolean): string | null {
+  const [id, setId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    try {
+      setId(window.localStorage.getItem(LAST_BLOCO_KEY));
+    } catch {
+      // Storage unavailable (private mode) — fall back to the heuristic.
+    }
+  }, [enabled]);
+  return id;
+}
+
+/**
+ * The Progressão body (Design A frame 1): etapa hero · "Continue de onde
+ * parou" · eixos with bloco rows (each pushes /bloco/$blocoId) · Reconhecimento
+ * de Ramo. Also rendered by the escotista's impersonation view with
+ * `targetUserId` (no "continue" card; bloco screens open for that scout).
+ */
 export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
   const {
     ramoRules,
     eixos,
     approvedActionIds,
     pendingActionIds,
-    actionStatusMap,
     customActions,
     completedBlockIds,
     pendingBlockIds,
     earnedSpecialtyBlocoIds,
-    earnedSpecialtyIds,
     completedBlockCount,
     pendingBlockCount,
     approvedIrrItemIds,
@@ -76,29 +87,25 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
     irrComplete,
   } = useProgression(targetUserId);
 
-  // Plan favorites only apply to the escoteiro viewing their own dashboard.
-  const showPlanStars = !targetUserId;
-  // Lock approved items from being un-checked by the escoteiro themselves;
-  // escotistas viewing an escoteiro retain edit rights.
+  // Escoteiros can't un-check their own approved items; escotistas viewing a
+  // scout keep edit rights.
   const lockApproved = !targetUserId;
+  const isOwn = !targetUserId;
 
-  const toggleActionFn = useConvexMutation(api.progression.toggleAction);
-  const { mutate: toggleAction } = useMutation({
-    mutationFn: toggleActionFn,
-    onSuccess: notifyLevelUps,
-  });
+  const summaries = useMemo(
+    () =>
+      summarizeAll(eixos, {
+        approvedActionIds,
+        pendingActionIds,
+        customActions,
+        earnedSpecialtyBlocoIds,
+      }),
+    [eixos, approvedActionIds, pendingActionIds, customActions, earnedSpecialtyBlocoIds],
+  );
 
-  const addCustomFn = useConvexMutation(api.progression.addCustomAction);
-  const { mutate: addCustom } = useMutation({ mutationFn: addCustomFn });
-
-  const toggleCustomFn = useConvexMutation(api.progression.toggleCustomAction);
-  const { mutate: toggleCustom } = useMutation({
-    mutationFn: toggleCustomFn,
-    onSuccess: notifyLevelUps,
-  });
-
-  const deleteCustomFn = useConvexMutation(api.progression.deleteCustomAction);
-  const { mutate: deleteCustom } = useMutation({ mutationFn: deleteCustomFn });
+  const lastVisited = useLastVisitedBloco(isOwn);
+  const continueWith = isOwn ? pickContinueBloco(eixos, summaries, lastVisited) : null;
+  const continueSummary = continueWith ? summaries.get(continueWith.bloco.id) : undefined;
 
   const toggleIrrItemFn = useConvexMutation(api.progression.toggleIrrItem);
   const { mutate: toggleIrrItem } = useMutation({
@@ -106,28 +113,10 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
     onSuccess: notifyLevelUps,
   });
 
-  const handleToggleAction = (actionId: string) => {
-    toggleAction({ actionId, targetUserId });
-  };
-
-  const handleAddCustom = (blocoId: string, text: string) => {
-    addCustom({ blocoId, text, targetUserId });
-  };
-
-  const handleToggleCustom = (id: Id<"customActions">) => {
-    toggleCustom({ customActionId: id, targetUserId });
-  };
-
-  const handleDeleteCustom = (id: Id<"customActions">) => {
-    deleteCustom({ customActionId: id, targetUserId });
-  };
-
-  const handleToggleIrrItem = (itemId: string) => {
-    toggleIrrItem({ itemId, targetUserId });
-  };
+  const totalBlocos = eixos.reduce((n, e) => n + e.blocos.length, 0);
 
   return (
-    <div className="space-y-4">
+    <div>
       <StageBanner
         etapas={ramoRules.etapas}
         irr={ramoRules.irr}
@@ -138,51 +127,31 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
         irrComplete={irrComplete}
       />
 
-      <OverallProgress
-        eixos={eixos}
-        completedBlockIds={completedBlockIds}
-        pendingBlockIds={pendingBlockIds}
-      />
+      {continueWith && continueSummary && (
+        <Section label="Continue de onde parou">
+          <ListBox testId="continue-card">
+            <BlocoRow
+              bloco={continueWith.bloco}
+              summary={continueSummary}
+              eixoName={continueWith.eixo.name}
+              testId="continue-bloco"
+            />
+          </ListBox>
+        </Section>
+      )}
 
-      {showPlanStars ? (
-        <DashboardEixosWithPlan
-          eixos={eixos}
-          approvedActionIds={approvedActionIds}
-          pendingActionIds={pendingActionIds}
-          actionStatusMap={actionStatusMap}
-          completedBlockIds={completedBlockIds}
-          pendingBlockIds={pendingBlockIds}
-          earnedSpecialtyBlocoIds={earnedSpecialtyBlocoIds}
-          earnedSpecialtyIds={earnedSpecialtyIds}
-          customActions={customActions}
-          onToggleAction={handleToggleAction}
-          onAddCustom={handleAddCustom}
-          onToggleCustom={handleToggleCustom}
-          onDeleteCustom={handleDeleteCustom}
-          lockApproved={lockApproved}
-        />
-      ) : (
-        eixos.map((eixo) => (
+      <Section label="Eixos" meta={`${totalBlocos} blocos`}>
+        {eixos.map((eixo) => (
           <EixoSection
             key={eixo.id}
             eixo={eixo}
-            approvedActionIds={approvedActionIds}
-            pendingActionIds={pendingActionIds}
-            actionStatusMap={actionStatusMap}
+            summaries={summaries}
             completedBlockIds={completedBlockIds}
             pendingBlockIds={pendingBlockIds}
-            earnedSpecialtyBlocoIds={earnedSpecialtyBlocoIds}
-            earnedSpecialtyIds={earnedSpecialtyIds}
-            customActions={customActions}
-            onToggleAction={handleToggleAction}
-            onAddCustom={handleAddCustom}
-            onToggleCustom={handleToggleCustom}
-            onDeleteCustom={handleDeleteCustom}
-            lockApproved={lockApproved}
             escoteiroId={targetUserId}
           />
-        ))
-      )}
+        ))}
+      </Section>
 
       <RecognitionSection
         irr={ramoRules.irr}
@@ -190,49 +159,9 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
         approvedIrrItemIds={approvedIrrItemIds}
         pendingIrrItemIds={pendingIrrItemIds}
         irrComplete={irrComplete}
-        onToggleItem={handleToggleIrrItem}
+        onToggleItem={(itemId) => toggleIrrItem({ itemId, targetUserId })}
         lockApproved={lockApproved}
       />
     </div>
-  );
-}
-
-type DashboardEixosWithPlanProps = {
-  eixos: Eixo[];
-  approvedActionIds: Set<string>;
-  pendingActionIds: Set<string>;
-  actionStatusMap: Map<string, "pending" | "approved">;
-  completedBlockIds: Set<string>;
-  pendingBlockIds: Set<string>;
-  earnedSpecialtyBlocoIds?: Set<string>;
-  earnedSpecialtyIds?: Set<string>;
-  customActions: React.ComponentProps<typeof EixoSection>["customActions"];
-  onToggleAction: (actionId: string) => void;
-  onAddCustom: (blocoId: string, text: string) => void;
-  onToggleCustom: (id: Id<"customActions">) => void;
-  onDeleteCustom: (id: Id<"customActions">) => void;
-  lockApproved?: boolean;
-};
-
-function DashboardEixosWithPlan({
-  eixos,
-  ...props
-}: DashboardEixosWithPlanProps) {
-  const { plannedKeys, togglePlanned } = usePlan();
-  const handleTogglePlanned = (itemKey: string) => {
-    togglePlanned({ itemKey });
-  };
-  return (
-    <>
-      {eixos.map((eixo) => (
-        <EixoSection
-          key={eixo.id}
-          eixo={eixo}
-          {...props}
-          plannedKeys={plannedKeys}
-          onTogglePlanned={handleTogglePlanned}
-        />
-      ))}
-    </>
   );
 }

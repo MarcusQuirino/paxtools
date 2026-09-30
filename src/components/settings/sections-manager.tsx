@@ -1,22 +1,26 @@
 import { useState } from "react";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
-import { Plus, Trash2, Users } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { MAX_SECTION_NAME_LENGTH } from "../../../convex/lib/sections";
-import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { HardButton } from "@/components/ui/hard-button";
 import { Input } from "@/components/ui/input";
+import { ListRow } from "@/components/ui/list-row";
+import { Card, ListBox, Note, Section } from "@/components/ui/section";
+import { FieldError, FieldLabel } from "@/components/settings/field";
 import { RAMOS, RAMO_LABELS, RAMO_UNIT_PREFIX, type Ramo } from "@/lib/ramos";
 
-type Section = { _id: Id<"sections">; name: string; ramo: Ramo };
+type SectionDoc = { _id: Id<"sections">; name: string; ramo: Ramo };
 
+/** Native select styled like `ui/input`: 48px, 2px ink, 16px text. */
 const selectClasses =
-  "h-9 rounded-md border-2 border-black bg-white px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-1";
+  "h-12 rounded-[10px] border-2 border-[#141414] bg-white px-3 text-base text-[#141414] outline-none focus-visible:ring-2 focus-visible:ring-[#141414] focus-visible:ring-offset-1";
 
 /** Ramo order first, then the order they were created in. */
-function sortSections(sections: Section[]): Section[] {
+function sortSections(sections: SectionDoc[]): SectionDoc[] {
   return [...sections].sort(
     (a, b) => RAMOS.indexOf(a.ramo) - RAMOS.indexOf(b.ramo),
   );
@@ -54,28 +58,23 @@ export function SectionsManager() {
   };
 
   return (
-    <section className="rounded-md border-2 border-black bg-card p-4 space-y-4">
-      <h2 className="text-sm font-black uppercase flex items-center gap-2">
-        <Users className="size-4" />
-        Seções
-      </h2>
-
+    <Section label="Seções" meta={sections.length || undefined}>
       {sections.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
+        <Note className="mb-3 mt-0">
           Nenhuma seção ainda. Crie a alcateia, a tropa ou o clã do seu grupo.
-        </p>
+        </Note>
       ) : (
-        <ul className="space-y-2">
-          {sortSections(sections).map((section) => (
-            <SectionRow key={section._id} section={section} />
-          ))}
-        </ul>
+        <ListBox className="mb-3">
+          <ul>
+            {sortSections(sections).map((section) => (
+              <SectionRow key={section._id} section={section} />
+            ))}
+          </ul>
+        </ListBox>
       )}
 
-      <div className="space-y-2 border-t pt-3">
-        <label htmlFor="new-section-name" className="text-xs font-medium">
-          Nova seção
-        </label>
+      <Card className="space-y-2.5">
+        <FieldLabel htmlFor="new-section-name">Nova seção</FieldLabel>
         <Input
           id="new-section-name"
           value={newName}
@@ -90,7 +89,7 @@ export function SectionsManager() {
         <div className="flex items-center gap-2">
           <select
             aria-label="Ramo da nova seção"
-            className={`${selectClasses} flex-1`}
+            className={`${selectClasses} min-w-0 flex-1`}
             value={newRamo}
             onChange={(e) => {
               setNewRamo(e.target.value as Ramo);
@@ -103,22 +102,22 @@ export function SectionsManager() {
               </option>
             ))}
           </select>
-          <Button
+          <HardButton
+            className="min-h-12"
             onClick={handleAdd}
             disabled={!newName.trim() || adding}
-            size="sm"
           >
-            <Plus className="size-4 mr-1" />
+            <Plus aria-hidden />
             {adding ? "..." : "Adicionar"}
-          </Button>
+          </HardButton>
         </div>
-        {addError && <p className="text-xs text-destructive">{addError}</p>}
-      </div>
-    </section>
+        <FieldError>{addError}</FieldError>
+      </Card>
+    </Section>
   );
 }
 
-function SectionRow({ section }: { section: Section }) {
+function SectionRow({ section }: { section: SectionDoc }) {
   const [name, setName] = useState(section.name);
   const [error, setError] = useState("");
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -162,40 +161,56 @@ function SectionRow({ section }: { section: Section }) {
     );
   };
 
+  // The divider lives on the <li> (ListRow is always its li's first child,
+  // so its own `first:border-t-0` would drop every divider).
   return (
-    <li className="space-y-1">
-      <div className="flex items-center gap-2">
-        <span className="w-20 shrink-0 text-xs text-muted-foreground">
-          {RAMO_LABELS[section.ramo]}
-        </span>
-        <Input
-          aria-label={`Nome da seção ${section.name}`}
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value);
-            setError("");
-          }}
-          onKeyDown={(e) => e.key === "Enter" && handleRename()}
-          maxLength={MAX_SECTION_NAME_LENGTH}
-        />
-        {dirty && (
-          <Button size="sm" onClick={handleRename} disabled={renaming}>
-            {renaming ? "..." : "Salvar"}
-          </Button>
-        )}
-        <Button
-          size="sm"
-          variant="outline"
-          className="text-destructive border-destructive/40 hover:bg-destructive/10"
-          onClick={() => setConfirmRemove(true)}
-          disabled={removing}
-          title={`Remover ${section.name}`}
-          aria-label={`Remover ${section.name}`}
-        >
-          <Trash2 className="size-4" aria-hidden />
-        </Button>
-      </div>
-      {error && <p className="text-xs text-destructive">{error}</p>}
+    <li className="border-t-[1.5px] border-[#D9D5C9] first:border-t-0">
+      <ListRow
+        leading={
+          <span className="w-16 shrink-0 text-[12px] font-extrabold text-[#4A4A44]">
+            {RAMO_LABELS[section.ramo]}
+          </span>
+        }
+        title={
+          <Input
+            aria-label={`Nome da seção ${section.name}`}
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              setError("");
+            }}
+            onKeyDown={(e) => e.key === "Enter" && handleRename()}
+            maxLength={MAX_SECTION_NAME_LENGTH}
+            className="font-semibold"
+          />
+        }
+        extra={
+          error ? (
+            <span role="alert" className="mt-1 block text-[12px] font-bold text-[#C62828]">
+              {error}
+            </span>
+          ) : undefined
+        }
+        trailing={
+          <span className="flex shrink-0 items-center gap-2">
+            {dirty && (
+              <HardButton size="md" onClick={handleRename} disabled={renaming}>
+                {renaming ? "..." : "Salvar"}
+              </HardButton>
+            )}
+            <HardButton
+              tone="danger"
+              className="w-11 px-0"
+              onClick={() => setConfirmRemove(true)}
+              disabled={removing}
+              title={`Remover ${section.name}`}
+              aria-label={`Remover ${section.name}`}
+            >
+              <Trash2 aria-hidden />
+            </HardButton>
+          </span>
+        }
+      />
       <ConfirmDialog
         open={confirmRemove}
         onOpenChange={setConfirmRemove}

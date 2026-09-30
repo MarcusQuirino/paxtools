@@ -1,13 +1,18 @@
 import { Star } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type PlanStarProps = {
   planned: boolean;
   onToggle: () => void;
-  color?: string;
   label?: string;
+  className?: string;
 };
 
-export function PlanStar({ planned, onToggle, color, label }: PlanStarProps) {
+/**
+ * "Add to / remove from Plano" star: 44px target, 22px icon. Planned = gold
+ * fill with an ink outline; not planned = muted outline.
+ */
+export function PlanStar({ planned, onToggle, label, className }: PlanStarProps) {
   return (
     <button
       type="button"
@@ -16,15 +21,19 @@ export function PlanStar({ planned, onToggle, color, label }: PlanStarProps) {
         e.stopPropagation();
         onToggle();
       }}
-      className="p-1.5 -m-1.5 shrink-0 rounded-md hover:bg-muted/70 transition-colors"
+      className={cn(
+        "-my-2 grid size-11 shrink-0 place-items-center rounded-md transition-colors hover:bg-black/[0.04]",
+        planned ? "text-[#141414]" : "text-[#8A887F]",
+        className,
+      )}
       aria-label={label ?? (planned ? "Remover do plano" : "Adicionar ao plano")}
       aria-pressed={planned}
     >
       <Star
-        className="size-4"
-        fill={planned ? color ?? "currentColor" : "none"}
-        stroke={planned ? color ?? "currentColor" : "currentColor"}
-        strokeWidth={1.75}
+        className="size-[22px]"
+        fill={planned ? "#F4C430" : "none"}
+        strokeWidth={2}
+        aria-hidden
       />
     </button>
   );

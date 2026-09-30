@@ -1,20 +1,31 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { HardButton } from "@/components/ui/hard-button";
+import { ListRow } from "@/components/ui/list-row";
+import { Card, ListBox, Section } from "@/components/ui/section";
+import { Pill } from "@/components/ui/status-pill";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { AuthButton } from "@/components/auth/auth-button";
+import { AppShell } from "@/components/layout/app-shell";
+import { BackLink, PageHeader } from "@/components/layout/page-header";
 import { EscoteiroShell } from "@/components/progression/escoteiro-shell";
 import { RamoNamesInputs } from "@/components/onboarding/ramo-names-inputs";
 import { RegiaoInput } from "@/components/onboarding/regiao-input";
+import { FieldError, FieldLabel } from "@/components/settings/field";
 import { SectionsManager } from "@/components/settings/sections-manager";
 import { type RamoNames } from "@/lib/ramos";
 import { formatGroupIdentity } from "@/lib/group-identity";
 import {
-  ArrowLeft,
+  EMERALD_INK,
+  EMERALD_TINT,
+  INK,
+  RED,
+  RED_TINT,
+} from "@/lib/design-tokens";
+import {
   Users,
   LogOut,
   Plus,
@@ -22,14 +33,30 @@ import {
   Check,
   Shield,
   Compass,
-  Settings as SettingsIcon,
   Trash2,
-  User,
 } from "lucide-react";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
 });
+
+/** 40px ink-bordered icon tile for a ListRow's leading slot. */
+function IconTile({ children }: { children: ReactNode }) {
+  return (
+    <span
+      className="grid size-10 shrink-0 place-items-center rounded-md border-2 [&_svg]:size-5"
+      style={{ borderColor: INK, background: EMERALD_TINT, color: EMERALD_INK }}
+      aria-hidden
+    >
+      {children}
+    </span>
+  );
+}
+
+/** 12px muted helper/status line (the type floor). */
+function Hint({ children }: { children: ReactNode }) {
+  return <span className="text-[12px] font-semibold text-[#8A887F]">{children}</span>;
+}
 
 function SettingsPage() {
   const navigate = useNavigate();
@@ -113,245 +140,227 @@ function SettingsPage() {
 
   if (!user) return null;
 
+  const isEscotista = user.role === "escotista";
+
   const sections = (
-    <>
-        <UserNameSection currentName={user.name ?? ""} />
+    <div>
+      <UserNameSection currentName={user.name ?? ""} />
 
-        {/* Role section */}
-        <section className="rounded-md border-2 border-black bg-card p-4 space-y-3">
-          <h2 className="text-sm font-black uppercase flex items-center gap-2">
-            {user.role === "escotista" ? (
-              <Shield className="size-4 text-teal-600" />
+      <Section label="Seu papel">
+        <Card className="flex flex-wrap items-center gap-3">
+          {/* Emerald tint (not solid): it's an identity chip, not a state. */}
+          <Pill
+            tone="paper"
+            className="bg-[#DDF3E8] px-2.5 py-1 text-[#08452F]"
+            testId="settings-role-pill"
+          >
+            {isEscotista ? (
+              <Shield className="size-3" strokeWidth={3} aria-hidden />
             ) : (
-              <Compass className="size-4 text-primary" />
+              <Compass className="size-3" strokeWidth={3} aria-hidden />
             )}
-            Seu papel
-          </h2>
-          <div className="flex items-center gap-3">
-            <div
-              className={`rounded-md border-2 border-black px-3 py-1.5 text-sm font-bold ${
-                user.role === "escotista"
-                  ? "bg-teal-100 text-teal-900"
-                  : "bg-emerald-100 text-emerald-900"
-              }`}
-            >
-              {user.role === "escotista" ? "Escotista" : "Escoteiro"}
-            </div>
-            <span className="text-xs text-muted-foreground">
-              O papel não pode ser alterado
-            </span>
-          </div>
-        </section>
+            <span>{isEscotista ? "Escotista" : "Escoteiro"}</span>
+          </Pill>
+          <Hint>O papel não pode ser alterado</Hint>
+        </Card>
+      </Section>
 
-        {/* Group section */}
-        <section className="rounded-md border-2 border-black bg-card p-4 space-y-4">
-          <h2 className="text-sm font-black uppercase flex items-center gap-2">
-            <Users className="size-4" />
-            Grupo
-          </h2>
-
-          {group ? (
-            <div className="space-y-3">
-              <div className="rounded-md border-2 border-black bg-muted/50 p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-sm">
+      <Section label="Grupo">
+        {group ? (
+          <div className="space-y-3">
+            <ListBox>
+              <ListRow
+                leading={
+                  <IconTile>
+                    <Users />
+                  </IconTile>
+                }
+                title={
+                  <>
                     {/* Two things are load-bearing here. The name needs its own
                         element so a text query can match it exactly, and the
                         identity needs a LEADING SPACE inside its text: an
                         accessible name concatenates descendant text across
-                        element boundaries, so without it the heading announces
+                        element boundaries, so without it the row announces
                         as "Grupo QA99999/RS". `ml-1` only fixes the pixels. */}
                     <span>{group.name}</span>
                     {groupIdentity ? (
-                      <span className="ml-1 text-xs text-muted-foreground">
+                      <span className="ml-1 text-[12px] font-bold text-[#8A887F]">
                         {` ${groupIdentity}`}
                       </span>
                     ) : null}
-                  </span>
-                  {group.password && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleCopyPassword}
-                      className="h-7 text-xs gap-1"
-                    >
-                      {copiedPassword ? (
-                        <Check className="size-3" />
-                      ) : (
-                        <Copy className="size-3" />
-                      )}
-                      {copiedPassword ? "Copiado!" : group.password}
-                    </Button>
-                  )}
-                </div>
-                {group.password && (
-                  <p className="text-xs text-muted-foreground">
-                    Compartilhe a senha acima para convidar membros.
-                  </p>
-                )}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLeave}
-                disabled={leaving}
-                className="text-destructive hover:text-destructive"
-              >
-                <LogOut className="size-4 mr-1" />
-                {leaving ? "Saindo..." : "Sair do grupo"}
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Você não está em nenhum grupo.
-              </p>
-
-              {/* Join group */}
-              <div className="space-y-2">
-                <label className="text-xs font-medium">
-                  Entrar em um grupo existente
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Senha do grupo"
-                    value={joinPassword}
-                    onChange={(e) => {
-                      setJoinPassword(e.target.value.toUpperCase());
-                      setJoinError("");
-                    }}
-                    onKeyDown={(e) => e.key === "Enter" && handleJoin()}
-                    className="font-mono tracking-widest text-center"
-                    maxLength={6}
-                  />
-                  <Button
-                    onClick={handleJoin}
-                    disabled={!joinPassword.trim() || joining}
-                    size="sm"
-                  >
-                    {joining ? "..." : "Entrar"}
-                  </Button>
-                </div>
-                {joinError && (
-                  <p className="text-xs text-destructive">{joinError}</p>
-                )}
-              </div>
-
-              {/* Create group (escotista only) */}
-              {user.role === "escotista" && (
-                <>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <div className="flex-1 border-t" />
-                    <span>ou</span>
-                    <div className="flex-1 border-t" />
-                  </div>
-
-                  {showCreate ? (
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium">
-                          Número do novo grupo
-                        </label>
-                        <Input
-                          placeholder="Ex: 123"
-                          inputMode="numeric"
-                          value={newGroupNumber}
-                          onChange={(e) => {
-                            setNewGroupNumber(
-                              e.target.value.replace(/\D/g, ""),
-                            );
-                            setCreateError("");
-                          }}
-                          maxLength={6}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label
-                          htmlFor="new-group-regiao"
-                          className="text-xs font-medium"
-                        >
-                          Região escoteira (UF)
-                        </label>
-                        <RegiaoInput
-                          id="new-group-regiao"
-                          value={newGroupRegiao}
-                          onChange={(next) => {
-                            setNewGroupRegiao(next);
-                            setCreateError("");
-                          }}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium">
-                          Nome do novo grupo
-                        </label>
-                        <Input
-                          placeholder="Ex: Potiguara"
-                          value={newGroupName}
-                          onChange={(e) => {
-                            setNewGroupName(e.target.value);
-                            setCreateError("");
-                          }}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium">
-                          Seções iniciais (opcional)
-                        </label>
-                        <RamoNamesInputs
-                          value={newGroupRamoNames}
-                          onChange={setNewGroupRamoNames}
-                          groupName={newGroupName}
-                        />
-                      </div>
-                      <Button
-                        onClick={handleCreate}
-                        disabled={
-                          !newGroupName.trim() ||
-                          !newGroupNumber.trim() ||
-                          !newGroupRegiao.trim() ||
-                          creating
-                        }
-                        size="sm"
-                        className="w-full"
-                      >
-                        {creating ? "Criando..." : "Criar grupo"}
-                      </Button>
-                      {createError && (
-                        <p className="text-xs text-destructive">
-                          {createError}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowCreate(true)}
-                      className="w-full"
-                    >
-                      <Plus className="size-4 mr-1" />
-                      Criar novo grupo
-                    </Button>
-                  )}
-                </>
+                  </>
+                }
+              />
+              {group.password && (
+                <ListRow
+                  onClick={() => void handleCopyPassword()}
+                  leading={
+                    <IconTile>{copiedPassword ? <Check /> : <Copy />}</IconTile>
+                  }
+                  title={
+                    <span className="font-mono tracking-[0.2em]">
+                      {group.password}
+                    </span>
+                  }
+                  subtitle="Compartilhe a senha para convidar membros."
+                  trailing={
+                    <span className="shrink-0 text-[12px] font-extrabold text-[#0E6B4E]">
+                      {copiedPassword ? "Copiado!" : "Copiar"}
+                    </span>
+                  }
+                />
               )}
+            </ListBox>
+            <HardButton
+              tone="danger"
+              onClick={handleLeave}
+              disabled={leaving}
+            >
+              <LogOut aria-hidden />
+              {leaving ? "Saindo..." : "Sair do grupo"}
+            </HardButton>
+          </div>
+        ) : (
+          <Card className="space-y-4">
+            <p className="text-[15px] text-[#4A4A44]">
+              Você não está em nenhum grupo.
+            </p>
+
+            {/* Join group */}
+            <div className="space-y-1.5">
+              <FieldLabel htmlFor="join-group-password">
+                Entrar em um grupo existente
+              </FieldLabel>
+              <div className="flex gap-2">
+                <Input
+                  id="join-group-password"
+                  placeholder="Senha do grupo"
+                  value={joinPassword}
+                  onChange={(e) => {
+                    setJoinPassword(e.target.value.toUpperCase());
+                    setJoinError("");
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && handleJoin()}
+                  className="font-mono tracking-widest text-center"
+                  maxLength={6}
+                />
+                <HardButton
+                  className="min-h-12"
+                  onClick={handleJoin}
+                  disabled={!joinPassword.trim() || joining}
+                >
+                  {joining ? "..." : "Entrar"}
+                </HardButton>
+              </div>
+              <FieldError>{joinError}</FieldError>
             </div>
-          )}
-        </section>
 
-        {group?.isAdmin && (
-          <>
-            <GroupAdminSection
-              initialName={group.name}
-              initialRegiao={group.regiao ?? ""}
-            />
-            <SectionsManager />
-          </>
+            {/* Create group (escotista only) */}
+            {isEscotista && (
+              <>
+                <div className="flex items-center gap-2 text-[12px] font-extrabold uppercase text-[#8A887F]">
+                  <div className="flex-1 border-t-[1.5px] border-[#D9D5C9]" />
+                  <span>ou</span>
+                  <div className="flex-1 border-t-[1.5px] border-[#D9D5C9]" />
+                </div>
+
+                {showCreate ? (
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <FieldLabel htmlFor="new-group-number">
+                        Número do novo grupo
+                      </FieldLabel>
+                      <Input
+                        id="new-group-number"
+                        placeholder="Ex: 123"
+                        inputMode="numeric"
+                        value={newGroupNumber}
+                        onChange={(e) => {
+                          setNewGroupNumber(e.target.value.replace(/\D/g, ""));
+                          setCreateError("");
+                        }}
+                        maxLength={6}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <FieldLabel htmlFor="new-group-regiao">
+                        Região escoteira (UF)
+                      </FieldLabel>
+                      <RegiaoInput
+                        id="new-group-regiao"
+                        value={newGroupRegiao}
+                        onChange={(next) => {
+                          setNewGroupRegiao(next);
+                          setCreateError("");
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <FieldLabel htmlFor="new-group-name">
+                        Nome do novo grupo
+                      </FieldLabel>
+                      <Input
+                        id="new-group-name"
+                        placeholder="Ex: Potiguara"
+                        value={newGroupName}
+                        onChange={(e) => {
+                          setNewGroupName(e.target.value);
+                          setCreateError("");
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <FieldLabel>Seções iniciais (opcional)</FieldLabel>
+                      <RamoNamesInputs
+                        value={newGroupRamoNames}
+                        onChange={setNewGroupRamoNames}
+                        groupName={newGroupName}
+                      />
+                    </div>
+                    <HardButton
+                      full
+                      onClick={handleCreate}
+                      disabled={
+                        !newGroupName.trim() ||
+                        !newGroupNumber.trim() ||
+                        !newGroupRegiao.trim() ||
+                        creating
+                      }
+                    >
+                      {creating ? "Criando..." : "Criar grupo"}
+                    </HardButton>
+                    <FieldError>{createError}</FieldError>
+                  </div>
+                ) : (
+                  <HardButton
+                    tone="paper"
+                    full
+                    onClick={() => setShowCreate(true)}
+                  >
+                    <Plus aria-hidden />
+                    Criar novo grupo
+                  </HardButton>
+                )}
+              </>
+            )}
+          </Card>
         )}
+      </Section>
 
-        <AccountSection />
-    </>
+      {group?.isAdmin && (
+        <>
+          <GroupAdminSection
+            initialName={group.name}
+            initialRegiao={group.regiao ?? ""}
+          />
+          <SectionsManager />
+          <GroupDangerZone groupName={group.name} />
+        </>
+      )}
+
+      <AccountSection />
+    </div>
   );
 
   // The escoteiro reaches this page as the Perfil tab: tabbed shell, no
@@ -360,51 +369,45 @@ function SettingsPage() {
   if (user.role === "escoteiro") {
     return (
       <EscoteiroShell title="Perfil" onProfile>
-        <div className="space-y-6">{sections}</div>
+        {sections}
       </EscoteiroShell>
     );
   }
 
+  // Escotista "Ajustes": a pushed screen off the painel's "Mais" sheet. The
+  // escotista tab bar lives in the /escotista layout (this route is outside
+  // it), so the way back is the header's 44px back target.
+  const eyebrow =
+    [group?.name, groupIdentity].filter(Boolean).join(" · ") || "Escotista";
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-lg px-4 py-4 space-y-6 pb-20">
-        <header className="flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() =>
-              void navigate({
-                to: user.role === "escotista" ? "/escotista" : "/",
-              })
-            }
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="size-4" />
-            Voltar
-          </button>
-          <AuthButton />
-        </header>
-
-        <h1 className="text-xl font-black uppercase">Configurações</h1>
-
-        {sections}
-      </div>
-    </div>
+    <AppShell
+      header={
+        <PageHeader
+          back={
+            <BackLink
+              link={<Link to={isEscotista ? "/escotista" : "/"} />}
+              ariaLabel={isEscotista ? "Voltar ao painel" : "Voltar"}
+            />
+          }
+          eyebrow={eyebrow}
+          title="Ajustes"
+        />
+      }
+    >
+      {sections}
+    </AppShell>
   );
 }
 
 function AccountSection() {
   const { signOut } = useAuthActions();
   return (
-    <section className="rounded-md border-2 border-black bg-card p-4 space-y-3">
-      <h2 className="text-sm font-black uppercase flex items-center gap-2">
-        <LogOut className="size-4" />
-        Conta
-      </h2>
-      <Button variant="outline" onClick={() => void signOut()}>
-        <LogOut className="size-4 mr-1" />
+    <Section label="Conta">
+      <HardButton tone="paper" full onClick={() => void signOut()}>
+        <LogOut aria-hidden />
         Sair da conta
-      </Button>
-    </section>
+      </HardButton>
+    </Section>
   );
 }
 
@@ -437,13 +440,10 @@ function UserNameSection({ currentName }: { currentName: string }) {
   };
 
   return (
-    <section className="rounded-md border-2 border-black bg-card p-4 space-y-3">
-      <h2 className="text-sm font-black uppercase flex items-center gap-2">
-        <User className="size-4" />
-        Seu nome
-      </h2>
-      <div className="space-y-2">
+    <Section label="Seu nome" first>
+      <Card className="space-y-2.5">
         <Input
+          aria-label="Seu nome"
           value={name}
           onChange={(e) => {
             setName(e.target.value);
@@ -453,21 +453,15 @@ function UserNameSection({ currentName }: { currentName: string }) {
           maxLength={100}
           placeholder="Seu nome"
         />
-        {saveError && <p className="text-xs text-destructive">{saveError}</p>}
+        <FieldError>{saveError}</FieldError>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-muted-foreground">
-            {savedAt && !dirty ? "Salvo." : ""}
-          </span>
-          <Button
-            onClick={handleSave}
-            disabled={!dirty || saving}
-            size="sm"
-          >
+          <Hint>{savedAt && !dirty ? "Salvo." : ""}</Hint>
+          <HardButton onClick={handleSave} disabled={!dirty || saving}>
             {saving ? "Salvando..." : "Salvar nome"}
-          </Button>
+          </HardButton>
         </div>
-      </div>
-    </section>
+      </Card>
+    </Section>
   );
 }
 
@@ -483,18 +477,9 @@ function GroupAdminSection({
   const [saveError, setSaveError] = useState("");
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmText, setConfirmText] = useState("");
-  const [deleteError, setDeleteError] = useState("");
-
   const updateGroupFn = useConvexMutation(api.groups.updateGroup);
   const { mutate: updateGroup, isPending: saving } = useMutation({
     mutationFn: updateGroupFn,
-  });
-
-  const deleteGroupFn = useConvexMutation(api.groups.deleteGroup);
-  const { mutate: deleteGroup, isPending: deleting } = useMutation({
-    mutationFn: deleteGroupFn,
   });
 
   const dirty =
@@ -518,26 +503,11 @@ function GroupAdminSection({
     );
   };
 
-  const handleDelete = () => {
-    setDeleteError("");
-    deleteGroup(
-      { confirmName: confirmText },
-      { onError: (err) => setDeleteError(err.message) },
-    );
-  };
-
   return (
-    <section className="rounded-md border-2 border-black bg-card p-4 space-y-4">
-      <h2 className="text-sm font-black uppercase flex items-center gap-2">
-        <SettingsIcon className="size-4" />
-        Gerenciar grupo
-      </h2>
-
-      <div className="space-y-3">
-        <div className="space-y-1">
-          <label htmlFor="admin-group-name" className="text-xs font-medium">
-            Nome do grupo
-          </label>
+    <Section label="Gerenciar grupo">
+      <Card className="space-y-3">
+        <div className="space-y-1.5">
+          <FieldLabel htmlFor="admin-group-name">Nome do grupo</FieldLabel>
           <Input
             id="admin-group-name"
             value={name}
@@ -550,10 +520,10 @@ function GroupAdminSection({
           />
         </div>
 
-        <div className="space-y-1">
-          <label htmlFor="admin-group-regiao" className="text-xs font-medium">
+        <div className="space-y-1.5">
+          <FieldLabel htmlFor="admin-group-regiao">
             Região escoteira (UF)
-          </label>
+          </FieldLabel>
           <RegiaoInput
             id="admin-group-regiao"
             value={regiao}
@@ -566,49 +536,60 @@ function GroupAdminSection({
         </div>
 
         <div className="flex items-center justify-between gap-2">
-          <div className="text-xs text-muted-foreground">
-            {savedAt && !dirty ? "Salvo." : ""}
-          </div>
-          <Button
-            onClick={handleSave}
-            disabled={!dirty || saving}
-            size="sm"
-          >
+          <Hint>{savedAt && !dirty ? "Salvo." : ""}</Hint>
+          <HardButton onClick={handleSave} disabled={!dirty || saving}>
             {saving ? "Salvando..." : "Salvar alterações"}
-          </Button>
+          </HardButton>
         </div>
-        {saveError && (
-          <p className="text-xs text-destructive">{saveError}</p>
-        )}
-      </div>
+        <FieldError>{saveError}</FieldError>
+      </Card>
+    </Section>
+  );
+}
 
-      <div className="border-t pt-4 space-y-2">
-        <h3 className="text-xs font-semibold text-destructive">
-          Zona perigosa
-        </h3>
+/** Admin-only "Excluir grupo", typed-name confirmation. Red tint, no shadow. */
+function GroupDangerZone({ groupName }: { groupName: string }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+
+  const deleteGroupFn = useConvexMutation(api.groups.deleteGroup);
+  const { mutate: deleteGroup, isPending: deleting } = useMutation({
+    mutationFn: deleteGroupFn,
+  });
+
+  const handleDelete = () => {
+    setDeleteError("");
+    deleteGroup(
+      { confirmName: confirmText },
+      { onError: (err) => setDeleteError(err.message) },
+    );
+  };
+
+  return (
+    <Section label={<span style={{ color: RED }}>Zona perigosa</span>}>
+      <Card tint={RED_TINT} style={{ borderColor: RED }} className="space-y-3">
         {confirmOpen ? (
-          <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-            <p className="text-xs">
+          <>
+            <p className="text-[15px] text-[#141414]">
               Esta ação não pode ser desfeita pela interface. Para confirmar,
               digite o nome do grupo:{" "}
-              <strong className="font-mono">{initialName}</strong>
+              <strong className="font-mono">{groupName}</strong>
             </p>
             <Input
+              aria-label="Nome do grupo para confirmar"
               value={confirmText}
               onChange={(e) => {
                 setConfirmText(e.target.value);
                 setDeleteError("");
               }}
-              placeholder={initialName}
+              placeholder={groupName}
               autoFocus
             />
-            {deleteError && (
-              <p className="text-xs text-destructive">{deleteError}</p>
-            )}
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
+            <FieldError>{deleteError}</FieldError>
+            <div className="flex flex-wrap justify-end gap-2">
+              <HardButton
+                tone="paper"
                 onClick={() => {
                   setConfirmOpen(false);
                   setConfirmText("");
@@ -617,31 +598,24 @@ function GroupAdminSection({
                 disabled={deleting}
               >
                 Cancelar
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-destructive border-destructive/40 hover:bg-destructive/10"
+              </HardButton>
+              <HardButton
+                tone="danger"
                 onClick={handleDelete}
-                disabled={confirmText.trim() !== initialName || deleting}
+                disabled={confirmText.trim() !== groupName || deleting}
               >
-                <Trash2 className="size-4 mr-1" />
+                <Trash2 aria-hidden />
                 {deleting ? "Excluindo..." : "Excluir definitivamente"}
-              </Button>
+              </HardButton>
             </div>
-          </div>
+          </>
         ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setConfirmOpen(true)}
-            className="text-destructive border-destructive/40 hover:bg-destructive/10"
-          >
-            <Trash2 className="size-4 mr-1" />
+          <HardButton tone="danger" onClick={() => setConfirmOpen(true)}>
+            <Trash2 aria-hidden />
             Excluir grupo
-          </Button>
+          </HardButton>
         )}
-      </div>
-    </section>
+      </Card>
+    </Section>
   );
 }

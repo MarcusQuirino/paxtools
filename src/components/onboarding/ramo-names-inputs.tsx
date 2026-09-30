@@ -1,4 +1,6 @@
 import { Input } from "@/components/ui/input";
+import { FieldLabel } from "@/components/settings/field";
+import { Note } from "@/components/ui/section";
 import {
   RAMOS,
   RAMO_LABELS,
@@ -15,18 +17,12 @@ import {
 type Props = {
   value: RamoNames;
   onChange: (next: RamoNames) => void;
+  /** @deprecated no-op — there is a single (light) look now. */
   variant?: "dark" | "light";
   groupName?: string;
 };
 
-export function RamoNamesInputs({
-  value,
-  onChange,
-  variant = "light",
-  groupName,
-}: Props) {
-  const isDark = variant === "dark";
-
+export function RamoNamesInputs({ value, onChange, groupName }: Props) {
   const setRamo = (r: Ramo, v: string) => {
     const next: RamoNames = { ...value };
     if (v.trim()) next[r] = v;
@@ -35,45 +31,29 @@ export function RamoNamesInputs({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {RAMOS.map((r) => {
         const placeholder = (groupName ?? "").trim() || "Nome da seção";
         const id = `ramo-name-${r}`;
         return (
           <div key={r} className="space-y-1">
-            <label
-              htmlFor={id}
-              className={`text-xs ${
-                isDark ? "text-green-200/70" : "text-muted-foreground"
-              }`}
-            >
+            <FieldLabel htmlFor={id}>
               {RAMO_UNIT_PREFIX[r]}{" "}
-              <span className={isDark ? "text-green-200/40" : ""}>
+              <span className="font-semibold text-[#8A887F]">
                 ({RAMO_LABELS[r]})
               </span>
-            </label>
+            </FieldLabel>
             <Input
               id={id}
               value={value[r] ?? ""}
               onChange={(e) => setRamo(r, e.target.value)}
               placeholder={placeholder}
               maxLength={60}
-              className={
-                isDark
-                  ? "bg-white/10 border-white/20 text-white placeholder:text-white/30"
-                  : ""
-              }
             />
           </div>
         );
       })}
-      <p
-        className={`text-[11px] ${
-          isDark ? "text-green-200/50" : "text-muted-foreground"
-        }`}
-      >
-        Opcional. Se vazio, usamos o nome do grupo.
-      </p>
+      <Note className="mt-0">Opcional. Se vazio, usamos o nome do grupo.</Note>
     </div>
   );
 }

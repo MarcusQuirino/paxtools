@@ -23,7 +23,7 @@ test("escoteiro stars a new item, reorders (persists), restores and unstars", as
   testInfo.setTimeout(120_000);
   await runPlanLifecycleFlow(page, {
     newItemActionId: "escoteiro:aprendizagem-continua:fixed:0",
-    blocoTrigger: /Aprendizagem Contínua/i,
+    blocoName: /Aprendizagem Contínua/i,
     includeDrag: true,
   });
 });

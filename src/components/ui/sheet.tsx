@@ -52,11 +52,13 @@ function SheetContent({
         data-slot="sheet-content"
         aria-describedby={undefined}
         className={cn(
-          "fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-lg flex-col gap-2 rounded-t-md border-2 border-black bg-background p-4 pb-8 shadow-[0px_-2px_0px_0px_#000] outline-none duration-200 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom",
+          "fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-lg flex-col gap-2 rounded-t-[14px] border-2 border-b-0 border-[#141414] bg-background p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] text-[#141414] outline-none duration-200 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom",
           className,
         )}
         {...props}
       >
+        {/* Grab handle: signals a dismissible bottom sheet. Static → no shadow. */}
+        <span aria-hidden className="mx-auto -mt-1 mb-1 h-1.5 w-10 rounded-full bg-[#D9D5C9]" />
         <DialogPrimitive.Title data-slot="sheet-title" className="sr-only">{title}</DialogPrimitive.Title>
         {children}
       </DialogPrimitive.Content>

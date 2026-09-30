@@ -9,7 +9,7 @@
  *
  * Care with Bruno's seed: he carries 2 seeded PENDING ações on his frontier
  * bloco (Consumo Responsável → fixed:0 + fixed:1) that other read specs assert
- * on. We mark a DIFFERENT unchecked ação (variable:0) and reject only that one
+ * on. We mark a DIFFERENT open ação (variable:0) and reject only that one
  * (the queue starts with nothing selected; we tick just our row) so the seeded
  * queue material stays intact.
  *
@@ -19,12 +19,13 @@
 
 import { test, expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
+import { openBloco } from "../shared/bloco-nav";
 
 const NEW_ACTION_ID = "escoteiro:consumo-responsavel:variable:0";
 // The visible label of NEW_ACTION_ID — its accessible name in the queue card.
 const NEW_ACTION_LABEL =
   /Registrar e analisar o consumo de água e energia da sua residência/i;
-const BLOCO_TRIGGER = /Consumo Responsável/i;
+const BLOCO_ID = "consumo-responsavel";
 // A seeded pending row we must NOT touch (proof the seed stays intact).
 const SEEDED_ACTION_ID = "escoteiro:consumo-responsavel:fixed:0";
 
@@ -32,8 +33,8 @@ const BRUNO_STATE = "tests/.auth/sim-troop-escoteiro-2.json";
 const RENATA_STATE = "tests/.auth/sim-escotista-escoteiro-1--m03.json";
 const BRUNO_NAME = /Bruno Sá/i;
 
-const expandBloco = (p: Page) =>
-  p.getByRole("button", { name: BLOCO_TRIGGER }).first().click();
+/** Push the bloco screen from Progressão (no-op if already on it). */
+const openBrunoBloco = (p: Page) => openBloco(p, BLOCO_ID);
 
 /** Bruno's card in Renata's queue (one `pending-person` box per escoteiro). */
 function brunoCard(page: Page): Locator {
@@ -54,14 +55,14 @@ test("escoteiro marks a new ação → escotista rejects it → row removed, see
   try {
     // 1. Bruno marks a NEW ação → pending (self-marked, never locked).
     await brunoPage.goto("/");
-    await expandBloco(brunoPage);
+    await openBrunoBloco(brunoPage);
     await expect(newCheckbox).toBeVisible();
-    if ((await newCheckbox.getAttribute("data-state")) === "checked") {
+    if ((await newCheckbox.getAttribute("data-state")) === "pending") {
       await newCheckbox.click();
-      await expect(newCheckbox).toHaveAttribute("data-state", "unchecked");
+      await expect(newCheckbox).toHaveAttribute("data-state", "open");
     }
     await newCheckbox.click();
-    await expect(newCheckbox).toHaveAttribute("data-state", "checked");
+    await expect(newCheckbox).toHaveAttribute("data-state", "pending");
 
     // 2. Renata sees Bruno's card; reject ONLY the new row.
     await renataPage.goto("/escotista/pending");
@@ -91,20 +92,21 @@ test("escoteiro marks a new ação → escotista rejects it → row removed, see
       renataPage.getByRole("button", { name: BRUNO_NAME }),
     ).toBeVisible();
 
-    // 3. Gone for Bruno on a fresh read; the seeded pending stays checked.
+    // 3. Gone for Bruno on a fresh read (reload stays on the bloco screen);
+    //    the seeded pending stays pending.
     await brunoPage.reload();
-    await expandBloco(brunoPage);
-    await expect(newCheckbox).toHaveAttribute("data-state", "unchecked");
+    await openBrunoBloco(brunoPage);
+    await expect(newCheckbox).toHaveAttribute("data-state", "open");
     await expect(
       brunoPage.locator(`[id="${SEEDED_ACTION_ID}"]`),
-    ).toHaveAttribute("data-state", "checked");
+    ).toHaveAttribute("data-state", "pending");
   } finally {
     // Safety net: if we failed after marking but before the reject landed,
     // unmark the (always-unlockable) new pending row so the next run is clean.
     try {
       await brunoPage.goto("/");
-      await expandBloco(brunoPage);
-      if ((await newCheckbox.getAttribute("data-state")) === "checked") {
+      await openBrunoBloco(brunoPage);
+      if ((await newCheckbox.getAttribute("data-state")) === "pending") {
         await newCheckbox.click();
       }
     } catch {

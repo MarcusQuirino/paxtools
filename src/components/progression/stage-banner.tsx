@@ -1,5 +1,6 @@
 import type { Etapa, Irr } from "@/data/progression-rules";
 import { Trophy } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type StageBannerProps = {
   etapas: Etapa[];
@@ -11,6 +12,15 @@ type StageBannerProps = {
   irrComplete: boolean;
 };
 
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * The etapa hero — the ONE heavy element of Progressão (emerald, 4px ink
+ * shadow). 34/900 stage name, a dot→bar track of the ramo's etapas (3 or 4),
+ * "Faltam N blocos para X" with a gold highlight, and a meta line with the
+ * approved count and what's aguardando aprovação. The IRR-complete variant is
+ * gold.
+ */
 export function StageBanner({
   etapas,
   irr,
@@ -21,116 +31,86 @@ export function StageBanner({
   irrComplete,
 }: StageBannerProps) {
   const threshold = irr.blockThreshold;
-  const approvedPercent = (completedBlockCount / threshold) * 100;
-  const pendingPercent = (pendingBlockCount / threshold) * 100;
 
   if (irrComplete) {
     return (
-      <div className="rounded-md border-2 border-black bg-yellow-400 p-5 text-black shadow-[4px_4px_0px_0px_#000]">
-        <div className="flex items-center gap-3">
-          <Trophy className="size-10" />
-          <div>
-            <h1 className="text-xl font-black uppercase tracking-tight">{irr.name}!</h1>
-            <p className="text-sm font-medium">
-              Parabéns! Reconhecimento de Ramo completo.
-            </p>
-          </div>
+      <div
+        data-testid="stage-hero"
+        className="flex items-center gap-3 rounded-[10px] border-2 border-[#141414] bg-[#F4C430] p-4 text-[#141414] shadow-[4px_4px_0_#141414]"
+      >
+        <Trophy className="size-10 shrink-0" strokeWidth={2.2} aria-hidden />
+        <div>
+          <h2 className="text-[26px] font-black leading-[1.05] tracking-[-0.02em]">{irr.name}!</h2>
+          <p className="mt-1 text-[15px] font-semibold">Parabéns! Reconhecimento de Ramo completo.</p>
         </div>
       </div>
     );
   }
 
-  const blocksToNext = nextStage
-    ? nextStage.blocksRequired - completedBlockCount
-    : 0;
-  const remainingToIrr = Math.max(0, threshold - completedBlockCount);
+  const target = nextStage
+    ? { n: nextStage.blocksRequired - completedBlockCount, name: nextStage.name }
+    : { n: Math.max(0, threshold - completedBlockCount), name: irr.name };
+  const currentIndex = etapas.findIndex((e) => e.id === stage.id);
 
   return (
-    <div className="rounded-md border-2 border-black bg-emerald-700 px-4 py-3 text-white shadow-[4px_4px_0px_0px_#065f46]">
-      <div className="flex items-baseline justify-between mb-1.5">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest opacity-80">
-            Etapa Atual
-          </p>
-          <h1 className="text-lg font-black text-white leading-tight uppercase">
-            {stage.name}
-          </h1>
-        </div>
-        <span className="text-xs font-bold opacity-80">
-          {completedBlockCount}/{threshold} blocos
-          {pendingBlockCount > 0 && ` (+${pendingBlockCount})`}
-        </span>
-      </div>
+    <div
+      data-testid="stage-hero"
+      className="rounded-[10px] border-2 border-[#141414] bg-[#0E6B4E] p-4 text-white shadow-[4px_4px_0_#141414]"
+    >
+      <p className="text-[12px] font-extrabold uppercase tracking-[0.1em] text-white/85">Etapa atual</p>
+      <h2 className="mt-0.5 mb-3.5 text-[34px] font-black leading-none tracking-[-0.02em]">
+        {stage.name}
+      </h2>
 
-      <div className="relative pt-5 pb-2">
-        {etapas.map((s) => {
-          const position = (s.blocksRequired / threshold) * 100;
-          const isCompleted = completedBlockCount >= s.blocksRequired;
-          const isCurrent = s.id === stage.id;
+      <ol
+        className="mb-3 grid gap-1.5"
+        style={{ gridTemplateColumns: `repeat(${etapas.length}, minmax(0, 1fr))` }}
+        aria-label="Etapas do ramo"
+      >
+        {etapas.map((e, i) => {
+          const done = i < currentIndex;
+          const cur = i === currentIndex;
           return (
-            <div
-              key={s.id}
-              className="absolute -top-0.5 z-10 flex flex-col items-center"
-              style={{
-                left: `${position}%`,
-                transform: "translateX(-50%)",
-              }}
-            >
-              {s.image ? (
-                <img
-                  src={s.image}
-                  alt={s.name}
-                  className={`size-7 rounded transition-all ${
-                    isCurrent
-                      ? "ring-2 ring-white scale-110"
-                      : isCompleted
-                        ? "opacity-100"
-                        : "opacity-40 grayscale"
-                  }`}
-                />
-              ) : (
-                <span
-                  aria-label={s.name}
-                  className={`grid size-7 place-items-center rounded-full border-2 border-white bg-white/20 text-[10px] font-black transition-all ${
-                    isCurrent
-                      ? "ring-2 ring-white scale-110 bg-white text-emerald-800"
-                      : isCompleted
-                        ? "opacity-100"
-                        : "opacity-40"
-                  }`}
-                >
-                  {s.name.charAt(0)}
-                </span>
+            <li
+              key={e.id}
+              aria-current={cur ? "step" : undefined}
+              className={cn(
+                "min-w-0 text-center text-[12px] font-extrabold",
+                done || cur ? "opacity-100" : "opacity-65",
               )}
-            </div>
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  "mb-1.5 block h-2 rounded border-2",
+                  cur
+                    ? "border-[#141414] bg-[#F4C430]"
+                    : done
+                      ? "border-white bg-white"
+                      : "border-white/50 bg-white/25",
+                )}
+              />
+              <span className="block truncate">{e.name}</span>
+            </li>
           );
         })}
+      </ol>
 
-        <div className="h-3 w-full rounded-sm border-2 border-white/60 bg-white/20 relative overflow-hidden">
-          {pendingPercent > 0 && (
-            <div
-              className="absolute inset-0 h-full rounded-sm bg-white/40 transition-all"
-              style={{ width: `${approvedPercent + pendingPercent}%` }}
-            />
-          )}
-          <div
-            className="absolute inset-0 h-full rounded-sm bg-white transition-all"
-            style={{ width: `${approvedPercent}%` }}
-          />
-        </div>
-      </div>
-
-      {nextStage ? (
-        <p className="text-[11px] font-bold opacity-80 mt-1 text-white">
-          +{blocksToNext} bloco{blocksToNext !== 1 ? "s" : ""} para{" "}
-          <strong>{nextStage.name}</strong>
+      {target.n > 0 ? (
+        <p className="text-[17px] font-extrabold leading-tight">
+          Faltam{" "}
+          <b className="rounded bg-[#F4C430] px-1.5 text-[#141414]">{plural(target.n, "bloco", "blocos")}</b>{" "}
+          para {target.name}
         </p>
-      ) : remainingToIrr > 0 ? (
-        <p className="text-[11px] font-bold opacity-80 mt-1 text-white">
-          +{remainingToIrr} bloco{remainingToIrr !== 1 ? "s" : ""} para{" "}
-          <strong>{irr.name}</strong>
+      ) : (
+        <p className="text-[17px] font-extrabold leading-tight">
+          Todos os blocos concluídos — falta o checklist da {irr.name}
         </p>
-      ) : null}
+      )}
+      <p className="mt-1 text-[13px] text-white/85" data-testid="stage-meta">
+        {completedBlockCount} de {threshold} blocos concluídos
+        {pendingBlockCount > 0 && ` · ${pendingBlockCount} aguardando aprovação`}
+      </p>
     </div>
   );
 }

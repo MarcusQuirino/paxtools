@@ -150,7 +150,7 @@ adminTest(
     ).toBeVisible();
 
     // The scout's own progression renders (stage banner + eixo sections).
-    await expect(page.getByText("Etapa Atual")).toBeVisible();
+    await expect(page.getByText("Etapa atual")).toBeVisible();
     await expect(
       page.getByText("Habilidades para a Vida", { exact: true }).first(),
     ).toBeVisible();
@@ -171,6 +171,6 @@ marinaTest(
       page.getByText("Bento Farias", { exact: true }),
     ).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/Visualizando como escotista/)).toBeVisible();
-    await expect(page.getByText("Etapa Atual")).toBeVisible();
+    await expect(page.getByText("Etapa atual")).toBeVisible();
   },
 );

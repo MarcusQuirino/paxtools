@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, type ReactNode } from "react";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   DndContext,
   PointerSensor,
@@ -17,26 +17,43 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { Award, GripVertical } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import type { Eixo } from "@/data/types";
+import { eixoColor } from "@/data/eixo-colors";
+import { AppShellSkeleton } from "@/components/layout/app-shell";
 import { EscoteiroShell } from "@/components/progression/escoteiro-shell";
-import { EixoSection } from "@/components/progression/eixo-section";
 import { ActionItem } from "@/components/progression/action-item";
+import { DeleteCustomButton } from "@/components/progression/custom-action-input";
+import { PlanStar } from "@/components/progression/plan-star";
+import { EmptyState } from "@/components/ui/empty-state";
+import { RowChevron } from "@/components/ui/list-row";
+import { Note } from "@/components/ui/section";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { StatusText } from "@/components/ui/status-pill";
 import { useAuthGate } from "@/hooks/use-auth-gate";
 import { useProgression } from "@/hooks/use-progression";
 import { usePlan } from "@/hooks/use-plan";
+import { notifyLevelUps } from "@/lib/level-up-toast";
+import { toCanonicalSpecialtyId } from "@/lib/completion-logic";
 import {
   buildCatalogIndex,
   resolvePlanItems,
+  isResolvedChecked,
   isResolvedComplete,
   sortForLinearView,
   type PlanItemResolved,
 } from "@/lib/plan-view";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Award, Clock, GripVertical, Sparkles } from "lucide-react";
-import { Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+type ViewMode = "byArea" | "ordered";
 
 export const Route = createFileRoute("/plan")({
+  // `?view=ordem` keeps "Minha ordem" across reloads and back navigation.
+  validateSearch: (search: Record<string, unknown>): { view?: "ordem" } => ({
+    view: search.view === "ordem" ? "ordem" : undefined,
+  }),
   loader: async ({ context }) => {
     await Promise.all([
       context.queryClient.ensureQueryData(
@@ -52,18 +69,7 @@ export const Route = createFileRoute("/plan")({
 
 function PlanPage() {
   const { ready } = useAuthGate("escoteiro");
-
-  if (!ready) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
-          <div className="h-6 w-32 animate-pulse rounded-md border-2 border-black bg-muted" />
-          <div className="h-12 animate-pulse rounded-md border-2 border-black bg-muted" />
-        </div>
-      </div>
-    );
-  }
-
+  if (!ready) return <AppShellSkeleton rows={3} />;
   return (
     <EscoteiroShell title="Plano">
       <PlanDashboard />
@@ -71,22 +77,29 @@ function PlanPage() {
   );
 }
 
-type ViewMode = "byArea" | "ordered";
+type Handlers = {
+  onToggleAction: (actionId: string, wasChecked: boolean) => void;
+  onToggleCustom: (id: Id<"customActions">) => void;
+  onDeleteCustom: (id: Id<"customActions">) => void;
+  onTogglePlanned: (itemKey: string) => void;
+};
 
 function PlanDashboard() {
-  const [viewMode, setViewMode] = useState<ViewMode>("byArea");
+  const { view } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const viewMode: ViewMode = view === "ordem" ? "ordered" : "byArea";
+  const setViewMode = (v: ViewMode) =>
+    void navigate({ search: { view: v === "ordered" ? "ordem" : undefined }, replace: true });
+
   const {
     eixos,
     approvedActionIds,
     pendingActionIds,
     actionStatusMap,
     customActions,
-    completedBlockIds,
-    pendingBlockIds,
-    earnedSpecialtyBlocoIds,
     earnedSpecialtyIds,
   } = useProgression();
-  const { items, plannedKeys, togglePlanned, reorderPlan } = usePlan();
+  const { items, togglePlanned, reorderPlan } = usePlan();
 
   const catalog = useMemo(() => buildCatalogIndex(eixos), [eixos]);
   const resolved = useMemo(
@@ -111,118 +124,140 @@ function PlanDashboard() {
   );
 
   const toggleActionFn = useConvexMutation(api.progression.toggleAction);
-  const { mutate: toggleAction } = useMutation({ mutationFn: toggleActionFn });
+  const { mutate: toggleAction } = useMutation({
+    mutationFn: toggleActionFn,
+    onSuccess: notifyLevelUps,
+  });
   const toggleCustomFn = useConvexMutation(api.progression.toggleCustomAction);
-  const { mutate: toggleCustom } = useMutation({ mutationFn: toggleCustomFn });
+  const { mutate: toggleCustom } = useMutation({
+    mutationFn: toggleCustomFn,
+    onSuccess: notifyLevelUps,
+  });
   const deleteCustomFn = useConvexMutation(api.progression.deleteCustomAction);
   const { mutate: deleteCustom } = useMutation({ mutationFn: deleteCustomFn });
-  const addCustomFn = useConvexMutation(api.progression.addCustomAction);
-  const { mutate: addCustom } = useMutation({ mutationFn: addCustomFn });
 
-  if (items.length === 0) {
-    return (
-      <EmptyState />
-    );
-  }
+  if (resolved.length === 0) return <PlanEmptyState />;
 
-  const plannedBlocoIds = new Set(resolved.map((r) => r.bloco.id));
+  const handlers: Handlers = {
+    onToggleAction: (actionId) => toggleAction({ actionId }),
+    onToggleCustom: (id) => toggleCustom({ customActionId: id }),
+    onDeleteCustom: (id) => deleteCustom({ customActionId: id }),
+    onTogglePlanned: (itemKey) => togglePlanned({ itemKey }),
+  };
+
+  const done = resolved.filter(isResolvedComplete).length;
+  const pending = resolved.filter((r) => isResolvedChecked(r) && !isResolvedComplete(r)).length;
 
   return (
     <div className="space-y-4">
-      <ViewToggle viewMode={viewMode} onChange={setViewMode} />
+      <p className="text-[13px] font-bold text-[#4A4A44]" data-testid="plan-counts">
+        {resolved.length} {resolved.length === 1 ? "item" : "itens"} · {done}{" "}
+        {done === 1 ? "feito" : "feitos"}
+        {pending > 0 && <span className="text-[#6B4A00]"> · {pending} aguardando aprovação</span>}
+      </p>
+      <SegmentedControl
+        ariaLabel="Organizar o plano"
+        value={viewMode}
+        onChange={setViewMode}
+        options={[
+          { value: "byArea", label: "Por área", testId: "plan-view-area" },
+          { value: "ordered", label: "Minha ordem", testId: "plan-view-ordered" },
+        ]}
+      />
 
       {viewMode === "byArea" ? (
-        eixos.filter((eixo) =>
-          eixo.blocos.some((b) => plannedBlocoIds.has(b.id)),
-        ).map((eixo) => (
-          <EixoSection
-            key={eixo.id}
-            eixo={eixo}
-            approvedActionIds={approvedActionIds}
-            pendingActionIds={pendingActionIds}
-            actionStatusMap={actionStatusMap}
-            completedBlockIds={completedBlockIds}
-            pendingBlockIds={pendingBlockIds}
-            earnedSpecialtyBlocoIds={earnedSpecialtyBlocoIds}
-            earnedSpecialtyIds={earnedSpecialtyIds}
-            customActions={customActions}
-            onToggleAction={(actionId) => toggleAction({ actionId })}
-            onAddCustom={(blocoId, text) => addCustom({ blocoId, text })}
-            onToggleCustom={(id) => toggleCustom({ customActionId: id })}
-            onDeleteCustom={(id) => deleteCustom({ customActionId: id })}
-            plannedKeys={plannedKeys}
-            onTogglePlanned={(itemKey) => togglePlanned({ itemKey })}
-            blocoFilter={(blocoId) => plannedBlocoIds.has(blocoId)}
-            planOnly
-            lockApproved
-          />
-        ))
+        <ByAreaView eixos={eixos} resolved={resolved} {...handlers} />
       ) : (
         <OrderedListView
           resolved={resolved}
-          onToggleAction={(actionId) => toggleAction({ actionId })}
-          onToggleCustom={(id) => toggleCustom({ customActionId: id })}
-          onDeleteCustom={(id) => deleteCustom({ customActionId: id })}
-          onTogglePlanned={(itemKey) => togglePlanned({ itemKey })}
+          {...handlers}
           onReorder={(itemKey, beforeItemKey, afterItemKey) =>
             reorderPlan({ itemKey, beforeItemKey, afterItemKey })
           }
         />
       )}
+
+      <Note>Toque na ★ em qualquer ação da Progressão para trazê-la para cá; na ★ daqui, para tirar do plano.</Note>
     </div>
   );
 }
 
-function ViewToggle({
-  viewMode,
-  onChange,
-}: {
-  viewMode: ViewMode;
-  onChange: (v: ViewMode) => void;
-}) {
-  const base =
-    "flex-1 text-sm h-9 rounded-md font-bold transition-all";
-  const active = "bg-primary text-white border-2 border-black shadow-[2px_2px_0px_0px_#000]";
-  const inactive = "text-foreground border-2 border-transparent hover:border-black hover:bg-white";
+function PlanEmptyState() {
   return (
-    <div className="flex gap-1 p-1 bg-muted rounded-md border-2 border-black">
-      <button
-        type="button"
-        onClick={() => onChange("byArea")}
-        className={`${base} ${viewMode === "byArea" ? active : inactive}`}
-      >
-        Por Área
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange("ordered")}
-        className={`${base} ${viewMode === "ordered" ? active : inactive}`}
-      >
-        Minha Ordem
-      </button>
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="rounded-md border-2 border-dashed border-black bg-card p-8 text-center space-y-3">
-      <Sparkles className="size-8 mx-auto text-primary" />
-      <p className="text-sm font-black uppercase">Seu plano está vazio</p>
-      <p className="text-xs font-medium text-muted-foreground">
-        Vá em <b>Progressão</b> e toque na estrela ao lado dos itens que você
-        quer focar. Eles vão aparecer aqui.
+    <EmptyState title="Seu plano está vazio" testId="plan-empty">
+      <p>
+        Em <b>Progressão</b>, abra um bloco e toque na ★ ao lado das ações que você quer focar. Elas
+        aparecem aqui.
       </p>
+      <Link
+        to="/"
+        className="mt-3 inline-flex min-h-11 items-center justify-center rounded-[10px] border-2 border-[#141414] bg-white px-4 text-[15px] font-black text-[#141414] shadow-[2px_2px_0_#141414] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+      >
+        Ir para Progressão
+      </Link>
+    </EmptyState>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Por área: eixo dot + "Eixo · Bloco" crumb, the bloco's plan cards below.
+// ---------------------------------------------------------------------------
+
+function ByAreaView({
+  eixos,
+  resolved,
+  ...handlers
+}: Handlers & { eixos: Eixo[]; resolved: PlanItemResolved[] }) {
+  const groups = useMemo(() => {
+    const byBloco = new Map<string, PlanItemResolved[]>();
+    for (const r of resolved) {
+      const list = byBloco.get(r.bloco.id) ?? [];
+      list.push(r);
+      byBloco.set(r.bloco.id, list);
+    }
+    return eixos.flatMap((eixo) =>
+      eixo.blocos
+        .filter((b) => byBloco.has(b.id))
+        .map((bloco) => ({ eixo, bloco, items: byBloco.get(bloco.id)! })),
+    );
+  }, [eixos, resolved]);
+
+  return (
+    <div className="space-y-4">
+      {groups.map(({ eixo, bloco, items }) => (
+        <section key={bloco.id} data-testid={`plan-group-${bloco.id}`}>
+          <h2 className="mb-1.5 ml-0.5 flex flex-wrap items-center gap-x-2 text-[12px] font-black uppercase tracking-[0.08em]">
+            <span
+              aria-hidden
+              className="size-2.5 shrink-0 rounded-[2px] border-2 border-[#141414]"
+              style={{ background: eixoColor(eixo.id) }}
+            />
+            {eixo.name}
+            <Link
+              to="/bloco/$blocoId"
+              params={{ blocoId: bloco.id }}
+              className="font-bold normal-case tracking-[0.02em] text-[#8A887F] underline-offset-2 hover:underline"
+            >
+              · {bloco.name}
+            </Link>
+          </h2>
+          <div className="space-y-2">
+            {items.map((item) => (
+              <PlanCard key={item.itemKey} item={item} idMode="raw" {...handlers} />
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
 
-type OrderedListViewProps = {
+// ---------------------------------------------------------------------------
+// Minha ordem: one draggable list (grip 36×44), eixo bar + bloco crumb.
+// ---------------------------------------------------------------------------
+
+type OrderedListViewProps = Handlers & {
   resolved: PlanItemResolved[];
-  onToggleAction: (actionId: string) => void;
-  onToggleCustom: (id: Id<"customActions">) => void;
-  onDeleteCustom: (id: Id<"customActions">) => void;
-  onTogglePlanned: (itemKey: string) => void;
   onReorder: (
     itemKey: string,
     beforeItemKey: string | undefined,
@@ -230,14 +265,7 @@ type OrderedListViewProps = {
   ) => void;
 };
 
-function OrderedListView({
-  resolved,
-  onToggleAction,
-  onToggleCustom,
-  onDeleteCustom,
-  onTogglePlanned,
-  onReorder,
-}: OrderedListViewProps) {
+function OrderedListView({ resolved, onReorder, ...handlers }: OrderedListViewProps) {
   const ordered = useMemo(() => sortForLinearView(resolved), [resolved]);
   const itemKeys = ordered.map((r) => r.itemKey);
 
@@ -262,189 +290,172 @@ function OrderedListView({
   };
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragEnd={onDragEnd}
-    >
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
       <SortableContext items={itemKeys} strategy={verticalListSortingStrategy}>
-        <div className="space-y-2">
+        <ol className="space-y-2">
           {ordered.map((item) => (
-            <SortableRow
-              key={item.itemKey}
-              item={item}
-              onToggleAction={onToggleAction}
-              onToggleCustom={onToggleCustom}
-              onDeleteCustom={onDeleteCustom}
-              onTogglePlanned={onTogglePlanned}
-            />
+            <SortableRow key={item.itemKey} item={item} {...handlers} />
           ))}
-        </div>
+        </ol>
       </SortableContext>
     </DndContext>
   );
 }
 
-type SortableRowProps = {
-  item: PlanItemResolved;
-  onToggleAction: (actionId: string) => void;
-  onToggleCustom: (id: Id<"customActions">) => void;
-  onDeleteCustom: (id: Id<"customActions">) => void;
-  onTogglePlanned: (itemKey: string) => void;
-};
-
-function SortableRow({
-  item,
-  onToggleAction,
-  onToggleCustom,
-  onDeleteCustom,
-  onTogglePlanned,
-}: SortableRowProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: item.itemKey });
-
+function SortableRow({ item, ...handlers }: Handlers & { item: PlanItemResolved }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.itemKey,
+  });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.6 : 1,
+    zIndex: isDragging ? 10 : undefined,
+    position: "relative",
   };
-
-  const done = isResolvedComplete(item);
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="rounded-md border-2 border-black bg-card flex items-stretch shadow-[2px_2px_0px_0px_#000]"
+  const grip = (
+    <button
+      type="button"
+      className="-my-2 -ml-2 grid h-11 w-9 shrink-0 touch-none place-items-center rounded-md text-[#8A887F] hover:bg-black/[0.04] hover:text-[#141414]"
+      aria-label="Arrastar"
+      {...attributes}
+      {...listeners}
     >
-      <button
-        type="button"
-        className="px-2 flex items-center text-muted-foreground hover:text-foreground touch-none"
-        aria-label="Arrastar"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="size-4" />
-      </button>
-      <div
-        className="flex-1 min-w-0 py-1 pr-1 border-l"
-        style={{ borderLeftColor: item.eixo.color, borderLeftWidth: 3 }}
-      >
-        <div className="px-2 pt-1 flex items-center gap-1.5">
-          <span
-            className="text-[10px] font-semibold uppercase tracking-wider"
-            style={{ color: item.eixo.color }}
-          >
-            {item.bloco.name}
-          </span>
-          {done && (
-            <span className="text-[10px] text-muted-foreground">
-              • concluído
-            </span>
-          )}
-        </div>
-        <RowBody
-          item={item}
-          onToggleAction={onToggleAction}
-          onToggleCustom={onToggleCustom}
-          onDeleteCustom={onDeleteCustom}
-          onTogglePlanned={onTogglePlanned}
-        />
-      </div>
-    </div>
+      <GripVertical className="size-5" aria-hidden />
+    </button>
+  );
+  return (
+    <li ref={setNodeRef} style={style}>
+      <PlanCard item={item} idMode="key" grip={grip} crumb {...handlers} />
+    </li>
   );
 }
 
-function RowBody({
+// ---------------------------------------------------------------------------
+// One plan card (both views): tappable/movable → paper + 2px hard shadow.
+// ---------------------------------------------------------------------------
+
+const KIND_LABEL = {
+  fixed: "Ação fixa",
+  variable: "Ação variável",
+  custom: "Ação personalizada",
+  specialty: "Especialidade",
+} as const;
+
+function PlanCard({
   item,
+  idMode,
+  grip,
+  crumb,
   onToggleAction,
   onToggleCustom,
   onDeleteCustom,
   onTogglePlanned,
-}: Omit<SortableRowProps, "item"> & { item: PlanItemResolved }) {
+}: Handlers & {
+  item: PlanItemResolved;
+  /** DOM id of the check: raw action id (Por área) or plan key (Minha ordem). */
+  idMode: "raw" | "key";
+  grip?: ReactNode;
+  /** Show the "Bloco · tipo" crumb in the eixo colour (Minha ordem). */
+  crumb?: boolean;
+}) {
+  const color = eixoColor(item.eixo.id);
+  const kindText =
+    item.kind === "action" ? KIND_LABEL[item.actionType] : KIND_LABEL[item.kind];
+  const kind = crumb ? (
+    <span className="normal-case tracking-normal" style={{ color }}>
+      {item.bloco.name} · {kindText.toLowerCase()}
+    </span>
+  ) : item.kind === "action" ? undefined : (
+    kindText
+  );
+  const unstar = () => onTogglePlanned(item.itemKey);
+
+  let body: ReactNode;
   if (item.kind === "action") {
-    return (
+    body = (
       <ActionItem
-        id={item.itemKey}
+        id={idMode === "raw" ? item.actionId : item.itemKey}
         text={item.text}
+        kind={kind}
         checked={item.checked}
         status={item.status}
-        onToggle={() => onToggleAction(item.actionId)}
-        color={item.eixo.color}
+        onToggle={() => onToggleAction(item.actionId, item.checked)}
         planned
-        onTogglePlanned={() => onTogglePlanned(item.itemKey)}
+        onTogglePlanned={unstar}
         lockApproved
+        leading={grip}
       />
     );
-  }
-  if (item.kind === "specialty") {
-    // Read-only since #47: an especialidade is earned on /especialidades, never
-    // ticked from the plano.
-    return (
-      <div className="flex items-center gap-3 min-h-[44px] px-3 py-2">
-        <Checkbox checked={item.checked} disabled className="size-5" />
-        <Award className="size-3.5 text-muted-foreground shrink-0" />
+  } else if (item.kind === "custom") {
+    const c = item.customAction;
+    const locked = c.completed && c.status !== "pending";
+    body = (
+      <ActionItem
+        id={`custom-${c._id}`}
+        text={c.text}
+        kind={kind}
+        checked={c.completed}
+        status={c.status}
+        onToggle={() => onToggleCustom(c._id)}
+        planned
+        onTogglePlanned={unstar}
+        lockApproved
+        leading={grip}
+        trailing={!locked ? <DeleteCustomButton onClick={() => onDeleteCustom(c._id)} /> : null}
+      />
+    );
+  } else {
+    // Read-only since #47: an especialidade is earned on /especialidades.
+    body = (
+      <div className="flex min-h-14 items-start gap-3 py-3 pr-1 pl-3" data-state={item.checked ? "approved" : "open"}>
+        {grip}
         <span
-          className={`text-sm flex-1 ${
-            item.checked ? "line-through text-muted-foreground" : ""
-          }`}
+          aria-hidden
+          className={cn(
+            "-my-2.5 -ml-2.5 grid size-12 shrink-0 place-items-center",
+            item.checked ? "text-[#0E6B4E]" : "text-[#4A4A44]",
+          )}
         >
-          {item.specialtyName}
+          <Award className="size-6" />
         </span>
+        <Link
+          to="/especialidades"
+          search={{ specialty: toCanonicalSpecialtyId(item.specialtyName) }}
+          className="flex min-w-0 flex-1 items-center gap-2 pt-0.5"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="mb-0.5 block text-[12px] font-extrabold uppercase tracking-[0.06em] text-[#8A887F]">
+              {kind ?? KIND_LABEL.specialty}
+            </span>
+            <span
+              className={cn(
+                "block text-[15px] leading-[1.4]",
+                item.checked && "text-[#8A887F] line-through decoration-[#0E6B4E]",
+              )}
+            >
+              {item.specialtyName}
+            </span>
+            <StatusText state={item.checked ? "approved" : "open"}>
+              {item.checked ? "Conquistada" : undefined}
+            </StatusText>
+          </span>
+          <RowChevron />
+        </Link>
+        <PlanStar planned onToggle={unstar} />
       </div>
     );
   }
-  // custom
-  const c = item.customAction;
-  const isPending = c.completed && c.status === "pending";
-  const isLocked = c.completed && c.status === "approved";
+
   return (
-    <div className="flex items-start gap-3 px-3 py-2 min-h-[44px]">
-      <Checkbox
-        checked={c.completed}
-        onCheckedChange={() => onToggleCustom(c._id)}
-        disabled={isLocked}
-        className="mt-0.5 size-5"
-        style={
-          c.completed
-            ? {
-                backgroundColor: item.eixo.color,
-                borderColor: item.eixo.color,
-                opacity: isPending ? 0.4 : 1,
-              }
-            : undefined
-        }
-      />
-      <span
-        className={`text-sm leading-relaxed flex-1 ${
-          c.completed
-            ? isPending
-              ? "text-muted-foreground/60"
-              : "line-through text-muted-foreground"
-            : ""
-        }`}
-      >
-        {c.text}
-      </span>
-      {isPending && (
-        <Clock className="size-3.5 text-amber-500 mt-0.5 shrink-0" />
+    <div
+      data-testid={`plan-item-${item.itemKey}`}
+      className="flex overflow-hidden rounded-[10px] border-2 border-[#141414] bg-white shadow-[2px_2px_0_#141414]"
+    >
+      {crumb && (
+        <span aria-hidden className="w-2 shrink-0 border-r-2 border-[#141414]" style={{ background: color }} />
       )}
-      {!isLocked && (
-        <button
-          type="button"
-          onClick={() => onDeleteCustom(c._id)}
-          className="text-muted-foreground hover:text-destructive p-1"
-          aria-label="Remover"
-        >
-          <Trash2 className="size-4" />
-        </button>
-      )}
+      <div className="min-w-0 flex-1">{body}</div>
     </div>
   );
 }

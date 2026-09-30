@@ -1,7 +1,7 @@
 /**
  * M1 (PRD #58 story 27) — desktop. Ana Lima (sim-troop-escoteiro-1) is an
  * escoteiro with 0 completed blocos, so the first fixed ação of her frontier
- * bloco ("Aprendizagem Contínua") starts unchecked. She marks it → a PENDING
+ * bloco ("Aprendizagem Contínua") starts open (unmarked). She marks it → a PENDING
  * completion (clock, checked, still enabled) → then unmarks it.
  *
  * Ownership: this spec owns Ana Lima's data (tests/utils/personas.ts). The
@@ -19,6 +19,6 @@ test("escoteiro marks an ação as pending and can unmark it", async ({
 }) => {
   await runMarkUnmarkFlow(page, {
     actionId: "escoteiro:aprendizagem-continua:fixed:0",
-    blocoTrigger: /Aprendizagem Contínua/i,
+    blocoName: /Aprendizagem Contínua/i,
   });
 });

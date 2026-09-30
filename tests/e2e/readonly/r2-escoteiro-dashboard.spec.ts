@@ -1,18 +1,19 @@
 /**
  * R2 — Escoteiro dashboard renders each persona's per-ramo progression exactly.
  *
- * The dashboard (src/routes/index.tsx → StageBanner / OverallProgress /
- * EixoSection / RecognitionSection) is ramo-scoped: it must show ONLY the
- * viewing escoteiro's current-ramo etapa, block count, per-eixo progress, and
- * that ramo's IRR — never a past ramo's completed record, and never another
- * ramo's etapa/IRR names.
+ * The dashboard (src/routes/index.tsx → StageBanner (`stage-hero`, meta line
+ * `stage-meta`) / EixoSection bloco rows / RecognitionSection) is ramo-scoped:
+ * it must show ONLY the viewing escoteiro's current-ramo etapa track, block
+ * count, per-eixo progress, and that ramo's IRR — never a past ramo's
+ * completed record, and never another ramo's etapa/IRR names. Ações live on
+ * the pushed bloco screen (/bloco/<blocoId>, tapped from a bloco row).
  *
  * Every assertion is pinned to the deterministic sim-troop seed
  * (convex/testing.ts SIM_SPECS + seedSimRamo). Block counts, etapa names and
  * IRR names are computed from src/data/progression-rules + the troop-order
  * arithmetic in seedSimRamo, so they are exact, not fuzzy.
  *
- * PRD #58 stories 22–26 + 30 (cluster R2). READ-ONLY: expands accordions and
+ * PRD #58 stories 22–26 + 30 (cluster R2). READ-ONLY: opens bloco screens and
  * follows a deep-link; never toggles a checkbox or submits a form.
  *
  * Note: r2-approved-locked.spec.ts covers the "approved conclusão is locked"
@@ -21,6 +22,7 @@
 
 import { expect } from "@playwright/test";
 import { testAs } from "../../fixtures/auth";
+import { openBloco } from "../shared/bloco-nav";
 
 // ── Persona fixtures (all in the manifest; auth states pre-captured) ─────────
 const escoteiroEmpty = testAs("sim-troop-escoteiro-1"); // Ana Lima, 0 blocos
@@ -42,14 +44,16 @@ escoteiroEmpty("empty escoteiro shows Pista, 0/18, IRR checklist locked", async 
 }) => {
   await page.goto("/");
 
-  // Initial etapa banner: escoteiro starts at Pista, next stage Trilha.
-  await expect(page.getByText("Etapa Atual")).toBeVisible();
+  // Initial etapa hero: escoteiro starts at Pista, next stage Trilha.
+  const hero = page.getByTestId("stage-hero");
+  await expect(hero.getByText("Etapa atual")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Pista", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("0/18 blocos", { exact: true })).toBeVisible();
-  await expect(page.getByText(/\+4 blocos para/)).toBeVisible();
-  await expect(page.getByText("Trilha", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("stage-meta")).toHaveText(
+    "0 de 18 blocos concluídos",
+  );
+  await expect(hero.getByText(/Faltam 4 blocos para Trilha/)).toBeVisible();
 
   // IRR / Reconhecimento de Ramo is locked until all 18 blocos are done.
   const recognition = page.locator("section", {
@@ -73,15 +77,17 @@ seniorMid("mid sênior shows Conquista 10/18 and sênior eixos, no escoteiro nam
 }) => {
   await page.goto("/");
 
-  await expect(page.getByText("Etapa Atual")).toBeVisible();
+  const hero = page.getByTestId("stage-hero");
+  await expect(hero.getByText("Etapa atual")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Conquista", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("10/18 blocos", { exact: true })).toBeVisible();
-  await expect(page.getByText(/\+2 blocos para/)).toBeVisible();
-  await expect(page.getByText("Azimute", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("stage-meta")).toHaveText(
+    /^10 de 18 blocos concluídos/,
+  );
+  await expect(hero.getByText(/Faltam 2 blocos para Azimute/)).toBeVisible();
 
-  // Per-eixo progress grid renders all four eixos with block counts.
+  // Every eixo renders as a collapsible section of bloco rows.
   for (const eixo of [
     "Habilidades para a Vida",
     "Meio Ambiente",
@@ -112,9 +118,9 @@ escoteiroMax("maxed escoteiro shows the Lis de Ouro trophy banner", async ({
   await expect(
     page.getByText(/Parabéns! Reconhecimento de Ramo completo/),
   ).toBeVisible();
-  await expect(page.getByText("Etapa Atual")).toHaveCount(0);
+  await expect(page.getByText("Etapa atual")).toHaveCount(0);
 
-  // Recognition section marked Completo.
+  // Recognition section heading carries the "Completo" pill.
   const recognition = page.locator("section", {
     hasText: "Reconhecimento de Ramo",
   });
@@ -130,7 +136,7 @@ lobinhoMax("maxed lobinho shows the Cruzeiro do Sul trophy banner", async ({
   await expect(
     page.getByText(/Parabéns! Reconhecimento de Ramo completo/),
   ).toBeVisible();
-  await expect(page.getByText("Etapa Atual")).toHaveCount(0);
+  await expect(page.getByText("Etapa atual")).toHaveCount(0);
   // Escoteiro's IRR name must NOT appear on a lobinho dashboard.
   await expect(page.getByText(/Lis de Ouro/)).toHaveCount(0);
 });
@@ -145,12 +151,14 @@ lobinhoPartial("partial-IRR lobinho: unlocked, 3/5 requisitos, one pending", asy
 }) => {
   await page.goto("/");
 
-  // Not maxed: normal banner, last lobinho etapa (Caçador), 18/18 blocos.
-  await expect(page.getByText("Etapa Atual")).toBeVisible();
+  // Not maxed: normal hero, last lobinho etapa (Caçador), 18/18 blocos.
+  await expect(page.getByText("Etapa atual")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Caçador", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("18/18 blocos", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("stage-meta")).toHaveText(
+    /^18 de 18 blocos concluídos/,
+  );
   await expect(page.getByText("Cruzeiro do Sul!")).toHaveCount(0);
 
   const recognition = page.locator("section", {
@@ -158,8 +166,11 @@ lobinhoPartial("partial-IRR lobinho: unlocked, 3/5 requisitos, one pending", asy
   });
   // Unlocked: the lock hint is gone.
   await expect(page.getByText(LOCK_TEXT)).toHaveCount(0);
-  // Not yet earned: 3/5 approved + 1 pending, no "Completo" badge.
-  await expect(recognition.getByText(/3\/5 requisitos \(\+1\)/)).toBeVisible();
+  // Not yet earned: 3/5 approved + 1 pending, no "Completo" pill.
+  await expect(recognition.getByTestId("irr-checklist")).toBeVisible();
+  await expect(
+    recognition.getByText(/3\/5 requisitos · 1 aguardando/),
+  ).toBeVisible();
   await expect(recognition.getByText("Completo", { exact: true })).toHaveCount(0);
   // The single pending IRR item renders in the awaiting-approval state (clock).
   await expect(recognition.locator("svg.lucide-clock")).toHaveCount(1);
@@ -178,28 +189,28 @@ escoteiroPending("pending ações render checked with the awaiting-approval cloc
 }) => {
   await page.goto("/");
 
-  // Banner: 1 bloco done → still Pista.
+  // Hero: 1 bloco done → still Pista.
   await expect(
     page.getByRole("heading", { name: "Pista", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("1/18 blocos", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("stage-meta")).toHaveText(
+    /^1 de 18 blocos concluídos/,
+  );
 
-  // Expand the frontier bloco that holds the two pending ações.
-  await page
-    .getByRole("button", { name: /Consumo Responsável/i })
-    .first()
-    .click();
+  // Open the frontier bloco screen that holds the two pending ações.
+  await openBloco(page, "consumo-responsavel");
 
   for (const actionId of [PENDING_ACTION_A, PENDING_ACTION_B]) {
     const checkbox = page.locator(`[id="${actionId}"]`);
     await expect(checkbox).toBeVisible();
-    // Checked (self-marked) but pending — not approved-locked, so still enabled.
-    await expect(checkbox).toHaveAttribute("data-state", "checked");
-    // Awaiting-approval clock sits in the same row as the checkbox.
-    const row = page.locator("label", {
-      has: page.locator(`[id="${actionId}"]`),
-    });
-    await expect(row.locator("svg.lucide-clock")).toBeVisible();
+    // Self-marked → pending, not approved-locked, so still enabled.
+    await expect(checkbox).toHaveAttribute("data-state", "pending");
+    await expect(checkbox).toBeEnabled();
+    // Awaiting-approval clock sits inside the check; status line under text.
+    await expect(checkbox.locator("svg.lucide-clock")).toBeVisible();
+    await expect(
+      page.locator(`[data-action-row="${actionId}"]`),
+    ).toContainText("Aguardando aprovação");
   }
 });
 
@@ -212,12 +223,13 @@ seniorHistory("sênior with completed lobinho+escoteiro history shows only 9/18 
   await page.goto("/");
 
   // Current sênior ramo only: 9 blocos → Conquista. NOT an 18/18 maxed view.
-  await expect(page.getByText("Etapa Atual")).toBeVisible();
+  await expect(page.getByText("Etapa atual")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Conquista", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("9/18 blocos", { exact: true })).toBeVisible();
-  await expect(page.getByText("18/18 blocos", { exact: true })).toHaveCount(0);
+  await expect(page.getByTestId("stage-meta")).toHaveText(
+    /^9 de 18 blocos concluídos/,
+  );
 
   // Past-ramo etapa/IRR names must NOT bleed in.
   for (const leak of [
@@ -239,12 +251,13 @@ pioneiroHistory("pioneiro with 3-ramo history shows only 7/18 pioneiro (Destino)
 }) => {
   await page.goto("/");
 
-  await expect(page.getByText("Etapa Atual")).toBeVisible();
+  await expect(page.getByText("Etapa atual")).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Destino", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("7/18 blocos", { exact: true })).toBeVisible();
-  await expect(page.getByText("18/18 blocos", { exact: true })).toHaveCount(0);
+  await expect(page.getByTestId("stage-meta")).toHaveText(
+    /^7 de 18 blocos concluídos/,
+  );
 
   // No lower-ramo etapa/IRR names.
   for (const leak of [
@@ -261,8 +274,8 @@ pioneiroHistory("pioneiro with 3-ramo history shows only 7/18 pioneiro (Destino)
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Story 30 — Especialidade deep-link: a dashboard bloco's alternative row
-// links into /especialidades with the matching card auto-opened.
+// Story 30 — Especialidade deep-link: a bloco screen's especialidade chip
+// links into /especialidades, opening that especialidade's pushed detail.
 // (Navigation only — any escoteiro works; uses the empty persona.)
 // ─────────────────────────────────────────────────────────────────────────────
 escoteiroEmpty("bloco especialidade 'ver' link deep-links into the matching card", async ({
@@ -271,32 +284,27 @@ escoteiroEmpty("bloco especialidade 'ver' link deep-links into the matching card
   await page.goto("/");
 
   // "Autonomia e Liderança" lists especialidades (incl. Empreendedorismo) as an
-  // alternative completion. Expand it to reveal the "ver" deep-link, then click
-  // it. Wrapped in toPass: under parallel load the Radix accordion's expand
-  // animation can detach/re-render the row mid-click, swallowing the
-  // navigation — re-drive the expand+click until the URL actually changes.
+  // alternative completion. Open its bloco screen and follow the chip's "ver"
+  // deep-link.
+  await openBloco(page, "autonomia-lideranca");
   const verEmpreendedorismo = page.getByRole("link", {
     name: "ver Empreendedorismo",
   });
   await expect(async () => {
-    if (!(await verEmpreendedorismo.isVisible())) {
-      await page
-        .getByRole("button", { name: /Autonomia e Liderança/i })
-        .first()
-        .click();
-      await expect(verEmpreendedorismo).toBeVisible({ timeout: 2_000 });
+    if (/\/bloco\//.test(page.url())) {
+      await verEmpreendedorismo.click({ timeout: 2_000 });
     }
-    await verEmpreendedorismo.click();
     await expect(page).toHaveURL(
       /\/especialidades\?.*specialty=empreendedorismo/,
       { timeout: 2_000 },
     );
   }).toPass();
+  // The especialidade detail is a pushed screen titled with its name.
   await expect(
-    page.getByRole("heading", { name: "Especialidades", exact: true }),
+    page.getByRole("heading", { level: 1, name: "Empreendedorismo", exact: true }),
   ).toBeVisible();
 
-  // The matching card auto-opened: its (unique) description is visible.
+  // The matching especialidade opened: its (unique) description is visible.
   await expect(
     page.getByText(/transformar ideias em soluções criativas/),
   ).toBeVisible();

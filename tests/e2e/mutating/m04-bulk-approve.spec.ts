@@ -8,8 +8,9 @@
  *
  * CLEANUP (achieved: full self-restore).
  *   a) Talita opens Quésia's impersonation dashboard (/escotista/escoteiro/<id>)
- *      where escotistas keep edit rights (lockApproved=false) and toggles the
- *      two now-approved ações OFF — an escotista direct-toggle deletes the row
+ *      → the bloco row → /bloco/<blocoId>?escoteiroId=<id>, where escotistas
+ *      keep edit rights (lockApproved=false), and toggles the two now-approved
+ *      ações OFF — an escotista direct-toggle deletes the row
  *      (convex/progression.ts toggleAction).
  *   b) As Quésia herself, re-marks the two ações → they return to PENDING,
  *      restoring the seed-equivalent queue material so a rerun exercises fresh.
@@ -22,12 +23,13 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { openBloco } from "../shared/bloco-nav";
 
 const SEEDED_IDS = [
   "senior:consumo-responsavel:variable:0",
   "senior:consumo-responsavel:variable:1",
 ] as const;
-const BLOCO_TRIGGER = /Consumo Responsável/i;
+const BLOCO_ID = "consumo-responsavel";
 
 const QUESIA_STATE = "tests/.auth/sim-troop-senior-2.json";
 const TALITA_STATE = "tests/.auth/sim-escotista-senior-1--m04.json";
@@ -78,30 +80,25 @@ test("escotista bulk-approves an escoteiro's pending ações, then cleans up", a
       .getByRole("link", { name: /Ver progressão de Quésia Torres/i })
       .first()
       .click();
-    await talitaPage
-      .getByRole("button", { name: BLOCO_TRIGGER })
-      .first()
-      .click();
+    await expect(talitaPage).toHaveURL(/\/escotista\/escoteiro\//);
+    await openBloco(talitaPage, BLOCO_ID);
     for (const id of SEEDED_IDS) {
       const cb = talitaPage.locator(`[id="${id}"]`);
-      await expect(cb).toHaveAttribute("data-state", "checked"); // approved
+      await expect(cb).toHaveAttribute("data-state", "approved");
       await cb.click();
-      await expect(cb).toHaveAttribute("data-state", "unchecked"); // deleted
+      await expect(cb).toHaveAttribute("data-state", "open"); // deleted
     }
 
     // 4b. Restore — as Quésia, re-mark the two ações → back to PENDING.
     await quesiaPage.goto("/");
-    await quesiaPage
-      .getByRole("button", { name: BLOCO_TRIGGER })
-      .first()
-      .click();
+    await openBloco(quesiaPage, BLOCO_ID);
     for (const id of SEEDED_IDS) {
       const cb = quesiaPage.locator(`[id="${id}"]`);
       await expect(cb).toBeVisible();
-      if ((await cb.getAttribute("data-state")) !== "checked") {
+      if ((await cb.getAttribute("data-state")) === "open") {
         await cb.click();
       }
-      await expect(cb).toHaveAttribute("data-state", "checked");
+      await expect(cb).toHaveAttribute("data-state", "pending");
     }
   } finally {
     await talitaCtx.close();

@@ -15,6 +15,7 @@ export function ActionCheck({
   disabled,
   ariaLabel,
   testId,
+  id,
   className,
 }: {
   state: CheckState;
@@ -22,6 +23,8 @@ export function ActionCheck({
   disabled?: boolean;
   ariaLabel: string;
   testId?: string;
+  /** DOM id (progression ações use the action id — e2e selects on it). */
+  id?: string;
   className?: string;
 }) {
   const checked = state !== "open";
@@ -33,6 +36,7 @@ export function ActionCheck({
       aria-label={ariaLabel}
       onClick={onClick}
       disabled={disabled}
+      id={id}
       data-testid={testId}
       data-state={state}
       className={cn(

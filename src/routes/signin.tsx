@@ -4,6 +4,11 @@ import { useConvexAuth } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { SignInWithGoogle } from "@/components/auth/sign-in";
 import { Footer } from "@/components/footer";
+import { HardButton } from "@/components/ui/hard-button";
+import { Input } from "@/components/ui/input";
+import { ListRow } from "@/components/ui/list-row";
+import { Card, ListBox, SectionHeading } from "@/components/ui/section";
+import { EMERALD_INK, EMERALD_TINT } from "@/lib/design-tokens";
 import { Compass, Map, Award, TrendingUp } from "lucide-react";
 
 const TEST_AUTH_ENABLED = import.meta.env.VITE_TEST_AUTH === "1";
@@ -28,12 +33,12 @@ function SignInPage() {
 const features = [
   {
     icon: Compass,
-    title: "Trilha Pessoal",
+    title: "Trilha pessoal",
     description: "Acompanhe cada passo da sua progressão",
   },
   {
     icon: Map,
-    title: "Eixos de Desenvolvimento",
+    title: "Eixos de desenvolvimento",
     description: "Visualize seu progresso por eixo",
   },
   {
@@ -50,67 +55,68 @@ const features = [
 
 function LoginPage({ loading = false }: { loading?: boolean }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md my-8 space-y-4">
-        {/* Logo & Brand */}
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-md bg-primary border-2 border-black mb-4 shadow-[4px_4px_0px_0px_#000]">
+    <div className="min-h-screen bg-background px-4 text-[#141414]">
+      <div className="mx-auto w-full max-w-md space-y-4 py-8">
+        {/* Brand (fine here — this is a landing, not a top bar). No shadow:
+            the one heavy element on this screen is the Google CTA. */}
+        <div className="pb-2 text-center">
+          <div className="mb-3 inline-flex size-16 items-center justify-center rounded-[10px] border-2 border-[#141414] bg-primary">
             <img
               src="/paxtools-logo.png"
               alt="Paxtools"
-              className="w-12 h-12 object-contain"
+              className="size-10 object-contain"
             />
           </div>
-          <h1 className="text-4xl font-black text-foreground uppercase tracking-tight">
+          <p className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-[#8A887F]">
+            Progressão pessoal escoteira
+          </p>
+          <h1 className="text-[28px] font-black leading-[1.05] tracking-[-0.02em]">
             Paxtools
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm font-bold uppercase tracking-wider">
-            Progressão Pessoal &middot; Ramo Escoteiro
-          </p>
         </div>
 
-        {/* Main Card */}
-        <div className="rounded-md border-2 border-black bg-card shadow-[6px_6px_0px_0px_#065f46]">
-          <div className="p-6 pb-0">
-            <h2 className="text-xl font-black text-foreground text-center uppercase">
+        <Card className="space-y-4 p-5">
+          <div className="text-center">
+            <h2 className="text-[22px] font-black leading-[1.1] tracking-[-0.02em]">
               Bem-vindo de volta
             </h2>
-            <p className="text-muted-foreground text-sm font-medium text-center mt-1">
+            <p className="mt-1 text-[15px] text-[#4A4A44]">
               Faça login para continuar sua jornada
             </p>
           </div>
 
-          {/* Features grid */}
-          <div className="grid grid-cols-2 gap-3 p-6">
-            {features.map((feature) => (
-              <div
-                key={feature.title}
-                className="rounded-md border-2 border-black bg-accent/30 p-3 hover:bg-accent/50 transition-colors shadow-[2px_2px_0px_0px_#000]"
-              >
-                <feature.icon className="w-5 h-5 text-primary mb-2" />
-                <p className="text-sm font-bold text-foreground">
-                  {feature.title}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                  {feature.description}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          {/* Sign-in section */}
-          <div className="p-6 pt-2">
-            {loading ? (
-              <div className="h-11 rounded-md border-2 border-black bg-muted animate-pulse" />
-            ) : (
-              <SignInWithGoogle />
-            )}
-          </div>
+          {loading ? (
+            <div className="h-[52px] animate-pulse rounded-[10px] border-2 border-[#141414] bg-[#EEE9DC]" />
+          ) : (
+            <SignInWithGoogle />
+          )}
 
           {TEST_AUTH_ENABLED && !loading ? <TestSignInForm /> : null}
-        </div>
+        </Card>
 
-        <Footer className="mt-4 text-center text-xs text-muted-foreground" />
+        <section>
+          <SectionHeading label="Recursos" />
+          <ListBox>
+            {features.map((feature) => (
+              <ListRow
+                key={feature.title}
+                leading={
+                  <span
+                    className="grid size-10 shrink-0 place-items-center rounded-md border-2 border-[#141414]"
+                    style={{ background: EMERALD_TINT, color: EMERALD_INK }}
+                    aria-hidden
+                  >
+                    <feature.icon className="size-5" strokeWidth={2.5} />
+                  </span>
+                }
+                title={feature.title}
+                subtitle={feature.description}
+              />
+            ))}
+          </ListBox>
+        </section>
+
+        <Footer />
       </div>
     </div>
   );
@@ -138,43 +144,44 @@ function TestSignInForm() {
   }
 
   return (
-    <div className="px-6 pb-6 pt-0">
-      <div className="rounded-md border-2 border-dashed border-black/30 bg-muted/50 p-3">
-        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">
-          Test sign-in (dev only)
-        </p>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-          <input
-            data-testid="test-signin-email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="email@test.paxtools.local"
-            className="rounded-md border-2 border-black bg-white px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-1"
-            autoComplete="off"
-          />
-          <input
-            data-testid="test-signin-password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="password"
-            className="rounded-md border-2 border-black bg-white px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-1"
-            autoComplete="off"
-          />
-          <button
-            data-testid="test-signin-submit"
-            type="submit"
-            disabled={submitting}
-            className="rounded-md border-2 border-black bg-primary text-white px-2 py-1.5 text-xs font-bold shadow-[2px_2px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none disabled:opacity-50 transition-all"
-          >
-            {submitting ? "Signing in…" : "Sign in (test)"}
-          </button>
-          {error ? (
-            <p className="text-[11px] text-destructive font-medium">{error}</p>
-          ) : null}
-        </form>
-      </div>
+    <div className="rounded-[10px] border-2 border-dashed border-[#8A887F] p-3">
+      <p className="mb-2 text-[12px] font-extrabold uppercase tracking-[0.08em] text-[#8A887F]">
+        Test sign-in (dev only)
+      </p>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+        <Input
+          data-testid="test-signin-email"
+          type="email"
+          aria-label="Test email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="email@test.paxtools.local"
+          autoComplete="off"
+        />
+        <Input
+          data-testid="test-signin-password"
+          type="password"
+          aria-label="Test password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="password"
+          autoComplete="off"
+        />
+        <HardButton
+          data-testid="test-signin-submit"
+          type="submit"
+          tone="paper"
+          full
+          disabled={submitting}
+        >
+          {submitting ? "Signing in…" : "Sign in (test)"}
+        </HardButton>
+        {error ? (
+          <p role="alert" className="text-[12px] font-bold text-[#C62828]">
+            {error}
+          </p>
+        ) : null}
+      </form>
     </div>
   );
 }
