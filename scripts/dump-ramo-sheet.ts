@@ -1,5 +1,9 @@
 #!/usr/bin/env bun
+import * as fs from "node:fs";
 import * as XLSX from "xlsx";
+
+// SheetJS's ESM build doesn't bundle fs; readFile needs it injected.
+XLSX.set_fs(fs);
 
 const sheetName = process.argv[2];
 if (!sheetName) {
