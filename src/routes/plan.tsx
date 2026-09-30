@@ -19,9 +19,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { AuthButton } from "@/components/auth/auth-button";
-import { Footer } from "@/components/footer";
-import { PlanNav } from "@/components/progression/plan-nav";
+import { EscoteiroShell } from "@/components/progression/escoteiro-shell";
 import { EixoSection } from "@/components/progression/eixo-section";
 import { ActionItem } from "@/components/progression/action-item";
 import { useAuthGate } from "@/hooks/use-auth-gate";
@@ -67,17 +65,9 @@ function PlanPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
-        <header className="flex items-center justify-between">
-          <h1 className="text-lg font-black uppercase text-foreground">Paxtools</h1>
-          <AuthButton />
-        </header>
-        <PlanNav />
-        <PlanDashboard />
-        <Footer />
-      </div>
-    </div>
+    <EscoteiroShell title="Plano">
+      <PlanDashboard />
+    </EscoteiroShell>
   );
 }
 
@@ -216,11 +206,11 @@ function ViewToggle({
 
 function EmptyState() {
   return (
-    <div className="rounded-md border-2 border-black bg-card p-8 text-center space-y-3 shadow-[4px_4px_0px_0px_#065f46]">
+    <div className="rounded-md border-2 border-dashed border-black bg-card p-8 text-center space-y-3">
       <Sparkles className="size-8 mx-auto text-primary" />
       <p className="text-sm font-black uppercase">Seu plano está vazio</p>
       <p className="text-xs font-medium text-muted-foreground">
-        Volte para <b>Tudo</b> e toque na estrela ao lado dos itens que você
+        Vá em <b>Progressão</b> e toque na estrela ao lado dos itens que você
         quer focar. Eles vão aparecer aqui.
       </p>
     </div>
