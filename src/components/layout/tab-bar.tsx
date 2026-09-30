@@ -12,8 +12,11 @@ import { cn } from "@/lib/utils";
 
 type IconType = React.ComponentType<{ className?: string }>;
 
+// Slots size to their label (`flex: 1 1 auto`) and share the leftover width,
+// so a long label ("Especialidades") takes a wider slot instead of overflowing
+// an equal quarter. With nowrap labels, all four fit a 360px screen.
 const BASE =
-  "group flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-md border-2 px-0.5 text-[11px] font-extrabold leading-tight tracking-[0.01em] transition-colors";
+  "group flex min-h-[52px] min-w-0 flex-[1_1_auto] flex-col items-center justify-center gap-0.5 whitespace-nowrap rounded-md border-2 px-1.5 text-[11px] font-extrabold leading-tight tracking-[-0.01em] transition-colors";
 const INACTIVE = "border-transparent text-[#4A4A44] hover:bg-[#F4F1E8] hover:text-[#141414]";
 const ACTIVE = "border-[#141414] bg-[#DDF3E8] text-[#141414]";
 
@@ -40,7 +43,7 @@ export function TabBar({
       data-testid={testId}
       className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-[#141414] bg-white px-1.5 pt-1.5 pb-[calc(0.375rem+env(safe-area-inset-bottom))]"
     >
-      <div className="mx-auto flex max-w-lg gap-1">{children}</div>
+      <div className="mx-auto flex max-w-lg gap-0.5">{children}</div>
     </nav>
   );
 }

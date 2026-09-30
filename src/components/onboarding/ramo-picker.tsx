@@ -1,5 +1,6 @@
 import { RAMOS, RAMO_LABELS, RAMO_AGE, type Ramo } from "@/lib/ramos";
 import { Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type Props = (
   | {
@@ -13,11 +14,15 @@ type Props = (
       onChange: (ramos: Ramo[]) => void;
     }
 ) & {
+  /** @deprecated no-op — there is a single (light) look now. */
   variant?: "dark" | "light";
 };
 
+/**
+ * 2×2 ramo tiles. Selected = emerald tint + ink border + 2px shadow (the
+ * SegmentedControl "active" treatment); unselected = paper, border only.
+ */
 export function RamoPicker(props: Props) {
-  const variant = props.variant ?? "light";
   const isSelected = (r: Ramo) =>
     props.mode === "single" ? props.value === r : props.value.includes(r);
 
@@ -32,25 +37,6 @@ export function RamoPicker(props: Props) {
     }
   };
 
-  const palette =
-    variant === "dark"
-      ? {
-          selected:
-            "bg-emerald-700 border-black text-white shadow-[3px_3px_0px_0px_#000] translate-x-[0px] translate-y-[0px]",
-          unselected:
-            "bg-white/[0.08] border-white/30 text-green-100 hover:bg-white/[0.14] hover:border-white/50",
-          age: "text-green-200/70",
-          check: "text-emerald-300",
-        }
-      : {
-          selected:
-            "bg-primary border-black text-white shadow-[3px_3px_0px_0px_#000]",
-          unselected:
-            "bg-white border-black text-foreground hover:bg-accent/40 shadow-[2px_2px_0px_0px_#000]",
-          age: "text-muted-foreground",
-          check: "text-white",
-        };
-
   return (
     <div className="grid grid-cols-2 gap-3">
       {RAMOS.map((r) => {
@@ -59,18 +45,28 @@ export function RamoPicker(props: Props) {
           <button
             type="button"
             key={r}
+            aria-pressed={selected}
             onClick={() => handleClick(r)}
-            className={`relative rounded-md border-2 p-3 text-left transition-all ${
-              selected ? palette.selected : palette.unselected
-            }`}
+            className={cn(
+              "relative min-h-16 rounded-[10px] border-2 border-[#141414] px-3 py-2.5 text-left text-[#141414] transition-colors",
+              selected
+                ? "bg-[#DDF3E8] shadow-[2px_2px_0_#141414]"
+                : "bg-white hover:bg-black/[0.02]",
+            )}
           >
-            <div className="flex items-center justify-between">
-              <span className="font-bold">{RAMO_LABELS[r]}</span>
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-[15px] font-extrabold">{RAMO_LABELS[r]}</span>
               {selected && (
-                <Check className={`size-4 ${palette.check}`} aria-hidden />
+                <Check
+                  className="size-5 shrink-0 text-[#0E6B4E]"
+                  strokeWidth={3}
+                  aria-hidden
+                />
               )}
-            </div>
-            <span className={`text-xs font-medium ${palette.age}`}>{RAMO_AGE[r]}</span>
+            </span>
+            <span className="mt-0.5 block text-[12px] font-semibold text-[#4A4A44]">
+              {RAMO_AGE[r]}
+            </span>
           </button>
         );
       })}

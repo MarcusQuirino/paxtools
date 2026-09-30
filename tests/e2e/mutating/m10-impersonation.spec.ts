@@ -2,32 +2,35 @@
  * M10 — Escotista impersonation auto-approval (PRD #58, story 40 write side).
  *
  * An escotista opening an escoteiro's read/act view
- * (`/escotista/escoteiro/<id>`, `Dashboard` with `targetUserId`) can toggle a
- * progression ação on the escoteiro's behalf. Unlike the escoteiro self-marking
+ * (`/escotista/escoteiro/<id>`, `Dashboard` with `targetUserId`) can open a
+ * bloco row (→ `/bloco/<blocoId>?escoteiroId=<id>`) and toggle a progression
+ * ação on the escoteiro's behalf. Unlike the escoteiro self-marking
  * (which creates a PENDING completion), an escotista toggling in impersonation
  * records the ação as APPROVED immediately (`toggleAction` with a targetUserId —
  * see convex/progression.ts). Toggling it OFF again deletes the row.
  *
  * Both directions are asserted, which is also what makes the spec self-cleaning:
- * it ends with the ação unchecked, exactly as the seed left it.
+ * it ends with the ação open (`data-state="open"`), exactly as the seed left it.
  *
  * Ownership (tests/utils/personas.ts): this spec owns Dante Meireles
  * (sim-troop-pioneiro-2) and mutates only his row. Vera Lacerda
  * (sim-escotista-pioneiro-1) is the impersonator — a SHARED login, never
  * mutated; no group/painel counts are asserted.
  *
- * ACTION_ID `pioneiro:autonomia-lideranca:fixed:0` is deterministically UNCHECKED
+ * ACTION_ID `pioneiro:autonomia-lideranca:fixed:0` is deterministically OPEN
  * for Dante: his seed (blocks:2, idx 1) completes `aprendizagem-continua` +
  * `comunidade` and leaves one pending ação in `consumo-responsavel`; the
  * `autonomia-lideranca` bloco is untouched.
  *
  * Two contexts: Vera acts via impersonation, Dante confirms he sees the ação
- * approved (on his own dashboard an approved item is checked AND locked/disabled,
- * which a merely-pending item would not be — the approval proof).
+ * approved (on his own bloco screen an approved item is `data-state="approved"`
+ * AND locked/disabled, which a merely-pending item would not be — the approval
+ * proof).
  */
 
 import { test, expect } from "@playwright/test";
 import type { Page, Locator } from "@playwright/test";
+import { blocoRow, openBloco } from "../shared/bloco-nav";
 
 const VERA_SLUG = "sim-escotista-pioneiro-1--m10";
 const DANTE_SLUG = "sim-troop-pioneiro-2";
@@ -37,7 +40,7 @@ const VERA_EMAIL = "sim-escotista-pioneiro-1@test.paxtools.local";
 const DANTE_EMAIL = `${DANTE_SLUG}@test.paxtools.local`;
 const DANTE_NAME = "Dante Meireles";
 const ACTION_ID = "pioneiro:autonomia-lideranca:fixed:0";
-const BLOCO_TRIGGER = /Autonomia e Liderança/i;
+const BLOCO_ID = "autonomia-lideranca";
 
 /**
  * Dead storageState guard (PRD #58 hard rule): captured sessions can expire.
@@ -132,13 +135,13 @@ test("escotista impersonation auto-approves an ação, then removes it", async (
     // escoteiro tab bar — the escotista stays in their own shell.
     await expect(veraPage.getByTestId("escoteiro-tab-bar")).toHaveCount(0);
   };
-  const expandVera = () =>
-    veraPage.getByRole("button", { name: BLOCO_TRIGGER }).first().click();
-  const expandDante = () =>
-    dantePage.getByRole("button", { name: BLOCO_TRIGGER }).first().click();
+  // Push the bloco screen from the Progressão body (impersonation rows carry
+  // `?escoteiroId=`, so Vera's screen acts on Dante).
+  const expandVera = () => openBloco(veraPage, BLOCO_ID);
+  const expandDante = () => openBloco(dantePage, BLOCO_ID);
 
   // Auth-resilient reloads (stale storageState can bounce a reload to /signin
-  // when the suite runs without the setup phase). Re-navigate + re-expand.
+  // when the suite runs without the setup phase). Re-navigate + re-open.
   let detailUrl = "";
   const reloadVera = async () => {
     await gotoAs(
@@ -156,7 +159,7 @@ test("escotista impersonation auto-approves an ação, then removes it", async (
       "/",
       DANTE_EMAIL,
       DANTE_SLUG,
-      dantePage.getByRole("button", { name: BLOCO_TRIGGER }).first(),
+      blocoRow(dantePage, BLOCO_ID),
     );
     await expandDante();
   };
@@ -168,53 +171,51 @@ test("escotista impersonation auto-approves an ação, then removes it", async (
     await expect(veraCheckbox).toBeVisible({ timeout: 15_000 });
 
     // Reset any leftover from an interrupted run so the flow starts clean.
-    if ((await veraCheckbox.getAttribute("data-state")) === "checked") {
+    if ((await veraCheckbox.getAttribute("data-state")) !== "open") {
       await veraCheckbox.click();
-      await expect(veraCheckbox).toHaveAttribute("data-state", "unchecked");
+      await expect(veraCheckbox).toHaveAttribute("data-state", "open");
     }
 
     // 1. Toggle ON via impersonation → recorded APPROVED (not pending).
     await veraCheckbox.click();
-    await expect(veraCheckbox).toHaveAttribute("data-state", "checked");
-    // Approved renders immediately — no pending Clock icon in the ação row.
-    await expect(
-      veraPage.locator(`label[for="${ACTION_ID}"] svg.lucide-clock`),
-    ).toHaveCount(0);
+    await expect(veraCheckbox).toHaveAttribute("data-state", "approved");
+    // Approved renders immediately — no pending Clock icon in the check.
+    await expect(veraCheckbox.locator("svg.lucide-clock")).toHaveCount(0);
 
     // 2. Persisted across a fresh query (reload).
     await reloadVera();
-    await expect(veraCheckbox).toHaveAttribute("data-state", "checked", {
+    await expect(veraCheckbox).toHaveAttribute("data-state", "approved", {
       timeout: 10_000,
     });
 
-    // 3. Dante sees it approved on his own dashboard: checked AND locked
+    // 3. Dante sees it approved on his own bloco screen: approved AND locked
     //    (an approved item can't be un-checked by the escoteiro; a pending one
     //    would stay enabled — this disabled state is the auto-approval proof).
     await reloadDante();
-    await expect(danteCheckbox).toHaveAttribute("data-state", "checked", {
+    await expect(danteCheckbox).toHaveAttribute("data-state", "approved", {
       timeout: 10_000,
     });
     await expect(danteCheckbox).toBeDisabled();
 
     // 4. Toggle OFF via impersonation → row deleted.
     await veraCheckbox.click();
-    await expect(veraCheckbox).toHaveAttribute("data-state", "unchecked");
+    await expect(veraCheckbox).toHaveAttribute("data-state", "open");
     await reloadVera();
-    await expect(veraCheckbox).toHaveAttribute("data-state", "unchecked", {
+    await expect(veraCheckbox).toHaveAttribute("data-state", "open", {
       timeout: 10_000,
     });
 
     // 5. Gone for Dante too.
     await reloadDante();
-    await expect(danteCheckbox).toHaveAttribute("data-state", "unchecked", {
+    await expect(danteCheckbox).toHaveAttribute("data-state", "open", {
       timeout: 10_000,
     });
   } finally {
-    // Safety net: leave the ação unchecked (seed baseline) whatever happened.
+    // Safety net: leave the ação open (seed baseline) whatever happened.
     try {
       await openDanteDetail();
       await expandVera();
-      if ((await veraCheckbox.getAttribute("data-state")) === "checked") {
+      if ((await veraCheckbox.getAttribute("data-state")) !== "open") {
         await veraCheckbox.click();
       }
     } catch {

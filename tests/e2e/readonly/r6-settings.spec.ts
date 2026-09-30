@@ -7,7 +7,8 @@
  *
  * What /settings actually renders (src/routes/settings.tsx), per role:
  *   - "Seu nome"  → name <input> whose value is the viewer's current name.
- *   - "Seu papel" → a badge reading "Escoteiro" or "Escotista".
+ *   - "Seu papel" → a pill reading "Escoteiro" or "Escotista".
+ *   - Escotista branch = "Ajustes" pushed screen (back link to /escotista).
  *   - "Grupo"     → the group name text, followed by its identity — numeral and
  *                   região escoteira, "99999/RS" for the seed group. For an
  *                   escotista (non-pending) it also shows the invite password +
@@ -119,6 +120,20 @@ escotistaTest.describe("R6 settings — escotista (non-admin)", () => {
     await expect(page.getByText(GROUP_NAME).first()).toBeVisible();
     // Escotistas (non-pending) get the invite password + share helper.
     await expect(page.getByText(/Compartilhe a senha/i)).toBeVisible();
+  });
+
+  escotistaTest("Ajustes is a pushed screen with a back link to the painel", async ({
+    page,
+  }) => {
+    // Escotista branch of /settings: PageHeader `back` variant (no avatar
+    // menu, no "Voltar" text link, no "CONFIGURAÇÕES" wordmark title).
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Ajustes", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Voltar ao painel" }),
+    ).toHaveAttribute("href", "/escotista");
+    await expect(page.getByRole("button", { name: "Sair da conta" })).toBeVisible();
   });
 
   escotistaTest("no admin-only management section for a non-admin escotista", async ({

@@ -5,8 +5,9 @@
  * Solano, Pata Tenra→Saltador) share one implementation.
  *
  * Two browser contexts (the flow spans two roles):
- *   - scout   (the escoteiro) marks their single missing variable ação →
- *     it becomes a PENDING completion (clock).
+ *   - scout   (the escoteiro) opens the frontier bloco screen (/bloco/<id>,
+ *     pushed from its Progressão row) and marks their single missing variable
+ *     ação → it becomes a PENDING completion (`data-state="pending"`, clock).
  *   - approver (the escotista) sees the scout's card in /escotista/pending and
  *     APPROVES it via the bulk "Aprovar" button. That approval completes the
  *     scout's 4th bloco, which crosses an etapa boundary → a level-up (a
@@ -23,8 +24,9 @@
  *   1. resets to the seed state up-front (deletes any leftover pending row as
  *      the scout, or un-approves a leftover approved row as the escotista), and
  *   2. in a guarded finally, un-approves the newly-approved ação via the
- *      escotista's impersonation view (/escotista/escoteiro/<id>), which DELETES
- *      the approved actionCompletions row (escotista direct-toggle on an
+ *      escotista's impersonation view (/escotista/escoteiro/<id> → bloco row →
+ *      /bloco/<blocoId>?escoteiroId=<id>), which DELETES the approved
+ *      actionCompletions row (escotista direct-toggle on an
  *      approved item removes it — convex/progression.ts toggleAction: an
  *      escotista acting with targetUserId resolves status "approved", so an
  *      existing approved row takes the delete branch after the
@@ -38,6 +40,7 @@
 
 import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { authFile } from "../../utils/personas";
+import { blocoIdOf, openBloco } from "./bloco-nav";
 
 export type RoundtripParams = {
   /** Manifest slug of the escoteiro whose data is mutated. */
@@ -46,7 +49,7 @@ export type RoundtripParams = {
   scoutName: string;
   /** Manifest slug of the approver escotista (shared login, row untouched). */
   approverSlug: string;
-  /** Frontier bloco display name (accordion trigger). */
+  /** Frontier bloco display name (the bloco screen's h1). */
   frontierBlocoName: RegExp;
   /**
    * The single missing variable ação that completes bloco #4 and levels the
@@ -61,21 +64,21 @@ export type RoundtripParams = {
   contextOptions?: Parameters<Browser["newContext"]>[0];
 };
 
-const expandBloco = (page: Page, name: RegExp) =>
-  page.getByRole("button", { name }).first().click();
-
-/** Fresh nav to the scout's own dashboard with the frontier bloco expanded. */
-async function openScoutBloco(page: Page, name: RegExp) {
+/** Fresh nav to the scout's own dashboard, then push the frontier bloco screen. */
+async function openScoutBloco(page: Page, params: RoundtripParams) {
   await page.goto("/");
-  await expandBloco(page, name);
+  await openBloco(page, blocoIdOf(params.missingActionId));
+  await expect(
+    page.getByRole("heading", { level: 1, name: params.frontierBlocoName }),
+  ).toBeVisible();
 }
 
 /**
  * Un-approve the ação via the escotista's impersonation view: search the painel
- * for the scout, open their progression, expand the frontier bloco, and toggle
- * the (checked, escotista-editable) checkbox OFF — deleting the approved row.
- * Leaves the scout back at the lower etapa. Used by both the up-front reset and
- * the teardown.
+ * for the scout, open their progression, open the frontier bloco screen, and
+ * toggle the (approved, escotista-editable) check OFF — deleting the approved
+ * row. Leaves the scout back at the lower etapa. Used by both the up-front
+ * reset and the teardown.
  */
 async function unapproveViaImpersonation(
   approverPage: Page,
@@ -92,15 +95,18 @@ async function unapproveViaImpersonation(
   await verProgressao.click();
   await expect(approverPage).toHaveURL(/\/escotista\/escoteiro\//);
 
-  await expandBloco(approverPage, params.frontierBlocoName);
+  await openBloco(approverPage, blocoIdOf(params.missingActionId));
   const checkbox = approverPage.locator(`[id="${params.missingActionId}"]`);
   await expect(checkbox).toBeVisible();
-  if ((await checkbox.getAttribute("data-state")) === "checked") {
+  if ((await checkbox.getAttribute("data-state")) !== "open") {
     await checkbox.click(); // escotista toggle on an approved item → delete row
-    await expect(checkbox).toHaveAttribute("data-state", "unchecked");
+    await expect(checkbox).toHaveAttribute("data-state", "open");
   }
-  // Impersonation reuses the scout's Dashboard: the etapa banner reflects the
-  // target. After un-approval the scout is back below the crossing.
+  // Back to the impersonation body — it reuses the scout's Dashboard, so the
+  // etapa hero reflects the target. After un-approval the scout is back below
+  // the crossing.
+  await approverPage.getByRole("button", { name: "Voltar" }).click();
+  await expect(approverPage).toHaveURL(/\/escotista\/escoteiro\//);
   await expect(
     approverPage.getByRole("heading", { name: params.lowerEtapa, exact: true }),
   ).toBeVisible();
@@ -116,23 +122,23 @@ async function resetToSeed(
   approverPage: Page,
   params: RoundtripParams,
 ) {
-  await openScoutBloco(scoutPage, params.frontierBlocoName);
+  await openScoutBloco(scoutPage, params);
   const checkbox = scoutPage.locator(`[id="${params.missingActionId}"]`);
   await expect(checkbox).toBeVisible();
 
-  if ((await checkbox.getAttribute("data-state")) !== "checked") return;
+  const state = await checkbox.getAttribute("data-state");
+  if (state === "open") return;
 
-  if (await checkbox.isEnabled()) {
+  if (state === "pending") {
     // Leftover PENDING (self-owned, not yet approved) → the scout can delete it.
     await checkbox.click();
-    await expect(checkbox).toHaveAttribute("data-state", "unchecked");
+    await expect(checkbox).toHaveAttribute("data-state", "open");
   } else {
     // Leftover APPROVED+locked (a prior run levelled the scout) → only the
-    // escotista can undo it.
+    // escotista can undo it. The reload stays on the bloco screen.
     await unapproveViaImpersonation(approverPage, params);
     await scoutPage.reload();
-    await expandBloco(scoutPage, params.frontierBlocoName);
-    await expect(checkbox).toHaveAttribute("data-state", "unchecked");
+    await expect(checkbox).toHaveAttribute("data-state", "open");
   }
 }
 
@@ -162,11 +168,9 @@ export async function runApprovalRoundtrip(
     // 1. Scout marks the single missing variable ação → PENDING (clock,
     //    still enabled because a self-mark is not yet locked).
     await checkbox.click();
-    await expect(checkbox).toHaveAttribute("data-state", "checked");
+    await expect(checkbox).toHaveAttribute("data-state", "pending");
     await expect(checkbox).toBeEnabled();
-    await expect(
-      scoutPage.locator(`label[for="${params.missingActionId}"] svg.lucide-clock`),
-    ).toBeVisible();
+    await expect(checkbox.locator("svg.lucide-clock")).toBeVisible();
 
     // 2. Approver sees THIS scout's card in the pending queue and approves it.
     await approverPage.goto("/escotista/pending");
@@ -192,17 +196,21 @@ export async function runApprovalRoundtrip(
       await expect(card).toHaveCount(0, { timeout: 5_000 });
     }).toPass({ timeout: 30_000 });
 
-    // 3. Scout reloads: the ação is approved + LOCKED, the bloco is Completo,
-    //    and the etapa banner shows the crossed-into etapa (level-up landed).
+    // 3. Scout reloads the bloco screen: the ação is approved + LOCKED and the
+    //    bloco head shows "Completo". Back on Progressão the bloco row is
+    //    Completo and the etapa hero shows the crossed-into etapa (level-up).
     await scoutPage.reload();
-    await expandBloco(scoutPage, params.frontierBlocoName);
-    await expect(checkbox).toHaveAttribute("data-state", "checked");
+    await expect(checkbox).toHaveAttribute("data-state", "approved");
     await expect(checkbox).toBeDisabled();
+    await expect(scoutPage.getByTestId("bloco-head")).toContainText("Completo");
 
-    const blocoTrigger = scoutPage
-      .getByRole("button", { name: params.frontierBlocoName })
-      .first();
-    await expect(blocoTrigger).toContainText(/Completo/i);
+    await scoutPage.getByRole("link", { name: "Progressão", exact: true }).click();
+    await expect(scoutPage).not.toHaveURL(/\/bloco\//);
+    const blocoRow = scoutPage.getByTestId(
+      `bloco-row-${blocoIdOf(params.missingActionId)}`,
+    );
+    await expect(blocoRow).toHaveAttribute("data-state", "full");
+    await expect(blocoRow).toContainText(/Completo/i);
 
     await expect(
       scoutPage.getByRole("heading", { name: params.upperEtapa, exact: true }),

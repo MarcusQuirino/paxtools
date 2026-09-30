@@ -43,7 +43,8 @@
 
 :root {
   /* Neobrutalism: Playful Neo - Variant B */
-  --radius: 0.375rem;
+  /* 0.5rem → rounded-md = 6px (inner controls), rounded-lg = 8px */
+  --radius: 0.5rem;
   /* Warm cream background */
   --background: oklch(0.978 0.012 85);
   --foreground: oklch(0.12 0 0);
@@ -52,8 +53,8 @@
   --card-foreground: oklch(0.12 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.12 0 0);
-  /* Vivid emerald primary */
-  --primary: oklch(0.36 0.12 162);
+  /* Design A emerald (src/lib/design-tokens.ts EMERALD) */
+  --primary: #0e6b4e;
   --primary-foreground: oklch(1 0 0);
   /* Light green secondary */
   --secondary: oklch(0.94 0.03 155);
@@ -67,7 +68,7 @@
   /* Soft charcoal border — NOT pure black, avoids the border-input trap */
   --border: oklch(0.78 0.008 85);
   --input: oklch(0.82 0.005 85);
-  --ring: oklch(0.36 0.12 162);
+  --ring: #0e6b4e;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -75,12 +76,12 @@
   --chart-5: oklch(0.769 0.188 70.08);
   --sidebar: oklch(0.978 0.012 85);
   --sidebar-foreground: oklch(0.12 0 0);
-  --sidebar-primary: oklch(0.36 0.12 162);
+  --sidebar-primary: #0e6b4e;
   --sidebar-primary-foreground: oklch(1 0 0);
   --sidebar-accent: oklch(0.92 0.04 155);
   --sidebar-accent-foreground: oklch(0.2 0.06 162);
   --sidebar-border: oklch(0.78 0.008 85);
-  --sidebar-ring: oklch(0.36 0.12 162);
+  --sidebar-ring: #0e6b4e;
 }
 
 .dark {

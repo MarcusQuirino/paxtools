@@ -2,14 +2,18 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
+/**
+ * Design A text field — same look as `SearchInput`: 48px, 2px ink border, 10px
+ * radius, 16px text (no iOS zoom on focus), ink focus ring, no shadow.
+ */
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
   return (
     <input
       type={type}
       data-slot="input"
       className={cn(
-        "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground h-9 w-full min-w-0 rounded-md border-2 border-black bg-white px-3 py-1 text-base outline-none transition-[color,box-shadow] file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
-        "focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-1 focus-visible:shadow-[2px_2px_0px_0px_#065f46]",
+        "file:text-foreground placeholder:text-[#8A887F] selection:bg-primary selection:text-primary-foreground h-12 w-full min-w-0 rounded-[10px] border-2 border-[#141414] bg-white px-3 py-1 text-base text-[#141414] outline-none transition-[color,box-shadow] file:inline-flex file:h-8 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+        "focus-visible:ring-2 focus-visible:ring-[#141414] focus-visible:ring-offset-1",
         "aria-invalid:border-destructive aria-invalid:ring-destructive/20",
         className,
       )}

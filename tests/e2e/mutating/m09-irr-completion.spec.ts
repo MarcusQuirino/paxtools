@@ -119,7 +119,7 @@ test("completing the manual IRR requisitos earns Pilar the Cruzeiro do Sul troph
     await expect(
       pilarPage.getByText(/Parabéns! Reconhecimento de Ramo completo/),
     ).toBeVisible();
-    await expect(pilarPage.getByText("Etapa Atual")).toHaveCount(0);
+    await expect(pilarPage.getByText("Etapa atual")).toHaveCount(0);
   };
 
   try {
@@ -140,7 +140,7 @@ test("completing the manual IRR requisitos earns Pilar the Cruzeiro do Sul troph
     ).toHaveCount(0);
 
     const uncheckedEnabled = recognition.locator(
-      'button[role="checkbox"][data-state="unchecked"]:not([disabled])',
+      'button[role="checkbox"][data-state="open"]:not([disabled])',
     );
     for (let guard = 0; guard < 10; guard++) {
       const n = await uncheckedEnabled.count();

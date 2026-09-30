@@ -1,33 +1,33 @@
 import type { AlternativeCompletion } from "@/data/types";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Award, ArrowRight } from "lucide-react";
+import { Check } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { PlanStar } from "./plan-star";
+import { Note } from "@/components/ui/section";
 import { encodePlanKey } from "@/lib/plan-keys";
 import { isSpecialtyEarned, toCanonicalSpecialtyId } from "@/lib/completion-logic";
+import { cn } from "@/lib/utils";
 import type { Id } from "../../../convex/_generated/dataModel";
 
 /**
- * The especialidades/insígnias a bloco can be completed with, listed as a
- * read-only "ou" alternative. Since #47 a box is checked only when the
- * especialidade is earned via its items/steps — the legacy manual toggle is
- * gone, so the escoteiro marks work on /especialidades (the "ver" link).
+ * "ou conclua com uma especialidade" (Design A frame 2): the especialidades /
+ * insígnias a bloco can be completed with, as 44px chips. Especialidade chips
+ * open that especialidade on /especialidades (earned = emerald tint + check —
+ * earned only via its items since #47); each chip carries its own plan star
+ * as a sibling button (never nested in the link).
  */
 type SpecialtySectionProps = {
   blocoId: string;
   alternatives: AlternativeCompletion[];
-  /** Canonical ids of specialties earned via items (#44) — those boxes render checked. */
+  /** Canonical ids of specialties earned via items (#44). */
   earnedSpecialtyIds?: Set<string>;
   plannedKeys?: Set<string>;
   onTogglePlanned?: (itemKey: string) => void;
-  planOnly?: boolean;
-  /**
-   * Target scout when rendered in the escotista impersonation Dashboard (#53):
-   * the "ver" deep-link carries it so /especialidades opens the scout's detail
-   * instead of bouncing the escotista.
-   */
+  /** Impersonation (#53): the link carries the scout so the escotista lands on their ficha. */
   escoteiroId?: Id<"users">;
 };
+
+const CHIP =
+  "inline-flex min-h-12 items-stretch overflow-hidden rounded-full border-2 border-[#141414] text-[14px] font-bold";
 
 export function SpecialtySection({
   blocoId,
@@ -35,87 +35,85 @@ export function SpecialtySection({
   earnedSpecialtyIds,
   plannedKeys,
   onTogglePlanned,
-  planOnly,
   escoteiroId,
 }: SpecialtySectionProps) {
-  if (alternatives.length === 0) return null;
-
+  const visible = alternatives.filter((alt) => alt.items.length > 0);
+  if (visible.length === 0) return null;
   const earned = earnedSpecialtyIds ?? new Set<string>();
 
-  const isPlanned = (name: string) =>
-    !planOnly ||
-    !!plannedKeys?.has(
-      encodePlanKey({ kind: "specialty", blocoId, specialtyName: name }),
-    );
-
-  const visibleAlternatives = alternatives
-    .map((alt) => ({ ...alt, items: alt.items.filter(isPlanned) }))
-    .filter((alt) => alt.items.length > 0);
-
-  if (visibleAlternatives.length === 0) return null;
-
   return (
-    <div className="mt-4">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground font-semibold uppercase tracking-wider px-3 mb-2">
-        <div className="flex-1 border-t" />
-        <span>ou</span>
-        <div className="flex-1 border-t" />
+    <section data-testid="bloco-alternatives">
+      <div className="mb-2.5 flex items-center gap-2.5 text-[12px] font-black uppercase tracking-[0.1em] text-[#8A887F] before:flex-1 before:border-t-2 before:border-[#D9D5C9] before:content-[''] after:flex-1 after:border-t-2 after:border-[#D9D5C9] after:content-['']">
+        ou conclua com {visible.length === 1 && visible[0]!.type === "insignia" ? "uma insígnia" : "uma especialidade"}
       </div>
-
-      {visibleAlternatives.map((alt) => (
-        <div key={alt.type} className="border rounded-md p-3 space-y-2">
-          <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase">
-            <Award className="size-3.5" />
-            {alt.type === "especialidade" ? "Especialidades" : "Insígnias"}
+      {visible.map((alt) => (
+        <div key={alt.type} className="mb-2">
+          {visible.length > 1 && (
+            <p className="mb-1.5 text-[12px] font-extrabold uppercase tracking-[0.06em] text-[#4A4A44]">
+              {alt.type === "especialidade" ? "Especialidades" : "Insígnias"}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {alt.items.map((item) => {
+              const planKey = encodePlanKey({ kind: "specialty", blocoId, specialtyName: item });
+              const isEsp = alt.type === "especialidade";
+              const won = isEsp && isSpecialtyEarned(item, earned);
+              const label = (
+                <>
+                  {won && <Check className="size-4 shrink-0" strokeWidth={3} aria-hidden />}
+                  {item}
+                  {won && <span className="sr-only"> (conquistada)</span>}
+                </>
+              );
+              return (
+                <span
+                  key={item}
+                  className={cn(CHIP, won ? "bg-[#DDF3E8]" : "bg-white")}
+                  data-testid={`alt-chip-${toCanonicalSpecialtyId(item)}`}
+                >
+                  {isEsp ? (
+                    <Link
+                      to="/especialidades"
+                      search={{
+                        specialty: toCanonicalSpecialtyId(item),
+                        ...(escoteiroId ? { escoteiroId } : {}),
+                      }}
+                      aria-label={`ver ${item}`}
+                      className={cn(
+                        "flex items-center gap-1.5 pl-3.5 hover:bg-black/[0.04]",
+                        onTogglePlanned ? "pr-1" : "pr-3.5",
+                      )}
+                    >
+                      {label}
+                    </Link>
+                  ) : (
+                    <span className={cn("flex items-center pl-3.5", onTogglePlanned ? "pr-1" : "pr-3.5")}>
+                      {label}
+                    </span>
+                  )}
+                  {onTogglePlanned && (
+                    <PlanStar
+                      planned={!!plannedKeys?.has(planKey)}
+                      onToggle={() => onTogglePlanned(planKey)}
+                      label={
+                        plannedKeys?.has(planKey)
+                          ? `Remover ${item} do plano`
+                          : `Adicionar ${item} ao plano`
+                      }
+                      className="my-0 h-auto rounded-none border-l-2 border-[#141414]"
+                    />
+                  )}
+                </span>
+              );
+            })}
           </div>
-          {alt.items.map((item) => {
-            const planKey = encodePlanKey({
-              kind: "specialty",
-              blocoId,
-              specialtyName: item,
-            });
-            return (
-              <div
-                key={item}
-                className="flex items-center gap-3 min-h-[44px] px-1"
-              >
-                {/* Insígnias have no catalog and are not tracked (#47), so only
-                    especialidades get a (read-only) earned box. */}
-                {alt.type === "especialidade" && (
-                  <Checkbox
-                    checked={isSpecialtyEarned(item, earned)}
-                    disabled
-                    className="size-5"
-                  />
-                )}
-                <span className="text-sm flex-1">{item}</span>
-                {alt.type === "especialidade" && (
-                  <Link
-                    to="/especialidades"
-                    search={{
-                      specialty: toCanonicalSpecialtyId(item),
-                      ...(escoteiroId ? { escoteiroId } : {}),
-                    }}
-                    // A bloco lists several "ver" links; name each one so it is
-                    // distinguishable to assistive tech (and to tests).
-                    aria-label={`ver ${item}`}
-                    className="flex items-center gap-0.5 text-xs font-medium text-primary hover:underline shrink-0"
-                  >
-                    ver
-                    <ArrowRight className="size-3" />
-                  </Link>
-                )}
-                {onTogglePlanned && (
-                  <PlanStar
-                    planned={!!plannedKeys?.has(planKey)}
-                    onToggle={() => onTogglePlanned(planKey)}
-                  />
-                )}
-              </div>
-            );
-          })}
         </div>
       ))}
-    </div>
+      {visible.some((alt) => alt.type === "especialidade") && (
+        <Note className="mt-1">
+          Uma especialidade no Nível 1 conclui este bloco assim que um escotista aprovar os itens.
+        </Note>
+      )}
+    </section>
   );
 }

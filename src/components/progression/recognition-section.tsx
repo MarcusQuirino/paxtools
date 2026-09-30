@@ -1,9 +1,11 @@
-import { Checkbox } from "@/components/ui/checkbox";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
+import { Lock } from "lucide-react";
 import type { Irr } from "@/data/progression-rules";
-import { Check, Clock, Lock, Trophy } from "lucide-react";
-import { rowTint } from "@/lib/row-tint";
+import { ActionCheck } from "@/components/ui/action-check";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ListBox, ListHeader, Section } from "@/components/ui/section";
+import { StatusPill, StatusText } from "@/components/ui/status-pill";
+import { EMERALD } from "@/lib/design-tokens";
+import { cn } from "@/lib/utils";
 
 type RecognitionSectionProps = {
   irr: Irr;
@@ -15,6 +17,10 @@ type RecognitionSectionProps = {
   lockApproved?: boolean;
 };
 
+/**
+ * "Reconhecimento de Ramo" (Design A): a neutral locked row until the 18
+ * blocos are done, then the IRR checklist with semantic ActionCheck states.
+ */
 export function RecognitionSection({
   irr,
   blocksComplete,
@@ -24,114 +30,82 @@ export function RecognitionSection({
   onToggleItem,
   lockApproved,
 }: RecognitionSectionProps) {
+  const total = irr.items.length;
+
+  if (!blocksComplete) {
+    return (
+      <Section label="Reconhecimento de Ramo">
+        <EmptyState
+          icon={<Lock strokeWidth={2.2} aria-hidden />}
+          title={irr.name}
+          testId="irr-locked"
+        >
+          Complete todos os {irr.blockThreshold} blocos para desbloquear o checklist · {total} requisitos
+        </EmptyState>
+      </Section>
+    );
+  }
+
   const approvedCount = irr.items.filter((item) =>
     item.auto ? blocksComplete : approvedIrrItemIds.has(item.id),
   ).length;
   const pendingCount = irr.items.filter(
     (item) => !item.auto && pendingIrrItemIds.has(item.id),
   ).length;
-  const totalCount = irr.items.length;
-  const approvedPercent = (approvedCount / totalCount) * 100;
-  const pendingPercent = (pendingCount / totalCount) * 100;
 
   return (
-    <section className="rounded-md overflow-hidden border-2 border-black bg-card">
-      <div
-        className="px-4 py-3 text-white border-b-2 border-black"
-        style={{ backgroundColor: irr.color }}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Trophy className="size-4" />
-            <h2 className="font-black text-base uppercase tracking-tight">Reconhecimento de Ramo</h2>
-          </div>
-          {irrComplete ? (
-            <Badge className="bg-white/20 text-white text-[10px] px-1.5 py-0 border-white/60">
-              <Check className="size-3 mr-0.5" />
-              Completo
-            </Badge>
-          ) : (
-            <span className="text-xs font-bold opacity-90">
-              {approvedCount}/{totalCount} requisitos
-              {pendingCount > 0 && ` (+${pendingCount})`}
+    <Section
+      label="Reconhecimento de Ramo"
+      meta={irrComplete ? <StatusPill state="approved">Completo</StatusPill> : undefined}
+    >
+      <ListBox testId="irr-checklist">
+        <ListHeader
+          label={irr.name}
+          meta={
+            <span style={irrComplete ? { color: EMERALD } : undefined}>
+              {approvedCount}/{total} requisitos
+              {pendingCount > 0 && ` · ${pendingCount} aguardando`}
             </span>
-          )}
-        </div>
-        <Progress
-          value={approvedPercent}
-          pendingValue={pendingPercent}
-          className="mt-2 border-white/60 bg-white/20 [&>[data-slot=progress-indicator]]:bg-white [&>[data-slot=progress-indicator-pending]]:bg-white/50"
+          }
         />
-      </div>
-
-      <div className="p-3 space-y-1">
-        {!blocksComplete && (
-          <div className="flex items-center gap-2 text-xs font-medium text-amber-900 bg-amber-50 rounded-md border-2 border-amber-400 px-3 py-2 mb-2">
-            <Lock className="size-3.5 shrink-0" />
-            <span>
-              Complete todos os 18 blocos para desbloquear o checklist.
-            </span>
-          </div>
-        )}
-
         {irr.items.map((item) => {
-          const isAutoItem = item.auto;
-          const isApproved = isAutoItem
-            ? blocksComplete
-            : approvedIrrItemIds.has(item.id);
-          const isPending = !isAutoItem && pendingIrrItemIds.has(item.id);
-          const isChecked = isApproved || isPending;
-          const isLocked = !!lockApproved && isApproved && !isAutoItem;
-          const isDisabled = !blocksComplete || isLocked;
-          const tint = rowTint(irr.color, !isDisabled);
-
+          const isApproved = item.auto ? blocksComplete : approvedIrrItemIds.has(item.id);
+          const isPending = !item.auto && !isApproved && pendingIrrItemIds.has(item.id);
+          const state = isApproved ? "approved" : isPending ? "pending" : "open";
+          const disabled = item.auto || (!!lockApproved && isApproved);
           return (
-            <label
+            <div
               key={item.id}
-              htmlFor={item.id}
-              className={`flex items-start gap-3 p-3 min-h-[44px] transition-colors ${
-                isDisabled
-                  ? "cursor-not-allowed opacity-50"
-                  : `cursor-pointer ${tint.className}`
-              }`}
-              style={tint.style}
+              data-state={state}
+              className="flex min-h-14 items-start gap-3 border-t-[1.5px] border-[#D9D5C9] py-3 pr-3 pl-3 first:border-t-0"
             >
-              <Checkbox
+              <ActionCheck
                 id={item.id}
-                checked={isChecked}
-                onCheckedChange={() => {
-                  if (!isAutoItem) onToggleItem(item.id);
-                }}
-                disabled={isDisabled || isAutoItem}
-                className="mt-0.5 size-5"
-                style={
-                  isChecked
-                    ? {
-                        backgroundColor: irr.color,
-                        borderColor: "#000",
-                        opacity: isPending ? 0.4 : 1,
-                      }
-                    : undefined
-                }
+                state={state}
+                onClick={() => onToggleItem(item.id)}
+                disabled={disabled}
+                ariaLabel={item.text}
               />
-              <span
-                className={`text-sm leading-relaxed flex-1 ${
-                  isChecked
-                    ? isPending
-                      ? "text-muted-foreground/60"
-                      : "line-through text-muted-foreground"
-                    : ""
-                }`}
+              <div
+                className={cn("min-w-0 flex-1 pt-0.5", !disabled && "cursor-pointer")}
+                onClick={disabled ? undefined : () => onToggleItem(item.id)}
               >
-                {item.text}
-              </span>
-              {isPending && (
-                <Clock className="size-3.5 text-amber-600 mt-0.5 shrink-0" />
-              )}
-            </label>
+                <span
+                  className={cn(
+                    "block text-[15px] leading-[1.4]",
+                    state === "approved" && "text-[#8A887F] line-through decoration-[#0E6B4E]",
+                  )}
+                >
+                  {item.text}
+                </span>
+                <StatusText state={state}>
+                  {item.auto && isApproved ? "Automático · 18 blocos" : undefined}
+                </StatusText>
+              </div>
+            </div>
           );
         })}
-      </div>
-    </section>
+      </ListBox>
+    </Section>
   );
 }

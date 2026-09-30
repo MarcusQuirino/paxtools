@@ -1,81 +1,99 @@
-import { Checkbox } from "@/components/ui/checkbox";
-import { Clock } from "lucide-react";
+import type { ReactNode } from "react";
 import type { CompletionStatus } from "@/data/types";
+import { ActionCheck, type CheckState } from "@/components/ui/action-check";
+import { StatusText } from "@/components/ui/status-pill";
+import { cn } from "@/lib/utils";
 import { PlanStar } from "./plan-star";
-import { rowTint } from "@/lib/row-tint";
+
+/** Semantic check state of a marked/unmarked ação. */
+export function actionCheckState(checked: boolean, status?: CompletionStatus): CheckState {
+  if (!checked) return "open";
+  return status === "pending" ? "pending" : "approved";
+}
 
 type ActionItemProps = {
+  /** DOM id of the check (the action id / plan key — e2e selects on it). */
   id: string;
-  text: string;
+  text: ReactNode;
+  /** Plain-text name for the check's aria-label (defaults to `text`). */
+  label?: string;
   checked: boolean;
   status?: CompletionStatus;
   onToggle: () => void;
-  color?: string;
   planned?: boolean;
   onTogglePlanned?: () => void;
+  /** Approved ações are locked for the escoteiro (escotistas can still undo). */
   lockApproved?: boolean;
+  /** 12px caps line above the text ("Ação fixa", "Especialidade"…). */
+  kind?: ReactNode;
+  /** Before the check (plan grip). */
+  leading?: ReactNode;
+  /** After the star (delete button). */
+  trailing?: ReactNode;
+  className?: string;
 };
 
+/**
+ * One ação row (Design A frame 2): 28px check in a 48px target, 15px text,
+ * 12px status line ("Aprovado" / "Aguardando aprovação"), 44px plan star.
+ * Approved = emerald + check, struck through in emerald, locked; pending =
+ * amber + clock. Rows separate with 1.5px line-soft dividers.
+ */
 export function ActionItem({
   id,
   text,
+  label,
   checked,
   status,
   onToggle,
-  color,
   planned,
   onTogglePlanned,
   lockApproved,
+  kind,
+  leading,
+  trailing,
+  className,
 }: ActionItemProps) {
-  const isPending = checked && status === "pending";
-  const isLocked = lockApproved && checked && status === "approved";
-  const tint = rowTint(color, !isLocked);
-
+  const state = actionCheckState(checked, status);
+  const isLocked = !!lockApproved && state === "approved";
   return (
-    <label
-      htmlFor={id}
-      className={`flex items-start gap-3 p-3 min-h-[44px] transition-colors ${
-        isLocked ? "cursor-not-allowed" : `cursor-pointer ${tint.className}`
-      }`}
-      style={tint.style}
+    <div
+      data-action-row={id}
+      data-state={state}
+      className={cn(
+        "flex min-h-14 items-start gap-3 border-t-[1.5px] border-[#D9D5C9] py-3 pr-1 pl-3 first:border-t-0",
+        className,
+      )}
     >
-      <Checkbox
+      {leading}
+      <ActionCheck
         id={id}
-        checked={checked}
-        onCheckedChange={onToggle}
+        state={state}
+        onClick={onToggle}
         disabled={isLocked}
-        className="mt-0.5 size-5"
-        style={
-          checked && color
-            ? {
-                backgroundColor: color,
-                borderColor: color,
-                opacity: isPending ? 0.4 : 1,
-              }
-            : undefined
-        }
+        ariaLabel={label ?? (typeof text === "string" ? text : "Ação")}
       />
-      <span
-        className={`text-sm leading-relaxed flex-1 ${
-          checked
-            ? isPending
-              ? "text-muted-foreground/60"
-              : "line-through text-muted-foreground"
-            : ""
-        }`}
+      <div
+        className={cn("min-w-0 flex-1 pt-0.5", !isLocked && "cursor-pointer")}
+        onClick={isLocked ? undefined : onToggle}
       >
-        {text}
-      </span>
-      {isPending && (
-        <Clock className="size-3.5 text-slate-400 mt-0.5 shrink-0" />
-      )}
-      {onTogglePlanned && (
-        <PlanStar
-          planned={!!planned}
-          onToggle={onTogglePlanned}
-          color={color}
-        />
-      )}
-    </label>
+        {kind && (
+          <span className="mb-0.5 block text-[12px] font-extrabold uppercase tracking-[0.06em] text-[#8A887F]">
+            {kind}
+          </span>
+        )}
+        <span
+          className={cn(
+            "block text-[15px] leading-[1.4]",
+            state === "approved" && "text-[#8A887F] line-through decoration-[#0E6B4E]",
+          )}
+        >
+          {text}
+        </span>
+        <StatusText state={state === "selected" ? "open" : state} />
+      </div>
+      {onTogglePlanned && <PlanStar planned={!!planned} onToggle={onTogglePlanned} />}
+      {trailing}
+    </div>
   );
 }

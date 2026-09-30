@@ -1,178 +1,50 @@
-import type { Bloco, CustomAction, CompletionStatus } from "@/data/types";
-import {
-  AccordionItem,
-  AccordionTrigger,
-  AccordionContent,
-} from "@/components/ui/accordion";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { ActionChecklist } from "./action-checklist";
-import { SpecialtySection } from "./specialty-section";
-import { getBlocoProgress } from "@/lib/completion-logic";
-import { Check, Clock } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import type { Bloco } from "@/data/types";
+import { eixoColor } from "@/data/eixo-colors";
+import { ListRow } from "@/components/ui/list-row";
+import { ProgressRing } from "@/components/ui/progress-ring";
+import { blocoStatusLine, type BlocoSummary } from "@/lib/bloco-summary";
 import type { Id } from "../../../convex/_generated/dataModel";
 
-type BlocoCardProps = {
+type BlocoRowProps = {
   bloco: Bloco;
-  approvedActionIds: Set<string>;
-  pendingActionIds: Set<string>;
-  actionStatusMap: Map<string, CompletionStatus>;
-  customActions: CustomAction[];
-  color: string;
-  colorLight: string;
-  onToggleAction: (actionId: string) => void;
-  onAddCustom: (blocoId: string, text: string) => void;
-  onToggleCustom: (id: Id<"customActions">) => void;
-  onDeleteCustom: (id: Id<"customActions">) => void;
-  /** Bloco satisfied via an earned especialidade (level ≥ 1) — computed on read (#44). */
-  earnedViaSpecialty?: boolean;
-  /** Canonical ids of specialties earned via items (#44), for marking the exact checkbox. */
-  earnedSpecialtyIds?: Set<string>;
-  plannedKeys?: Set<string>;
-  onTogglePlanned?: (itemKey: string) => void;
-  planOnly?: boolean;
-  lockApproved?: boolean;
-  /** Target scout in the escotista impersonation view (#53) — threads to the
-   * specialty "ver" deep-link. */
+  summary: BlocoSummary;
+  /** Impersonation (#53): the bloco screen opens for this scout. */
   escoteiroId?: Id<"users">;
+  /** Prefix the status line with the eixo name ("Continue de onde parou"). */
+  eixoName?: string;
+  testId?: string;
 };
 
-export function BlocoCard({
-  bloco,
-  approvedActionIds,
-  pendingActionIds,
-  actionStatusMap,
-  customActions,
-  color,
-  colorLight,
-  onToggleAction,
-  onAddCustom,
-  onToggleCustom,
-  onDeleteCustom,
-  earnedViaSpecialty,
-  earnedSpecialtyIds,
-  plannedKeys,
-  onTogglePlanned,
-  planOnly,
-  lockApproved,
-  escoteiroId,
-}: BlocoCardProps) {
-  const approvedCustomCompleted = customActions.filter(
-    (c) => c.blocoId === bloco.id && c.completed && c.status !== "pending",
-  ).length;
-  const pendingCustomCompleted = customActions.filter(
-    (c) => c.blocoId === bloco.id && c.completed && c.status === "pending",
-  ).length;
-  const hasApprovedSpecialty = !!earnedViaSpecialty;
-
-  const progress = getBlocoProgress(
-    bloco,
-    approvedActionIds,
-    pendingActionIds,
-    approvedCustomCompleted,
-    pendingCustomCompleted,
-    hasApprovedSpecialty,
-  );
-
-  const totalActions = bloco.fixedActions.length + bloco.variableRequired;
-
-  const approvedVariableCredit = hasApprovedSpecialty
-    ? bloco.variableRequired
-    : Math.min(progress.variableDone, bloco.variableRequired);
-  const approvedDone = Math.min(
-    progress.fixedDone + approvedVariableCredit,
-    totalActions,
-  );
-  const approvedPercent =
-    totalActions > 0 ? (approvedDone / totalActions) * 100 : 0;
-
-  const pendingVariableCredit = hasApprovedSpecialty
-    ? bloco.variableRequired - approvedVariableCredit
-    : Math.min(
-        progress.variablePending,
-        bloco.variableRequired - approvedVariableCredit,
-      );
-  const pendingDone = Math.min(
-    progress.fixedPending + Math.max(0, pendingVariableCredit),
-    totalActions - approvedDone,
-  );
-  const pendingPercent =
-    totalActions > 0 ? (pendingDone / totalActions) * 100 : 0;
-
-  // For the checklist, combine both sets so checked items show
-  const allCompletedActionIds = new Set([
-    ...approvedActionIds,
-    ...pendingActionIds,
-  ]);
-
+/**
+ * One bloco in an eixo list (Design A frame 1): 32px ProgressRing in the eixo
+ * colour (full = check, aguardando = amber clock), 15/800 name, 12px status
+ * line, chevron. Tapping pushes the bloco screen (/bloco/$blocoId).
+ */
+export function BlocoRow({ bloco, summary, escoteiroId, eixoName, testId }: BlocoRowProps) {
+  const status = blocoStatusLine(summary);
   return (
-    <AccordionItem value={bloco.id}>
-      <AccordionTrigger className="px-3 hover:no-underline gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-sm">{bloco.name}</span>
-            {progress.isComplete ? (
-              <Badge
-                className="text-[10px] px-1.5 py-0 border-black"
-                style={{ backgroundColor: color }}
-              >
-                <Check className="size-3 mr-0.5" />
-                Completo
-              </Badge>
-            ) : progress.isPendingComplete && !progress.isComplete ? (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0 text-amber-800 border-amber-600 bg-amber-50"
-              >
-                <Clock className="size-3 mr-0.5" />
-                Pendente
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                {approvedDone}/{totalActions}
-              </Badge>
-            )}
-          </div>
-          <Progress
-            value={approvedPercent}
-            pendingValue={pendingPercent}
-            className="mt-2"
-            indicatorColor={color}
-            pendingColor={color}
-          />
-        </div>
-      </AccordionTrigger>
-      <AccordionContent className="px-3">
-        <p className="text-xs text-muted-foreground italic mb-4">
-          {bloco.objective}
-        </p>
-        <ActionChecklist
-          bloco={bloco}
-          completedActionIds={allCompletedActionIds}
-          actionStatusMap={actionStatusMap}
-          customActions={customActions}
-          hasSpecialtyAlternative={hasApprovedSpecialty}
-          color={color}
-          colorLight={colorLight}
-          onToggleAction={onToggleAction}
-          onAddCustom={onAddCustom}
-          onToggleCustom={onToggleCustom}
-          onDeleteCustom={onDeleteCustom}
-          plannedKeys={plannedKeys}
-          onTogglePlanned={onTogglePlanned}
-          planOnly={planOnly}
-          lockApproved={lockApproved}
+    <ListRow
+      leading={
+        <ProgressRing
+          pct={summary.approvedPct}
+          color={eixoColor(bloco.eixoId)}
+          state={summary.state}
         />
-        <SpecialtySection
-          blocoId={bloco.id}
-          alternatives={bloco.alternativeCompletions}
-          earnedSpecialtyIds={earnedSpecialtyIds}
-          plannedKeys={plannedKeys}
-          onTogglePlanned={onTogglePlanned}
-          planOnly={planOnly}
-          escoteiroId={escoteiroId}
+      }
+      title={bloco.name}
+      subtitle={eixoName ? `${eixoName} · ${status.text}` : status.text}
+      subtitleTone={status.tone}
+      chevron
+      testId={testId ?? `bloco-row-${bloco.id}`}
+      data={{ state: summary.state }}
+      link={
+        <Link
+          to="/bloco/$blocoId"
+          params={{ blocoId: bloco.id }}
+          search={escoteiroId ? { escoteiroId } : {}}
         />
-      </AccordionContent>
-    </AccordionItem>
+      }
+    />
   );
 }

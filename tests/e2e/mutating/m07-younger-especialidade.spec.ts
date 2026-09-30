@@ -61,16 +61,22 @@ async function gotoStable(page: Page, url: string, ready: Locator): Promise<void
   await ready.waitFor({ state: "visible", timeout: 12_000 });
 }
 
-/** The Acampamento SpecialtyCard trigger on Felipe's /especialidades. */
-const acampamentoCard = (page: Page) =>
-  page.getByRole("button", { name: new RegExp(SPECIALTY_NAME) });
+/** The head card ("N de M itens", pending note, level boxes) of the pushed
+ *  especialidade detail screen on Felipe's /especialidades?specialty=…. */
+const acampamentoCard = (page: Page) => page.getByTestId("esp-detail-head");
 
-/** Deep-link Felipe into his Acampamento card (auto-opens it). */
+/** Deep-link Felipe into his Acampamento detail screen. */
 async function openFelipeCard(page: Page): Promise<Locator> {
   const card = acampamentoCard(page);
   await gotoStable(page, `/especialidades?specialty=${SPECIALTY_ID}`, card);
+  await expect(
+    page.getByRole("heading", { level: 1, name: SPECIALTY_NAME, exact: true }),
+  ).toBeVisible();
   return card;
 }
+
+/** Nível 1 reached ⇔ its level box is marked reached ("conquistado"). */
+const nivel1 = (page: Page) => page.getByTestId("level-box-1");
 
 /** One escoteiro's pending-queue card, scoped by name (never global). */
 const queueCard = (page: Page, name: string) =>
@@ -148,17 +154,23 @@ test("younger especialidade item approval levels Felipe up to Nível 1", async (
 
     // ── Assert: Felipe's especialidade is now Nível 1 with 4/8 aprovados ──────
     let card = await openFelipeCard(felipePage);
-    await expect(card).toContainText("Nível 1", { timeout: 15_000 });
-    await expect(card).toContainText("4/8 itens aprovados");
+    await expect(nivel1(felipePage)).toHaveAttribute("data-reached", "true", {
+      timeout: 15_000,
+    });
+    await expect(card).toContainText("4 de 8 itens");
 
     // ── Step 2: self-cleaning demo — mark one more item, then Marina rejects ──
-    // Mark the first still-unstarted item (enabled + unchecked) → pending.
-    const unstarted = card
-      .locator('button[role="checkbox"][data-state="unchecked"]:not([disabled])')
+    // Mark the first still-unstarted item (enabled + open) → pending.
+    const unstarted = felipePage
+      .locator(
+        '[data-testid^="ficha-item-"][data-state="open"] button[role="checkbox"]:not([disabled])',
+      )
       .first();
     if (await unstarted.count()) {
       await unstarted.click();
-      await expect(card).toContainText("1 pendente", { timeout: 15_000 });
+      await expect(card).toContainText("1 aguardando aprovação", {
+        timeout: 15_000,
+      });
     }
 
     // Marina finds the freshly pending item and REJECTS it (deletes the row).
@@ -179,9 +191,11 @@ test("younger especialidade item approval levels Felipe up to Nível 1", async (
 
     // ── Assert: back to the clean 4/8 Nível 1 state, no pending item ──────────
     card = await openFelipeCard(felipePage);
-    await expect(card).toContainText("Nível 1", { timeout: 15_000 });
-    await expect(card).toContainText("4/8 itens aprovados");
-    await expect(card).not.toContainText("pendente");
+    await expect(nivel1(felipePage)).toHaveAttribute("data-reached", "true", {
+      timeout: 15_000,
+    });
+    await expect(card).toContainText("4 de 8 itens");
+    await expect(card).toContainText("nada aguardando");
   } finally {
     await felipeCtx.close();
     await marinaCtx.close();

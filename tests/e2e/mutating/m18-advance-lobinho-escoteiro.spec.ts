@@ -115,11 +115,11 @@ test("M18 admin advances Helena lobinho→escoteiro: fresh progression, younger 
     await setScoutRamo(admin, HELENA.name, "Escoteiro");
 
     // ── Rule 1: dashboard starts FRESH on the escoteiro ramo ──────────────────
-    await gotoReady(helena, "/", helena.getByText("Etapa Atual"), HELENA.email);
+    await gotoReady(helena, "/", helena.getByText("Etapa atual"), HELENA.email);
     await expect(
       helena.getByRole("heading", { name: "Pista", exact: true }),
     ).toBeVisible();
-    await expect(helena.getByText("0/18 blocos", { exact: true })).toBeVisible();
+    await expect(helena.getByTestId("stage-meta")).toHaveText(/^0 de 18 blocos concluídos/);
     await expect(helena.getByText(LOCK_TEXT)).toBeVisible();
     // No lobinho etapa names bleed into the escoteiro dashboard.
     for (const name of LOBINHO_ETAPAS) {
@@ -130,10 +130,11 @@ test("M18 admin advances Helena lobinho→escoteiro: fresh progression, younger 
 
     // ── Rule 2: younger especialidade CARRIES (shared younger catalog) ────────
     // Brasilidades (Nível 1, 3/6) still renders at its level as an escoteiro.
-    const card = helena.getByRole("button", { name: /Brasilidades/ });
+    // (Pushed detail screen: head card `esp-detail-head` + level boxes.)
+    const card = helena.getByTestId("esp-detail-head");
     await gotoReady(helena, "/especialidades?specialty=brasilidades", card, HELENA.email);
-    await expect(card).toContainText("Nível 1");
-    await expect(card).toContainText("3/6 itens aprovados");
+    await expect(helena.getByTestId("level-box-1")).toHaveAttribute("data-reached", "true");
+    await expect(card).toContainText("3 de 6 itens");
 
     // ── Rule 3: visibility flips lobinho → escoteiro escotista ────────────────
     await gotoPainel(renata, RENATA.email);
@@ -150,11 +151,11 @@ test("M18 admin advances Helena lobinho→escoteiro: fresh progression, younger 
   } finally {
     // ── Self-clean: restore Helena to lobinho and verify her prior state ──────
     await setScoutRamo(admin, HELENA.name, "Lobinho");
-    await gotoReady(helena, "/", helena.getByText("Etapa Atual"), HELENA.email);
+    await gotoReady(helena, "/", helena.getByText("Etapa atual"), HELENA.email);
     await expect(
       helena.getByRole("heading", { name: "Saltador", exact: true }),
     ).toBeVisible();
-    await expect(helena.getByText("7/18 blocos", { exact: true })).toBeVisible();
+    await expect(helena.getByTestId("stage-meta")).toHaveText(/^7 de 18 blocos concluídos/);
 
     await adminCtx.close();
     await helenaCtx.close();
