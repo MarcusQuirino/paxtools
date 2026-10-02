@@ -15,7 +15,7 @@
  * PERSISTENCE without page.reload(): the test-auth refresh token is single-use
  * and rotates on every full page load, so a second full load in a run (or a
  * rerun) logs the session out. Instead we prove persistence with a client-side
- * round-trip (Plano → Tudo) that UNMOUNTS and re-mounts the dashboard, which
+ * round-trip (Plano → Progressão) that UNMOUNTS and re-mounts the dashboard, which
  * re-reads `api.progression.getMyCompletions` from the live Convex subscription
  * — i.e. committed server state, not local component state.
  *
@@ -58,7 +58,7 @@ async function expandBloco(page: Page): Promise<void> {
 async function remountHome(page: Page): Promise<void> {
   await page.getByRole("link", { name: "Plano" }).click();
   await expect(page).toHaveURL(/\/plan/, { timeout: 10_000 });
-  await page.getByRole("link", { name: "Tudo" }).click();
+  await page.getByRole("link", { name: "Progressão", exact: true }).click();
   await expect(page).not.toHaveURL(/\/plan/, { timeout: 10_000 });
   await expandBloco(page);
 }

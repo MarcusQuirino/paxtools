@@ -3,7 +3,6 @@ import { useMutation } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { AuthButton } from "@/components/auth/auth-button";
 import { useAuthGate } from "@/hooks/use-auth-gate";
 import { useProgression } from "@/hooks/use-progression";
 import { usePlan } from "@/hooks/use-plan";
@@ -11,8 +10,7 @@ import { StageBanner } from "@/components/progression/stage-banner";
 import { OverallProgress } from "@/components/progression/overall-progress";
 import { EixoSection } from "@/components/progression/eixo-section";
 import { RecognitionSection } from "@/components/progression/recognition-section";
-import { PlanNav } from "@/components/progression/plan-nav";
-import { Footer } from "@/components/footer";
+import { EscoteiroShell } from "@/components/progression/escoteiro-shell";
 import { notifyLevelUps } from "@/lib/level-up-toast";
 import type { Eixo } from "@/data/types";
 
@@ -50,17 +48,9 @@ function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
-        <header className="flex items-center justify-between">
-          <h1 className="text-lg font-black uppercase text-foreground">Paxtools</h1>
-          <AuthButton />
-        </header>
-        <PlanNav />
-        <Dashboard />
-        <Footer />
-      </div>
-    </div>
+    <EscoteiroShell title="Progressão">
+      <Dashboard />
+    </EscoteiroShell>
   );
 }
 

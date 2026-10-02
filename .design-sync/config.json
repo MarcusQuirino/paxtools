@@ -36,7 +36,7 @@
     "CustomActionInput": "src/components/progression/custom-action-input.tsx",
     "EixoSection": "src/components/progression/eixo-section.tsx",
     "OverallProgress": "src/components/progression/overall-progress.tsx",
-    "PlanNav": "src/components/progression/plan-nav.tsx",
+    "EscoteiroTabBar": "src/components/progression/escoteiro-tab-bar.tsx",
     "PlanStar": "src/components/progression/plan-star.tsx",
     "RecognitionSection": "src/components/progression/recognition-section.tsx",
     "SpecialtySection": "src/components/progression/specialty-section.tsx",

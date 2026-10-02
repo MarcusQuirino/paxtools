@@ -67,7 +67,7 @@ export function EixoSection({
   const pendingPercent = (pendingInEixo / total) * 100;
 
   return (
-    <section className="rounded-md overflow-hidden border-2 border-black bg-card shadow-[4px_4px_0px_0px_#065f46]">
+    <section className="rounded-md overflow-hidden border-2 border-black bg-card">
       <div
         className="px-4 py-3 text-white border-b-2 border-black"
         style={{ backgroundColor: eixo.color }}

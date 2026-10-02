@@ -20,7 +20,7 @@
  * NO page.reload(): the test-auth refresh token is single-use and rotates on
  * every full page load, so a second full load per run (or a rerun) logs the
  * session out. After ONE initial load the whole flow navigates client-side via
- * the PlanNav links. Persistence is proven by a client re-mount (Tudo → Plano)
+ * the bottom tab bar. Persistence is proven by a client re-mount (Progressão → Plano)
  * that re-reads `api.plan.getMyPlan` from the live Convex subscription — usePlan
  * holds no optimistic state (src/hooks/use-plan.ts), so a re-mount reflects
  * exactly the committed server order.
@@ -74,7 +74,7 @@ async function initialHome(page: Page, blocoTrigger: RegExp): Promise<void> {
 
 /** Client-side nav to the dashboard, converging on the target bloco trigger. */
 async function toHome(page: Page, blocoTrigger: RegExp): Promise<void> {
-  await page.getByRole("link", { name: "Tudo" }).click();
+  await page.getByRole("link", { name: "Progressão", exact: true }).click();
   await expect(page).not.toHaveURL(/\/plan/, { timeout: 10_000 });
   await expect(page.getByRole("button", { name: blocoTrigger }).first()).toBeVisible();
 }

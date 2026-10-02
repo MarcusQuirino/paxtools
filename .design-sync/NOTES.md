@@ -33,7 +33,7 @@ previews graded `good`. No floor cards.
   gitignored cache, so it dangles until `prepare.mjs` runs. Harmless (nothing
   imports paxtools as a package) but do not "clean it up".
 - **`cfg.provider` = `DesignPreviewProvider`** (`.design-sync/ds-provider.tsx`,
-  exported from the barrel). `PlanNav` uses `useLocation`; `SpecialtySection`
+  exported from the barrel). `EscoteiroTabBar` uses `Link` active state; `SpecialtySection`
   and `BlocoCard`/`EixoSection` render `Link`. `RouterProvider` renders the
   matched route tree instead of children, so it cannot wrap a preview —
   `RouterContextProvider` over a memory-history router is the one that works.

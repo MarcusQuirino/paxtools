@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -6,7 +6,7 @@ import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { useAuthGate } from "@/hooks/use-auth-gate";
 import { AuthButton } from "@/components/auth/auth-button";
-import { PlanNav } from "@/components/progression/plan-nav";
+import { EscoteiroShell } from "@/components/progression/escoteiro-shell";
 import { Footer } from "@/components/footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -105,6 +105,41 @@ export const Route = createFileRoute("/especialidades")({
   },
   component: EspecialidadesPage,
 });
+
+// ---------------------------------------------------------------------------
+// Page frame
+// ---------------------------------------------------------------------------
+
+/**
+ * The escoteiro's own page sits in the tabbed escoteiro shell. The escotista's
+ * read-only view of a scout (#53) must not show the escoteiro tab bar, so it
+ * keeps a plain header with the account menu.
+ */
+function EspecialidadesFrame({
+  readOnly,
+  children,
+}: {
+  readOnly?: boolean;
+  children: ReactNode;
+}) {
+  if (!readOnly) {
+    return <EscoteiroShell title="Especialidades">{children}</EscoteiroShell>;
+  }
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
+        <header className="flex items-center justify-between">
+          <h1 className="text-lg font-black uppercase text-foreground">
+            Especialidades
+          </h1>
+          <AuthButton />
+        </header>
+        {children}
+        <Footer />
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Level badge
@@ -219,7 +254,7 @@ function SpecialtyCard({
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <div className="mt-1 border-2 border-black rounded-md bg-card shadow-[2px_2px_0px_0px_#000] divide-y-2 divide-black/10">
+          <div className="mt-1 border-2 border-black rounded-md bg-card divide-y-2 divide-black/10">
             {/* Description */}
             <p className="px-4 py-3 text-xs text-muted-foreground leading-relaxed">
               {specialty.description}
@@ -551,38 +586,25 @@ function YoungerEspecialidadesView({
   const eixoIds = Object.keys(YOUNGER_SPECIALTIES_BY_EIXO);
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
-        <header className="flex items-center justify-between">
-          <h1 className="text-lg font-black uppercase text-foreground">
-            Especialidades
-          </h1>
-          <AuthButton />
-        </header>
-
-        <PlanNav />
-
-        <div className="space-y-2">
-          {eixoIds.map((eixoId) => {
-            const specialties = YOUNGER_SPECIALTIES_BY_EIXO[eixoId] ?? [];
-            return (
-              <EixoSection
-                key={eixoId}
-                eixoId={eixoId}
-                specialties={specialties}
-                itemsBySpecialty={itemsBySpecialty}
-                onToggle={handleToggle}
-                isToggling={isToggling}
-                highlightId={highlightId}
-                readOnly={readOnly}
-              />
-            );
-          })}
-        </div>
-
-        <Footer />
+    <EspecialidadesFrame readOnly={readOnly}>
+      <div className="space-y-2">
+        {eixoIds.map((eixoId) => {
+          const specialties = YOUNGER_SPECIALTIES_BY_EIXO[eixoId] ?? [];
+          return (
+            <EixoSection
+              key={eixoId}
+              eixoId={eixoId}
+              specialties={specialties}
+              itemsBySpecialty={itemsBySpecialty}
+              onToggle={handleToggle}
+              isToggling={isToggling}
+              highlightId={highlightId}
+              readOnly={readOnly}
+            />
+          );
+        })}
       </div>
-    </div>
+    </EspecialidadesFrame>
   );
 }
 
@@ -634,7 +656,7 @@ function StepCard({
 
   return (
     <div
-      className={`rounded-md border-2 border-black p-3 shadow-[2px_2px_0px_0px_#000] ${
+      className={`rounded-md border-2 border-black p-3 ${
         isApproved ? "bg-green-50/60" : isPending ? "bg-amber-50/60" : "bg-card"
       }`}
     >
@@ -939,40 +961,27 @@ function OlderEspecialidadesView({
   const eixoIds = Object.keys(OLDER_SPECIALTIES_BY_EIXO);
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
-        <header className="flex items-center justify-between">
-          <h1 className="text-lg font-black uppercase text-foreground">
-            Especialidades
-          </h1>
-          <AuthButton />
-        </header>
+    <EspecialidadesFrame readOnly={readOnly}>
+      <p className="text-xs text-muted-foreground px-1">
+        Cada especialidade é um projeto em três etapas: Conhecer, Fazer e
+        Compartilhar. Você pode escrever os relatos em qualquer ordem; a
+        especialidade é conquistada quando as três etapas forem aprovadas.
+      </p>
 
-        <PlanNav />
-
-        <p className="text-xs text-muted-foreground px-1">
-          Cada especialidade é um projeto em três etapas: Conhecer, Fazer e
-          Compartilhar. Você pode escrever os relatos em qualquer ordem; a
-          especialidade é conquistada quando as três etapas forem aprovadas.
-        </p>
-
-        <div className="space-y-2">
-          {eixoIds.map((eixoId) => (
-            <OlderEixoSection
-              key={eixoId}
-              eixoId={eixoId}
-              specialties={OLDER_SPECIALTIES_BY_EIXO[eixoId] ?? []}
-              reportsBySpecialty={reportsBySpecialty}
-              onSubmit={handleSubmit}
-              isSubmitting={isSubmitting}
-              highlightId={highlightId}
-              readOnly={readOnly}
-            />
-          ))}
-        </div>
-
-        <Footer />
+      <div className="space-y-2">
+        {eixoIds.map((eixoId) => (
+          <OlderEixoSection
+            key={eixoId}
+            eixoId={eixoId}
+            specialties={OLDER_SPECIALTIES_BY_EIXO[eixoId] ?? []}
+            reportsBySpecialty={reportsBySpecialty}
+            onSubmit={handleSubmit}
+            isSubmitting={isSubmitting}
+            highlightId={highlightId}
+            readOnly={readOnly}
+          />
+        ))}
       </div>
-    </div>
+    </EspecialidadesFrame>
   );
 }

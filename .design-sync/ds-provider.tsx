@@ -1,7 +1,7 @@
 /**
  * Preview-only provider for design-sync.
  *
- * Two synced components read TanStack Router context — PlanNav (`useLocation`)
+ * Two synced components read TanStack Router context — EscoteiroTabBar (`Link` active state)
  * and SpecialtySection (`Link`). `RouterProvider` renders the matched route
  * tree instead of its children, so it can't wrap a preview; `RouterContextProvider`
  * is the low-level variant that puts a router in context and renders `children`

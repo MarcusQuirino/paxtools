@@ -5,7 +5,9 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { AuthButton } from "@/components/auth/auth-button";
+import { EscoteiroShell } from "@/components/progression/escoteiro-shell";
 import { RamoNamesInputs } from "@/components/onboarding/ramo-names-inputs";
 import { RegiaoInput } from "@/components/onboarding/regiao-input";
 import { SectionsManager } from "@/components/settings/sections-manager";
@@ -111,31 +113,12 @@ function SettingsPage() {
 
   if (!user) return null;
 
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-lg px-4 py-4 space-y-6 pb-20">
-        <header className="flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() =>
-              void navigate({
-                to: user.role === "escotista" ? "/escotista" : "/",
-              })
-            }
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="size-4" />
-            Voltar
-          </button>
-          <AuthButton />
-        </header>
-
-        <h1 className="text-xl font-black uppercase">Configurações</h1>
-
+  const sections = (
+    <>
         <UserNameSection currentName={user.name ?? ""} />
 
         {/* Role section */}
-        <section className="rounded-md border-2 border-black bg-card p-4 space-y-3 shadow-[3px_3px_0px_0px_#065f46]">
+        <section className="rounded-md border-2 border-black bg-card p-4 space-y-3">
           <h2 className="text-sm font-black uppercase flex items-center gap-2">
             {user.role === "escotista" ? (
               <Shield className="size-4 text-teal-600" />
@@ -161,7 +144,7 @@ function SettingsPage() {
         </section>
 
         {/* Group section */}
-        <section className="rounded-md border-2 border-black bg-card p-4 space-y-4 shadow-[3px_3px_0px_0px_#065f46]">
+        <section className="rounded-md border-2 border-black bg-card p-4 space-y-4">
           <h2 className="text-sm font-black uppercase flex items-center gap-2">
             <Users className="size-4" />
             Grupo
@@ -366,8 +349,62 @@ function SettingsPage() {
             <SectionsManager />
           </>
         )}
+
+        <AccountSection />
+    </>
+  );
+
+  // The escoteiro reaches this page as the Perfil tab: tabbed shell, no
+  // back button (the tab bar is the way out) and no avatar menu (sign-out
+  // lives in AccountSection).
+  if (user.role === "escoteiro") {
+    return (
+      <EscoteiroShell title="Perfil" onProfile>
+        <div className="space-y-6">{sections}</div>
+      </EscoteiroShell>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-lg px-4 py-4 space-y-6 pb-20">
+        <header className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() =>
+              void navigate({
+                to: user.role === "escotista" ? "/escotista" : "/",
+              })
+            }
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="size-4" />
+            Voltar
+          </button>
+          <AuthButton />
+        </header>
+
+        <h1 className="text-xl font-black uppercase">Configurações</h1>
+
+        {sections}
       </div>
     </div>
+  );
+}
+
+function AccountSection() {
+  const { signOut } = useAuthActions();
+  return (
+    <section className="rounded-md border-2 border-black bg-card p-4 space-y-3">
+      <h2 className="text-sm font-black uppercase flex items-center gap-2">
+        <LogOut className="size-4" />
+        Conta
+      </h2>
+      <Button variant="outline" onClick={() => void signOut()}>
+        <LogOut className="size-4 mr-1" />
+        Sair da conta
+      </Button>
+    </section>
   );
 }
 
@@ -400,7 +437,7 @@ function UserNameSection({ currentName }: { currentName: string }) {
   };
 
   return (
-    <section className="rounded-md border-2 border-black bg-card p-4 space-y-3 shadow-[3px_3px_0px_0px_#065f46]">
+    <section className="rounded-md border-2 border-black bg-card p-4 space-y-3">
       <h2 className="text-sm font-black uppercase flex items-center gap-2">
         <User className="size-4" />
         Seu nome
@@ -490,7 +527,7 @@ function GroupAdminSection({
   };
 
   return (
-    <section className="rounded-md border-2 border-black bg-card p-4 space-y-4 shadow-[3px_3px_0px_0px_#065f46]">
+    <section className="rounded-md border-2 border-black bg-card p-4 space-y-4">
       <h2 className="text-sm font-black uppercase flex items-center gap-2">
         <SettingsIcon className="size-4" />
         Gerenciar grupo
