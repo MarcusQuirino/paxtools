@@ -1,6 +1,6 @@
 import { createRouter } from "@tanstack/react-router";
 import { QueryClient } from "@tanstack/react-query";
-import { routerWithQueryClient } from "@tanstack/react-router-with-query";
+import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { ConvexQueryClient } from "@convex-dev/react-query";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { routeTree } from "./routeTree.gen";
@@ -19,20 +19,26 @@ export function getRouter() {
   });
   convexQueryClient.connect(queryClient);
 
-  const router = routerWithQueryClient(
-    createRouter({
-      routeTree,
-      defaultPreload: "intent",
-      context: { queryClient },
-      scrollRestoration: true,
-      Wrap: ({ children }) => (
-        <ConvexAuthProvider client={convexQueryClient.convexClient}>
-          {children}
-        </ConvexAuthProvider>
-      ),
-    }),
+  const router = createRouter({
+    routeTree,
+    defaultPreload: "intent",
+    context: { queryClient },
+    scrollRestoration: true,
+    Wrap: ({ children }) => (
+      <ConvexAuthProvider client={convexQueryClient.convexClient}>
+        {children}
+      </ConvexAuthProvider>
+    ),
+  });
+  // Convex Auth tokens live client-side only, so every query the server runs
+  // sees the signed-out view (e.g. viewer === null). Hydrating those results
+  // makes auth guards redirect before the client authenticates — keep them
+  // server-side and let the client fetch its own.
+  setupRouterSsrQueryIntegration({
+    router,
     queryClient,
-  );
+    dehydrateOptions: { shouldDehydrateQuery: () => false },
+  });
 
   return router;
 }
