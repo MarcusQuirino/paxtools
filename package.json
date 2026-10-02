@@ -32,8 +32,8 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.125",
-    "@auth/core": "0.37.0",
-    "@convex-dev/auth": "^0.0.91",
+    "@auth/core": "0.41.3",
+    "@convex-dev/auth": "^0.0.95",
     "@convex-dev/migrations": "^0.3.6",
     "@convex-dev/react-query": "^0.1.0",
     "@dnd-kit/core": "^6.3.1",
