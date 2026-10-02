@@ -24,6 +24,7 @@ import type * as lib_legacySpecialty from "../lib/legacySpecialty.js";
 import type * as lib_progression from "../lib/progression.js";
 import type * as lib_ramoVisibility from "../lib/ramoVisibility.js";
 import type * as lib_sections from "../lib/sections.js";
+import type * as lib_specialtyProgress from "../lib/specialtyProgress.js";
 import type * as migrations from "../migrations.js";
 import type * as onboarding from "../onboarding.js";
 import type * as plan from "../plan.js";
@@ -56,6 +57,7 @@ declare const fullApi: ApiFromModules<{
   "lib/progression": typeof lib_progression;
   "lib/ramoVisibility": typeof lib_ramoVisibility;
   "lib/sections": typeof lib_sections;
+  "lib/specialtyProgress": typeof lib_specialtyProgress;
   migrations: typeof migrations;
   onboarding: typeof onboarding;
   plan: typeof plan;

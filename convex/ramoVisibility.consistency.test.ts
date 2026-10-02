@@ -6,8 +6,9 @@ import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
 // The cross-surface consistency suite (#31): one grupo fixture set is run
-// through all six visibilidade-de-ramo surfaces — pending approvals, group
-// members, write/read assert, timeline, stats scoping, AI scoping — and the
+// through all seven visibilidade-de-ramo surfaces — pending approvals, group
+// members, write/read assert, timeline, stats scoping, AI scoping, the
+// escotista especialidades tab — and the
 // visible/actionable escoteiro sets must agree surface-to-surface for every
 // viewer archetype. A future inline re-statement of the predicate on any one
 // surface breaks the agreement and fails here.
@@ -29,6 +30,7 @@ const modules = {
   "./onboarding.ts": () => import("./onboarding"),
   "./plan.ts": () => import("./plan"),
   "./progression.ts": () => import("./progression"),
+  "./specialties.ts": () => import("./specialties"),
   "./stats.ts": () => import("./stats"),
   "./testing.ts": () => import("./testing"),
   "./users.ts": () => import("./users"),
@@ -198,6 +200,33 @@ async function buildGrupo(t: ReturnType<typeof convexTest>) {
       summary: "entrou no grupo",
     });
     await ctx.db.insert("featureFlags", { key: "ai_suggestions", enabled: true });
+
+    // One approved especialidade row each (item for the younger ramoGroup,
+    // etapa for the older), so the escotista Especialidades surfaces would
+    // list every escoteiro they can see — and must not list the rest.
+    const older = new Set([escSenior, escPioneiro, escUnstamped]);
+    for (const userId of escoteiros) {
+      if (older.has(userId)) {
+        await ctx.db.insert("specialtyProjectReports", {
+          userId,
+          ramoGroup: "older",
+          specialtyId: "comunicacoes",
+          step: "conhecer",
+          text: "relato",
+          completedAt: 1,
+          status: "approved",
+        });
+      } else {
+        await ctx.db.insert("specialtyItemCompletions", {
+          userId,
+          ramoGroup: "younger",
+          specialtyId: "administracao",
+          itemIndex: 0,
+          completedAt: 1,
+          status: "approved",
+        });
+      }
+    }
   });
 
   return {
@@ -296,6 +325,34 @@ async function statsScope(
   return { allowed, scoutsByRamo };
 }
 
+/**
+ * The escotista Especialidades tab: who the per-specialty roster lists and how
+ * many escoteiros the catalog summary counts, across both ramoGroups.
+ */
+async function especialidadesView(
+  t: ReturnType<typeof convexTest>,
+  viewer: Id<"users">,
+) {
+  const ids = new Set<string>();
+  let counted = 0;
+  for (const [ramoGroup, specialtyId] of [
+    ["younger", "administracao"],
+    ["older", "comunicacoes"],
+  ] as const) {
+    const roster = await as(t, viewer).query(api.specialties.getSpecialtyRoster, {
+      specialtyId,
+      ramoGroup,
+    });
+    for (const p of roster?.people ?? []) ids.add(p._id as string);
+    const summary = await as(t, viewer).query(
+      api.specialties.getGroupSpecialtySummary,
+      { ramoGroup },
+    );
+    counted += summary?.escoteiroCount ?? 0;
+  }
+  return { ids, counted };
+}
+
 /** Which ramos may the viewer request on the AI surface? (flag is on) */
 async function aiScope(t: ReturnType<typeof convexTest>, viewer: Id<"users">) {
   const allowed = new Set<string>();
@@ -377,7 +434,7 @@ const ARCHETYPES: Archetype[] = [
   },
 ];
 
-describe("visibilidade de ramo: all six surfaces agree", () => {
+describe("visibilidade de ramo: all seven surfaces agree", () => {
   for (const arch of ARCHETYPES) {
     test(arch.name, async () => {
       const t = convexTest(schema, modules);
@@ -390,6 +447,9 @@ describe("visibilidade de ramo: all six surfaces agree", () => {
       expect(await pendingListIds(t, viewer)).toEqual(expectedIds);
       expect(await memberListEscoteiroIds(t, viewer)).toEqual(expectedIds);
       expect(await actionableIds(t, viewer, f.allEscoteiros)).toEqual(expectedIds);
+      const esp = await especialidadesView(t, viewer);
+      expect(esp.ids).toEqual(expectedIds);
+      expect(esp.counted).toBe(expectedIds.size);
 
       // Ramo-scoped surfaces agree on which ramos are in scope.
       const stats = await statsScope(t, viewer);
@@ -480,6 +540,10 @@ describe("visibilidade de ramo: unauthorized callers", () => {
 
       expect(await pendingListIds(t, caller)).toEqual(new Set());
       expect(await memberListEscoteiroIds(t, caller)).toEqual(new Set());
+      expect(await especialidadesView(t, caller)).toEqual({
+        ids: new Set(),
+        counted: 0,
+      });
       const timeline = await timelineView(t, caller);
       expect(timeline.ramos).toEqual(new Set());
       expect(timeline.seesGroupEvents).toBe(false);

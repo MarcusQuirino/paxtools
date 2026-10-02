@@ -22,6 +22,8 @@ import { Route as EscotistaPendingRouteImport } from './routes/escotista/pending
 import { Route as EscotistaStatsRouteImport } from './routes/escotista/stats'
 import { Route as EscotistaTimelineRouteImport } from './routes/escotista/timeline'
 import { Route as EscotistaEscoteiroEscoteiroIdRouteImport } from './routes/escotista/escoteiro.$escoteiroId'
+import { Route as EscotistaEspecialidadesIndexRouteImport } from './routes/escotista/especialidades.index'
+import { Route as EscotistaEspecialidadesSpecialtyIdRouteImport } from './routes/escotista/especialidades.$specialtyId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -89,6 +91,18 @@ const EscotistaEscoteiroEscoteiroIdRoute =
     path: '/escoteiro/$escoteiroId',
     getParentRoute: () => EscotistaRouteRoute,
   } as any)
+const EscotistaEspecialidadesIndexRoute =
+  EscotistaEspecialidadesIndexRouteImport.update({
+    id: '/especialidades/',
+    path: '/especialidades/',
+    getParentRoute: () => EscotistaRouteRoute,
+  } as any)
+const EscotistaEspecialidadesSpecialtyIdRoute =
+  EscotistaEspecialidadesSpecialtyIdRouteImport.update({
+    id: '/especialidades/$specialtyId',
+    path: '/especialidades/$specialtyId',
+    getParentRoute: () => EscotistaRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -104,6 +118,8 @@ export interface FileRoutesByFullPath {
   '/escotista/timeline': typeof EscotistaTimelineRoute
   '/escotista/': typeof EscotistaIndexRoute
   '/escotista/escoteiro/$escoteiroId': typeof EscotistaEscoteiroEscoteiroIdRoute
+  '/escotista/especialidades/$specialtyId': typeof EscotistaEspecialidadesSpecialtyIdRoute
+  '/escotista/especialidades/': typeof EscotistaEspecialidadesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -118,6 +134,8 @@ export interface FileRoutesByTo {
   '/escotista/timeline': typeof EscotistaTimelineRoute
   '/escotista': typeof EscotistaIndexRoute
   '/escotista/escoteiro/$escoteiroId': typeof EscotistaEscoteiroEscoteiroIdRoute
+  '/escotista/especialidades/$specialtyId': typeof EscotistaEspecialidadesSpecialtyIdRoute
+  '/escotista/especialidades': typeof EscotistaEspecialidadesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -134,6 +152,8 @@ export interface FileRoutesById {
   '/escotista/timeline': typeof EscotistaTimelineRoute
   '/escotista/': typeof EscotistaIndexRoute
   '/escotista/escoteiro/$escoteiroId': typeof EscotistaEscoteiroEscoteiroIdRoute
+  '/escotista/especialidades/$specialtyId': typeof EscotistaEspecialidadesSpecialtyIdRoute
+  '/escotista/especialidades/': typeof EscotistaEspecialidadesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -151,6 +171,8 @@ export interface FileRouteTypes {
     | '/escotista/timeline'
     | '/escotista/'
     | '/escotista/escoteiro/$escoteiroId'
+    | '/escotista/especialidades/$specialtyId'
+    | '/escotista/especialidades/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -165,6 +187,8 @@ export interface FileRouteTypes {
     | '/escotista/timeline'
     | '/escotista'
     | '/escotista/escoteiro/$escoteiroId'
+    | '/escotista/especialidades/$specialtyId'
+    | '/escotista/especialidades'
   id:
     | '__root__'
     | '/'
@@ -180,6 +204,8 @@ export interface FileRouteTypes {
     | '/escotista/timeline'
     | '/escotista/'
     | '/escotista/escoteiro/$escoteiroId'
+    | '/escotista/especialidades/$specialtyId'
+    | '/escotista/especialidades/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -285,6 +311,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EscotistaEscoteiroEscoteiroIdRouteImport
       parentRoute: typeof EscotistaRouteRoute
     }
+    '/escotista/especialidades/': {
+      id: '/escotista/especialidades/'
+      path: '/especialidades'
+      fullPath: '/escotista/especialidades/'
+      preLoaderRoute: typeof EscotistaEspecialidadesIndexRouteImport
+      parentRoute: typeof EscotistaRouteRoute
+    }
+    '/escotista/especialidades/$specialtyId': {
+      id: '/escotista/especialidades/$specialtyId'
+      path: '/especialidades/$specialtyId'
+      fullPath: '/escotista/especialidades/$specialtyId'
+      preLoaderRoute: typeof EscotistaEspecialidadesSpecialtyIdRouteImport
+      parentRoute: typeof EscotistaRouteRoute
+    }
   }
 }
 
@@ -295,6 +335,8 @@ interface EscotistaRouteRouteChildren {
   EscotistaTimelineRoute: typeof EscotistaTimelineRoute
   EscotistaIndexRoute: typeof EscotistaIndexRoute
   EscotistaEscoteiroEscoteiroIdRoute: typeof EscotistaEscoteiroEscoteiroIdRoute
+  EscotistaEspecialidadesSpecialtyIdRoute: typeof EscotistaEspecialidadesSpecialtyIdRoute
+  EscotistaEspecialidadesIndexRoute: typeof EscotistaEspecialidadesIndexRoute
 }
 
 const EscotistaRouteRouteChildren: EscotistaRouteRouteChildren = {
@@ -304,6 +346,9 @@ const EscotistaRouteRouteChildren: EscotistaRouteRouteChildren = {
   EscotistaTimelineRoute: EscotistaTimelineRoute,
   EscotistaIndexRoute: EscotistaIndexRoute,
   EscotistaEscoteiroEscoteiroIdRoute: EscotistaEscoteiroEscoteiroIdRoute,
+  EscotistaEspecialidadesSpecialtyIdRoute:
+    EscotistaEspecialidadesSpecialtyIdRoute,
+  EscotistaEspecialidadesIndexRoute: EscotistaEspecialidadesIndexRoute,
 }
 
 const EscotistaRouteRouteWithChildren = EscotistaRouteRoute._addFileChildren(
