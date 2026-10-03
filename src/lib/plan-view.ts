@@ -27,6 +27,18 @@ export type PlanItemResolved =
       status?: "pending" | "approved";
     }
   | {
+      // Catalog especialidade starred on /especialidades — no bloco.
+      itemKey: string;
+      position: number;
+      kind: "especialidade";
+      eixo: Eixo;
+      specialtyId: string;
+      name: string;
+      progress: SpecialtyProgress;
+      checked: boolean;
+      status?: "pending" | "approved";
+    }
+  | {
       itemKey: string;
       position: number;
       kind: "custom";
@@ -34,6 +46,21 @@ export type PlanItemResolved =
       bloco: Bloco;
       customAction: CustomAction;
     };
+
+/** Younger: approved/total items. Older: approved/3 etapas. */
+export type SpecialtyProgress = {
+  approved: number;
+  total: number;
+  unit: "itens" | "etapas";
+};
+
+/** Younger entries carry their item count; older ones `null` (3 etapas). */
+export type SpecialtyCatalogEntry = {
+  id: string;
+  name: string;
+  eixoId: string;
+  itemCount: number | null;
+};
 
 type CatalogIndex = {
   blocosById: Map<string, { eixo: Eixo; bloco: Bloco }>;
@@ -91,6 +118,10 @@ export type ResolverInput = {
   /** Canonical ids of specialties earned via items (#44) — always approved. */
   earnedSpecialtyIds?: Set<string>;
   customActions: CustomAction[];
+  /** Current ramoGroup's especialidade catalog, for `especialidade:` keys. */
+  specialtyCatalog?: SpecialtyCatalogEntry[];
+  /** specialtyId → progress; missing = not started. */
+  specialtyProgress?: Map<string, SpecialtyProgress>;
 };
 
 export function resolvePlanItems(
@@ -98,6 +129,13 @@ export function resolvePlanItems(
   input: ResolverInput,
 ): PlanItemResolved[] {
   const customById = new Map(input.customActions.map((c) => [c._id, c]));
+  const specialtyById = new Map(
+    (input.specialtyCatalog ?? []).map((s) => [s.id, s]),
+  );
+  const eixosById = new Map<string, Eixo>();
+  for (const { eixo } of input.catalog.blocosById.values()) {
+    eixosById.set(eixo.id, eixo);
+  }
 
   const sorted = [...planned].sort((a, b) => a.position - b.position);
   const resolved: PlanItemResolved[] = [];
@@ -141,6 +179,26 @@ export function resolvePlanItems(
         checked: earned,
         status: earned ? "approved" : undefined,
       });
+    } else if (decoded.kind === "especialidade") {
+      const spec = specialtyById.get(decoded.specialtyId);
+      const eixo = spec && eixosById.get(spec.eixoId);
+      if (!spec || !eixo) continue;
+      const earned = (input.earnedSpecialtyIds ?? new Set()).has(spec.id);
+      resolved.push({
+        itemKey: p.itemKey,
+        position: p.position,
+        kind: "especialidade",
+        eixo,
+        specialtyId: spec.id,
+        name: spec.name,
+        progress: input.specialtyProgress?.get(spec.id) ?? {
+          approved: 0,
+          total: spec.itemCount ?? 3,
+          unit: spec.itemCount === null ? "etapas" : "itens",
+        },
+        checked: earned,
+        status: earned ? "approved" : undefined,
+      });
     } else if (decoded.kind === "custom") {
       const custom = customById.get(decoded.customActionId);
       if (!custom) continue;
@@ -181,4 +239,39 @@ export function sortForLinearView(
     (isResolvedChecked(item) ? done : open).push(item);
   }
   return [...open, ...done];
+}
+
+type SpecialtyRow = {
+  specialtyId: string;
+  ramoGroup: string;
+  status?: string;
+};
+
+/**
+ * Per-specialty progress for the plano's `especialidade:` rows. Younger counts
+ * approved items (a missing status counts as approved, like /especialidades);
+ * older counts approved etapas out of 3. Only started specialties get an entry.
+ */
+export function buildSpecialtyProgress(
+  group: "younger" | "older",
+  catalog: { id: string; itemCount: number | null }[],
+  items: SpecialtyRow[],
+  reports: SpecialtyRow[],
+): Map<string, SpecialtyProgress> {
+  const totals = new Map(catalog.map((e) => [e.id, e.itemCount]));
+  const progress = new Map<string, SpecialtyProgress>();
+  const rows = group === "younger" ? items : reports;
+  for (const row of rows) {
+    if (row.ramoGroup !== group || !totals.has(row.specialtyId)) continue;
+    const entry = progress.get(row.specialtyId) ?? {
+      approved: 0,
+      total: group === "younger" ? (totals.get(row.specialtyId) ?? 0) : 3,
+      unit: group === "younger" ? "itens" : "etapas",
+    };
+    const approved =
+      group === "younger" ? row.status !== "pending" : row.status === "approved";
+    if (approved) entry.approved += 1;
+    progress.set(row.specialtyId, entry);
+  }
+  return progress;
 }

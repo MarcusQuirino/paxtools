@@ -123,6 +123,13 @@ describe("togglePlanned: key validation", () => {
       as(t, userId).mutation(api.plan.togglePlanned, { itemKey: "garbage" }),
     ).rejects.toThrow("Chave de item inválida");
 
+    // `especialidade:` takes a bare slug — no spaces/uppercase/extra segments.
+    await expect(
+      as(t, userId).mutation(api.plan.togglePlanned, {
+        itemKey: "especialidade:Não Slug",
+      }),
+    ).rejects.toThrow("Chave de item inválida");
+
     // `action:` needs at least blocoId + type:index after the prefix.
     await expect(
       as(t, userId).mutation(api.plan.togglePlanned, { itemKey: "action:onlytwo" }),
@@ -136,7 +143,7 @@ describe("togglePlanned: key validation", () => {
     ).rejects.toThrow("Chave de item inválida");
   });
 
-  test("accepts valid keys (new 4-part action, legacy 3-part action, specialty, custom)", async () => {
+  test("accepts valid keys (new 4-part action, legacy 3-part action, specialty, especialidade, custom)", async () => {
     const t = convexTest(schema, modules);
     const userId = await insertUser(t);
 
@@ -144,6 +151,7 @@ describe("togglePlanned: key validation", () => {
       "action:escoteiro:aprendizagem-continua:fixed:0",
       "action:aprendizagem-continua:fixed:0",
       "specialty:aprendizagem-continua:Leitura",
+      "especialidade:administracao",
       "custom:abc123",
     ];
 

@@ -7,6 +7,7 @@ import {
   isResolvedComplete,
   buildCatalogIndex,
   resolvePlanItems,
+  buildSpecialtyProgress,
   type PlanItemResolved,
 } from "@/lib/plan-view";
 import { encodePlanKey, decodePlanKey } from "@/lib/plan-keys";
@@ -200,6 +201,109 @@ describe("resolvePlanItems: especialidades (#47)", () => {
   });
 });
 
+describe("resolvePlanItems: catalog especialidades", () => {
+  const catalog = buildCatalogIndex([fakeEixo]);
+  const planned = (specialtyId: string) => [
+    {
+      _id: "p1" as Id<"plannedItems">,
+      _creationTime: 0,
+      userId: "u1" as Id<"users">,
+      itemKey: encodePlanKey({ kind: "especialidade", specialtyId }),
+      position: 0,
+    },
+  ];
+  const specialtyCatalog = [
+    { id: "adm", name: "Administração", eixoId: "e1", itemCount: 6 },
+    { id: "proj", name: "Projeto", eixoId: "e1", itemCount: null },
+    { id: "orphan", name: "Órfã", eixoId: "nope", itemCount: 4 },
+  ];
+  const input = (
+    earnedSpecialtyIds = new Set<string>(),
+    specialtyProgress = new Map(),
+  ) => ({
+    catalog,
+    approvedActionIds: new Set<string>(),
+    pendingActionIds: new Set<string>(),
+    actionStatusMap: new Map<string, "pending" | "approved">(),
+    earnedSpecialtyIds,
+    customActions: [],
+    specialtyCatalog,
+    specialtyProgress,
+  });
+
+  function resolveOne(id: string, ...rest: Parameters<typeof input>) {
+    const [item] = resolvePlanItems(planned(id), input(...rest));
+    if (item?.kind !== "especialidade") throw new Error("expected especialidade");
+    return item;
+  }
+
+  it("resolves eixo + name and defaults progress from the catalog when unstarted", () => {
+    const item = resolveOne("adm");
+    expect(item.eixo).toBe(fakeEixo);
+    expect(item.name).toBe("Administração");
+    expect(item.progress).toEqual({ approved: 0, total: 6, unit: "itens" });
+    expect(item.checked).toBe(false);
+    expect(resolveOne("proj").progress).toEqual({
+      approved: 0,
+      total: 3,
+      unit: "etapas",
+    });
+  });
+
+  it("uses supplied progress and marks earned as complete", () => {
+    const item = resolveOne(
+      "adm",
+      new Set(["adm"]),
+      new Map([["adm", { approved: 3, total: 6, unit: "itens" as const }]]),
+    );
+    expect(item.progress.approved).toBe(3);
+    expect(item.checked).toBe(true);
+    expect(isResolvedComplete(item)).toBe(true);
+  });
+
+  it("skips ids missing from the catalog or whose eixo isn't in this ramo", () => {
+    expect(resolvePlanItems(planned("ghost"), input())).toEqual([]);
+    expect(resolvePlanItems(planned("orphan"), input())).toEqual([]);
+  });
+});
+
+describe("buildSpecialtyProgress", () => {
+  const cat = [
+    { id: "a", itemCount: 4 },
+    { id: "b", itemCount: null },
+  ];
+
+  it("younger: counts non-pending items of the younger group only", () => {
+    const m = buildSpecialtyProgress(
+      "younger",
+      cat,
+      [
+        { specialtyId: "a", ramoGroup: "younger", status: "approved" },
+        { specialtyId: "a", ramoGroup: "younger" },
+        { specialtyId: "a", ramoGroup: "younger", status: "pending" },
+        { specialtyId: "a", ramoGroup: "older", status: "approved" },
+        { specialtyId: "zz", ramoGroup: "younger", status: "approved" },
+      ],
+      [],
+    );
+    expect(m.get("a")).toEqual({ approved: 2, total: 4, unit: "itens" });
+    expect(m.has("zz")).toBe(false);
+  });
+
+  it("older: counts approved etapas out of 3", () => {
+    const m = buildSpecialtyProgress(
+      "older",
+      cat,
+      [],
+      [
+        { specialtyId: "b", ramoGroup: "older", status: "approved" },
+        { specialtyId: "b", ramoGroup: "older", status: "pending" },
+      ],
+    );
+    expect(m.get("b")).toEqual({ approved: 1, total: 3, unit: "etapas" });
+  });
+});
+
 describe("plan key codec", () => {
   it("round-trips an action key", () => {
     const key = encodePlanKey({
@@ -222,6 +326,18 @@ describe("plan key codec", () => {
       kind: "specialty",
       blocoId: "consumo-responsavel",
       specialtyName: "Insígnia do Aprender",
+    });
+  });
+
+  it("round-trips a catalog especialidade key", () => {
+    const key = encodePlanKey({
+      kind: "especialidade",
+      specialtyId: "administracao",
+    });
+    expect(key).toBe("especialidade:administracao");
+    expect(decodePlanKey(key)).toEqual({
+      kind: "especialidade",
+      specialtyId: "administracao",
     });
   });
 

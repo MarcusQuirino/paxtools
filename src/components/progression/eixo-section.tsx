@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Eixo, CustomAction, CompletionStatus } from "@/data/types";
 import { Accordion } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
@@ -6,6 +7,8 @@ import type { Id } from "../../../convex/_generated/dataModel";
 
 type EixoSectionProps = {
   eixo: Eixo;
+  /** Extra content below the blocos (the plano's starred especialidades). */
+  footer?: ReactNode;
   approvedActionIds: Set<string>;
   pendingActionIds: Set<string>;
   actionStatusMap: Map<string, CompletionStatus>;
@@ -50,11 +53,12 @@ export function EixoSection({
   planOnly,
   lockApproved,
   escoteiroId,
+  footer,
 }: EixoSectionProps) {
   const visibleBlocos = blocoFilter
     ? eixo.blocos.filter((b) => blocoFilter(b.id))
     : eixo.blocos;
-  if (visibleBlocos.length === 0) return null;
+  if (visibleBlocos.length === 0 && !footer) return null;
   const approvedInEixo = eixo.blocos.filter((b) =>
     completedBlockIds.has(b.id),
   ).length;
@@ -111,6 +115,7 @@ export function EixoSection({
           />
         ))}
       </Accordion>
+      {footer}
     </section>
   );
 }

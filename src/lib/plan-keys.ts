@@ -3,6 +3,8 @@ import type { Id } from "../../convex/_generated/dataModel";
 export type PlanItemKey =
   | { kind: "action"; actionId: string }
   | { kind: "specialty"; blocoId: string; specialtyName: string }
+  /** Starred from the /especialidades catalog — not tied to a bloco. */
+  | { kind: "especialidade"; specialtyId: string }
   | { kind: "custom"; customActionId: Id<"customActions"> };
 
 export function encodePlanKey(item: PlanItemKey): string {
@@ -11,6 +13,8 @@ export function encodePlanKey(item: PlanItemKey): string {
       return `action:${item.actionId}`;
     case "specialty":
       return `specialty:${item.blocoId}:${item.specialtyName}`;
+    case "especialidade":
+      return `especialidade:${item.specialtyId}`;
     case "custom":
       return `custom:${item.customActionId}`;
   }
@@ -28,6 +32,12 @@ export function decodePlanKey(key: string): PlanItemKey | null {
       kind: "specialty",
       blocoId: rest.slice(0, idx),
       specialtyName: rest.slice(idx + 1),
+    };
+  }
+  if (key.startsWith("especialidade:")) {
+    return {
+      kind: "especialidade",
+      specialtyId: key.slice("especialidade:".length),
     };
   }
   if (key.startsWith("custom:")) {
