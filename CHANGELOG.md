@@ -1,5 +1,113 @@
 # paxtools
 
+## 1.5.0
+
+### Minor Changes
+
+- e9aa66a: feat(ui): escoteiro bottom tab bar + context header (redesign PR 1, "Design A — native-app brutalism")
+
+  - The top segmented Tudo / Plano / Esp. nav is replaced by a fixed bottom tab bar with four full-label tabs — Progressão, Plano, Especialidades, Perfil — icon over label, 52px targets, `aria-current` on the active tab, safe-area padding for the iOS home indicator (`viewport-fit=cover`)
+  - "Tudo" is renamed "Progressão" everywhere it named that tab (incl. the empty-plan hint)
+  - Page header drops the "PAXTOOLS" wordmark for a context eyebrow (ramo · grupo, e.g. "Ramo Escoteiro · 38/RS"), a 28px page title and an avatar that opens Perfil
+  - Perfil (/settings) is the escoteiro's fourth tab and gains a "Sair da conta" button, so sign-out stays reachable without the header avatar menu; the escotista settings page keeps its back button and menu
+  - The escotista's views of a scout (impersonation Dashboard, read-only especialidades) never show the escoteiro tab bar
+  - Calm brutalism: static containers (eixo sections, eixo summary cards, recognition, settings sections, especialidade detail panels, empty states) lose their hard shadow and keep the 2px border; interactive and hero elements keep theirs
+
+- 8d60f44: Escotista Especialidades tab. The bottom bar is now Painel · Pendentes · Especialidades · Mais (Stats moved into Mais). New catalog (`/escotista/especialidades`) with Lobinhos e Escoteiros / Sêniores e Pioneiros, search over names and item text, eixo / "Com atividade na tropa" filters, and "Na tropa" signals; new consult detail (`/escotista/especialidades/$specialtyId`) with per-item "N têm" and a "Quem tem" list linking to each escoteiro's ficha. The per-escoteiro ficha (`/especialidades?escoteiroId=…`) is now actionable: tap marks/unmarks an item, pending items get Aprovar / Rejeitar, and older-ramo etapas can be approved/rejected or registered on the scout's behalf. Backend: `getGroupSpecialtySummary`, `getSpecialtyRoster`, `setSpecialtyItemApproved` (all scoped by visibilidade de ramo; reads also by seção observada); `submitSpecialtyStep` on-behalf now logs the approval, runs the level-up cascade and refuses to overwrite a scout's pending relato.
+- cb63db9: Grupos agora têm região escoteira: o grupo é identificado como "38/RS" no painel do escotista, na tela de aprovação pendente e nas configurações, a região é pedida ao criar um grupo e pode ser editada por um administrador. Grupos sem região continuam identificados apenas pelo numeral.
+- cb63db9: feat(groups): a grupo now holds a list of seções (name + ramo) instead of one unit name per ramo (#72)
+
+  - Configurações' group management gained a "Seções" card where an admin escotista adds, renames and removes seções, choosing the ramo for each — two alcateias and no seção sênior are both expressible now
+  - Removing a seção that still has escoteiros in it is refused, in Portuguese, instead of silently unassigning them
+  - A migration converts every existing unit name into one seção of that ramo, so no grupo loses the names it had
+
+- 558b993: chore(especialidades): purge the deprecated legacy `specialtyCompletions` system (#47)
+
+  - Removed `progression.toggleSpecialty`, its reads (`getMyCompletions`/`getCompletionsForUser` no longer return `specialties`), and its approval path (`approvals.approveSpecialty`/`rejectSpecialty`, the `specialtyIds` arm of `bulkAction`, and the legacy branch of `approveAllForEscoteiro`/`getPendingForGroup`)
+  - Bloco cards no longer offer a manual especialidade checkbox: an especialidade box is checked only when it is actually earned (level ≥ 1 younger, all three project steps older) and is read-only — marking happens on `/especialidades` via the "ver" link. Insígnias are listed without a box, since nothing tracks them
+  - New migration `migrations:dropLegacySpecialtyCompletions` drains the table: rows whose name still resolves to a catalog entry are converted first (`toggleSpecialty` stayed live after the 2026-07-05 conversion run, so an especialidade marked since then would otherwise be lost), the rest — insígnias and retired especialidades — are dropped. The table definition goes in a follow-up, once the drain has run everywhere
+
+- cb63db9: feat(groups): o escotista escolhe a seção observada e a lista de jovens filtra por ela (#73)
+
+  - Em Admin, cada escoteiro pode ser colocado em uma seção do próprio ramo; seções de outro ramo são recusadas, e trocar o ramo tira o escoteiro da seção antiga
+  - No painel, um seletor escolhe a seção observada ao lado da identidade do grupo ("38/RS"); a escolha fica salva e sobrevive ao recarregar
+  - A lista de jovens (e as contagens que saem dela) mostra só a seção observada; um escoteiro ainda sem seção continua aparecendo, marcado com "sem seção", para não sumir de vista
+
+- eb3efb7: Staging seed now simulates all four ramos, not just escoteiro. `testing:seedSimulatedTroop` (now an action, split into one mutation per ramo) creates a cohort-shaped troop per ramo — lobinho 16, escoteiro 15, sênior 13, pioneiro 5 — with varied bloco/eixo coverage and rotated variable-ação choices so the stats page shows real gaps. Every feature surface gets data: especialidades (earned/in-progress/pending, younger items + older project reports), one IRR holder per ramo (+ one partial), pending conclusões, ações personalizadas, planos, synthetic events, ≥2 single-ramo escotistas per ramo, pending join requests (escoteiros + escotistas), and multi-ramo history scouts (sênior since lobinho; pioneiro with full lobinho→sênior record) to pin ramo-bleed protection. All sim personas get test auth accounts for future Playwright flows. The sim wipe now cascades through the new specialty tables and events.
+- 2dff093: Staging environment + tag-driven prod releases. Master merges now deploy to staging only (stable `paxtools-git-master-*` Vercel alias + dedicated staging Convex deployment with working Google OAuth); prod ships exclusively via the manual `deploy-prod.yml` workflow (`-f tag=vX.Y.Z`), which snapshots prod data, deploys the backend, runs pending migrations, and only then releases the frontend. Migrations move to `@convex-dev/migrations` (stateful, resumable, append-only registry; legacy one-off migrations removed). New staging data scripts: `staging:seed`, `staging:wipe-real`, `staging:reset`.
+- ad1d29e: Unified E2E Playwright suite (#58): one suite targeting local or staging via `E2E_TARGET`, always-reseeded deterministic dataset (canonical users + simulated troop on both targets), parallel read-only phase in desktop + mobile viewports followed by a mutating phase parallelized through disjoint persona ownership, full R1–R6/M1–M20 scenario map coverage, and a manually-triggered `e2e-staging.yml` GitHub Actions workflow with failure artifacts.
+
+### Patch Changes
+
+- 2121e7a: fix(deps): upgrade `@auth/core` 0.37 → 0.41.3 and `@convex-dev/auth` 0.0.91 → 0.0.95
+
+  - Fixes GHSA-7rqj-j65f-68wh (critical: email normalizer homoglyph `@` bypass), GHSA-xmf8-cvqr-rfgj (high: `getToken()` crash on malformed Bearer header) and GHSA-x445-f3h2-j279 (moderate: OAuth state/nonce/PKCE cookies not bound to provider)
+  - `@convex-dev/auth` 0.0.95 is the release that peers on `@auth/core` ^0.41; also stops failed OTP sign-ins from consuming the code
+
+- aade855: chore(deps): bump all dependencies to their latest minor/patch versions
+
+  - TanStack Router/Start 1.170/1.168, React 19.3, Convex 1.46, Vite 8.3, Tailwind 4.3, zod 4.6, radix-ui 1.6, Playwright 1.63, oxlint 1.86 (+ oxlint-tsgolint 7, which it now requires), nitro beta 260903, convex-test 0.0.60
+  - Replaced the deprecated `@tanstack/react-router-with-query` (frozen at 1.130, broke SSR on router 1.170 with `router.serverSsr.isDehydrated is not a function`) with its successor `@tanstack/react-router-ssr-query`. Server-side query results are not dehydrated: Convex Auth tokens are client-only, so the server always sees the signed-out view and hydrating it made `/settings` bounce to `/signin` on a hard load
+  - Regenerated `bun.lock` so transitive deps pick up security fixes (postcss, nanoid, picomatch, ws, browserslist, @babel/core, js-yaml…) — `bun audit` 66 → 5 findings; the rest (`@auth/core`, `xlsx`) ship in follow-up PRs
+
+- 2bbfdfb: fix(deps): move `xlsx` (dev-only) from the abandoned npm 0.18.5 to SheetJS 0.20.3 from the official CDN
+
+  - Fixes GHSA-4r6h-8v6p-xvw6 (prototype pollution) and GHSA-5pgg-2g8v-p4x9 (ReDoS); `bun audit` now reports no vulnerabilities
+  - `scripts/dump-ramo-sheet.ts` injects `fs` via `XLSX.set_fs` — the 0.20 ESM build no longer bundles it
+
+- b149a31: Docs: record the deployment-protection decision and pipeline verification status in docs/deploy.md; document the staging/prod split in README (Ambientes e deploy) and CONTRIBUTING (Depois do merge).
+- 069f93b: E2E: cap workers at 4 on CI runners and relax the staging expect timeout to 15s — 8 workers oversubscribed GitHub's 2-core runners enough to blow hydration timeouts in the mobile readonly project.
+- 42ea242: Fix (#53): an escotista viewing an escoteiro's progression can now open a specialty detail ("ver") instead of being bounced to /escotista. The /especialidades route accepts an optional `escoteiroId` search param; when present it gates on the escotista role and renders that scout's especialidade data read-only via the visibility-checked `getSpecialtyItemsForEscoteiro` / `getSpecialtyReportsForEscoteiro` queries. The bloco "ver" link threads the target scout when rendered in the impersonation Dashboard. Escoteiro self-service is unchanged; an escoteiro or out-of-ramo escotista crafting the param gets no data (backend visibility rule).
+- 9d8b98e: fix(copy): ramo-specific empty state on stats page and correct Portuguese pluralization of "item" in especialidades (#49)
+
+  - Stats empty state now shows the ramo's member noun (lobinho/escoteiro/sênior/pioneiro) instead of always "escoteiro"
+  - Especialidade progress line uses whole-word forms: "item aprovado" (exactly 1) / "itens aprovados" (otherwise), eliminating the non-word "itemns"
+  - Updated Playwright assertions in r4, m07, m18, m19 specs to match the corrected text
+
+- ace55ff: fix(ui): action rows highlight with their own eixo colour instead of the global green accent (#54)
+
+  - Hover/active on progression rows is now a translucent overlay of the row's own eixo colour (12% hover, 22% active) via the new `rowTint` helper, so a pink or navy bloco no longer flashes the theme's green `--accent`
+  - Applied to fixed/variable action rows, custom-action rows (which previously had no hover feedback at all) and IRR recognition items
+  - Locked and disabled rows still get no tint; checked/pending visuals are unchanged
+
+- 4083662: fix: add bottom padding to custom-action input row so it no longer touches the container border (#52)
+- 955c78b: Fix M13 onboarding spec asserting a hardcoded localhost origin — now origin-agnostic so it passes on the staging target.
+- 97d5910: Agents: add the `test-preview` skill and `docs/agents/preview-testing.md` — after opening a PR, resolve its Vercel preview by commit SHA and drive it in a real browser. Documents the frontend/backend skew rule (PR previews run the branch frontend against master's Convex), the read-only default on shared staging data, and where the step sits in the PR flow.
+- ea80139: E2E: r6-settings self-heals a revoked session in its hydration gate — Convex Auth refresh rotation could revoke a shared session mid-run in CI, stranding the spec on /signin.
+- cb63db9: Ajustes no campo de região escoteira: o placeholder do campo deixa de aparecer em caixa alta ("EX: RS"), os rótulos "Região escoteira (UF)" passam a estar associados aos seus campos, e "Região escoteira" entra no glossário do `CONTEXT.md`.
+- cb63db9: review(groups): resolver as seções observáveis no servidor (#73)
+
+  - O seletor de seção observada agora vem de `getGroupStats`, pela mesma regra que `setObservedSection` aplica — o painel não repete mais a visibilidade de ramo no cliente
+  - Escolher uma seção que o servidor recusa mostra o motivo, em vez de o seletor voltar sozinho sem explicação
+  - CONTEXT.md: colocar um escoteiro numa seção é ação de admin (o verbete de seção ainda dizia escotista)
+
+- cb63db9: review(groups): tidy up the seções slice (#72)
+
+  - `users.sectionId` is now dropped whenever a member leaves the grupo (sair, banir, recusar entrada, entrar em outro grupo) and when they stop being an escoteiro, so a seção pointer can no longer follow someone into another grupo or come back to block `removeSection` if they rejoin
+  - Removing a seção clears any leftover pointer at it before deleting the row, instead of leaving a reference to a row that no longer exists
+  - Removing a seção now asks for confirmation, like the grupo's other destructive admin actions
+  - The seção list is read with a bounded query, and the 60-character name limit has a single definition shared by the server and the form
+
+- cb63db9: Keep the grupo name and its numeral/região as separate text nodes so screen
+  readers no longer announce them as one run ("Grupo QA99999/RS"), and cover the
+  seções feature end to end with Playwright: group identity on the painel and in
+  settings, plus seção create/rename/remove, scout placement, and the
+  observed-seção filter on the escotista painel.
+- f883ecc: Upgrade @tanstack/react-start to 1.168.60 to patch an XSS vulnerability that Vercel blocks deploys for.
+- 88701fd: Import the design system into Claude Design, and make the diacritics regex encoding-safe.
+
+  `toSpecialtySlug` stripped combining marks with a regex written using literal
+  `U+0300–U+036F` characters. esbuild ASCII-escapes output everywhere except inside
+  regex literals, so those raw bytes survived into bundled output — and any consumer
+  serving that JS without `charset=utf-8` fails to parse the entire file. Rewritten
+  with `\u` escapes; behaviour is byte-identical.
+
+  Also adds the `.design-sync/` sync inputs (config, bundle entry, preview sources,
+  conventions header) and excludes sync scaffolding from oxlint.
+
+- 821851e: docs: record out-of-scope decision — completed items intentionally remain in the plano (#51)
+- c6799e8: Agents: drop vendored third-party skills (TanStack, Vercel, shadcn, Playwright CLI, design guidelines, broken Convex symlinks), the stale `skills-lock.json`, the unused Vercel plugin setting, and the Sandcastle AFK loop. The project-specific `run-app` and `test-preview` skills move to `docs/agents/running-locally.md` and `docs/agents/preview-testing.md`, referenced from `CLAUDE.md`.
+
 ## 1.4.0
 
 ### Minor Changes
