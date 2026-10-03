@@ -130,7 +130,7 @@ test("M18 admin advances Helena lobinho→escoteiro: fresh progression, younger 
 
     // ── Rule 2: younger especialidade CARRIES (shared younger catalog) ────────
     // Brasilidades (Nível 1, 3/6) still renders at its level as an escoteiro.
-    const card = helena.getByRole("button", { name: /Brasilidades/ });
+    const card = helena.getByRole("button", { name: /^Brasilidades/ });
     await gotoReady(helena, "/especialidades?specialty=brasilidades", card, HELENA.email);
     await expect(card).toContainText("Nível 1");
     await expect(card).toContainText("3/6 itens aprovados");

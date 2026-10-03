@@ -8,8 +8,9 @@ import { currentRamo } from "./lib/progression";
 // (`action:ramo:blocoId:type:index`). We accept 1 or 2 segments before
 // `type:index` so legacy 3-part keys (`action:blocoId:type:index`) still
 // validate during/after the data migration — see migrations.ts.
+// `especialidade:<id>` is a catalog specialty starred on /especialidades.
 const ITEM_KEY_PATTERN =
-  /^(action:([a-z0-9-]+:){1,2}(fixed|variable):\d+|specialty:[a-z0-9-]+:.+|custom:[a-z0-9]+)$/;
+  /^(action:([a-z0-9-]+:){1,2}(fixed|variable):\d+|specialty:[a-z0-9-]+:.+|especialidade:[a-z0-9-]+|custom:[a-z0-9]+)$/;
 
 const MAX_PLANNED_ITEMS = 500;
 
