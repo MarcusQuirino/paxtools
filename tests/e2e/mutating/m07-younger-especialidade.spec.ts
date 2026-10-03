@@ -63,7 +63,7 @@ async function gotoStable(page: Page, url: string, ready: Locator): Promise<void
 
 /** The Acampamento SpecialtyCard trigger on Felipe's /especialidades. */
 const acampamentoCard = (page: Page) =>
-  page.getByRole("button", { name: new RegExp(SPECIALTY_NAME) });
+  page.getByRole("button", { name: new RegExp(`^${SPECIALTY_NAME}`) });
 
 /** Deep-link Felipe into his Acampamento card (auto-opens it). */
 async function openFelipeCard(page: Page): Promise<Locator> {

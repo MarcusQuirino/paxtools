@@ -33,7 +33,7 @@ testAs("sim-troop-lobinho-11")(
   "escoteiro filters especialidades by Minhas, eixo and search",
   async ({ page }, testInfo) => {
     await openPage(page, testInfo);
-    const nutricao = page.getByRole("button", { name: /Nutrição/ });
+    const nutricao = page.getByRole("button", { name: /^Nutrição/ });
     const chip = (name: string) =>
       page.getByRole("button", { name, exact: true });
 

@@ -88,7 +88,7 @@ async function openCard(
 testAs("sim-troop-lobinho-8")(
   "younger earned especialidade shows Nível 1 at half the items approved",
   async ({ page }, testInfo) => {
-    const card = page.getByRole("button", { name: /Brasilidades/ });
+    const card = page.getByRole("button", { name: /^Brasilidades/ });
     await openCard(page, testInfo, "brasilidades", card);
     await expect(card).toContainText("Nível 1");
     await expect(card).not.toContainText("Nível 2");
@@ -99,7 +99,7 @@ testAs("sim-troop-lobinho-8")(
 testAs("sim-troop-lobinho-11")(
   "younger level2 especialidade shows Nível 2 with every item approved",
   async ({ page }, testInfo) => {
-    const card = page.getByRole("button", { name: /Nutrição/ });
+    const card = page.getByRole("button", { name: /^Nutrição/ });
     await openCard(page, testInfo, "nutricao", card);
     await expect(card).toContainText("Nível 2");
     await expect(card).toContainText("6/6 itens aprovados");
@@ -109,7 +109,7 @@ testAs("sim-troop-lobinho-11")(
 testAs("sim-troop-lobinho-6")(
   "younger in-progress especialidade is one item short of Nível 1 with a pending item",
   async ({ page }, testInfo) => {
-    const card = page.getByRole("button", { name: /Acampamento/ });
+    const card = page.getByRole("button", { name: /^Acampamento/ });
     await openCard(page, testInfo, "acampamento", card);
     // 3/8 approved: below the 4-item Nível 1 threshold → no level badge yet.
     await expect(card).not.toContainText("Nível");
@@ -121,7 +121,7 @@ testAs("sim-troop-lobinho-6")(
 testAs("sim-troop-lobinho-3")(
   "younger pending especialidade shows zero approved and two pending items",
   async ({ page }, testInfo) => {
-    const card = page.getByRole("button", { name: /Meteorologia/ });
+    const card = page.getByRole("button", { name: /^Meteorologia/ });
     await openCard(page, testInfo, "meteorologia", card);
     await expect(card).not.toContainText("Nível");
     await expect(card).toContainText("0/6 itens aprovados");

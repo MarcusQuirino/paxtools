@@ -1,4 +1,12 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -16,7 +24,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronDown, Award, Trophy, CheckCircle2 } from "lucide-react";
+import { ChevronDown, Award, Trophy, CheckCircle2, Star } from "lucide-react";
 import {
   YOUNGER_SPECIALTIES_BY_EIXO,
   YOUNGER_SPECIALTY_BY_ID,
@@ -31,6 +39,9 @@ import {
   type ProjectStep as Step,
 } from "@/data/specialty-data/older";
 import { getSpecialtyLevel } from "@/lib/completion-logic";
+import { usePlan } from "@/hooks/use-plan";
+import { encodePlanKey } from "@/lib/plan-keys";
+import { PlanStar } from "@/components/progression/plan-star";
 import { EscotistaFicha } from "@/components/escotista/especialidades/ficha";
 import {
   catalogFor,
@@ -125,6 +136,7 @@ export const Route = createFileRoute("/especialidades")({
       context.queryClient.ensureQueryData(
         convexQuery(api.specialties.getMySpecialtyReports, {}),
       ),
+      context.queryClient.ensureQueryData(convexQuery(api.plan.getMyPlan, {})),
     ]);
   },
   component: EspecialidadesPage,
@@ -161,6 +173,93 @@ function EspecialidadesFrame({
         {children}
         <Footer />
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Plano stars — only the escoteiro's own page provides this; the escotista
+// read-only view leaves it null, so no stars or "No plano" chip render there.
+// ---------------------------------------------------------------------------
+
+type CatalogPlan = {
+  plannedIds: Set<string>;
+  toggle: (specialtyId: string) => void;
+};
+
+const CatalogPlanContext = createContext<CatalogPlan | null>(null);
+
+function CatalogPlanProvider({ children }: { children: ReactNode }) {
+  const { plannedKeys, togglePlanned } = usePlan();
+  const value = useMemo((): CatalogPlan => {
+    const plannedIds = new Set<string>();
+    for (const key of plannedKeys) {
+      if (key.startsWith("especialidade:")) {
+        plannedIds.add(key.slice("especialidade:".length));
+      }
+    }
+    return {
+      plannedIds,
+      toggle: (specialtyId) =>
+        togglePlanned({
+          itemKey: encodePlanKey({ kind: "especialidade", specialtyId }),
+        }),
+    };
+  }, [plannedKeys, togglePlanned]);
+  return (
+    <CatalogPlanContext.Provider value={value}>
+      {children}
+    </CatalogPlanContext.Provider>
+  );
+}
+
+/**
+ * Card header: the collapsible trigger plus, on the escoteiro's own page, a
+ * plano star beside it (a sibling — buttons can't nest).
+ */
+function CardHeader({
+  specialtyId,
+  name,
+  eixoId,
+  highlighted,
+  children,
+}: {
+  specialtyId: string;
+  name: string;
+  eixoId: string;
+  highlighted?: boolean;
+  children: ReactNode;
+}) {
+  const plan = useContext(CatalogPlanContext);
+  const planned = !!plan?.plannedIds.has(specialtyId);
+  return (
+    <div
+      className={`flex items-center rounded-md border-2 border-black bg-card shadow-[2px_2px_0px_0px_#000] ${
+        highlighted ? "ring-2 ring-primary ring-offset-2" : ""
+      }`}
+    >
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex-1 min-w-0 flex items-center gap-3 p-3 rounded-md hover:bg-muted/50 transition-colors text-left"
+        >
+          {children}
+        </button>
+      </CollapsibleTrigger>
+      {plan && (
+        <div className="pr-3">
+          <PlanStar
+            planned={planned}
+            onToggle={() => plan.toggle(specialtyId)}
+            color={EIXO_LABELS[eixoId]?.color}
+            label={
+              planned
+                ? `Remover ${name} do plano`
+                : `Adicionar ${name} ao plano`
+            }
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -237,45 +336,43 @@ function SpecialtyCard({
   return (
     <div ref={ref} className="scroll-mt-4">
       <Collapsible open={open} onOpenChange={setOpen}>
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className={`w-full flex items-center gap-3 p-3 rounded-md border-2 border-black bg-card hover:bg-muted/50 transition-colors text-left shadow-[2px_2px_0px_0px_#000] ${
-              highlighted ? "ring-2 ring-primary ring-offset-2" : ""
-            }`}
-          >
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-sm text-foreground">
-                  {specialty.name}
-                </span>
-                {level > 0 && <LevelBadge level={level} />}
-                {pendingCount > 0 && (
-                  <Badge
-                    variant="outline"
-                    className="text-xs border-amber-400 text-amber-700 bg-amber-50"
-                  >
-                    {pendingCount} pendente{pendingCount > 1 ? "s" : ""}
-                  </Badge>
-                )}
-              </div>
-              {/* Progress bar */}
-              <div className="mt-1.5 h-1.5 w-full rounded-full bg-muted border border-black/20 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-primary transition-all"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {approvedCount}/{totalItems}{" "}
-                {approvedCount === 1 ? "item aprovado" : "itens aprovados"}
-              </p>
+        <CardHeader
+          specialtyId={specialty.id}
+          name={specialty.name}
+          eixoId={specialty.eixoId}
+          highlighted={highlighted}
+        >
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-sm text-foreground">
+                {specialty.name}
+              </span>
+              {level > 0 && <LevelBadge level={level} />}
+              {pendingCount > 0 && (
+                <Badge
+                  variant="outline"
+                  className="text-xs border-amber-400 text-amber-700 bg-amber-50"
+                >
+                  {pendingCount} pendente{pendingCount > 1 ? "s" : ""}
+                </Badge>
+              )}
             </div>
-            <ChevronDown
-              className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
-            />
-          </button>
-        </CollapsibleTrigger>
+            {/* Progress bar */}
+            <div className="mt-1.5 h-1.5 w-full rounded-full bg-muted border border-black/20 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {approvedCount}/{totalItems}{" "}
+              {approvedCount === 1 ? "item aprovado" : "itens aprovados"}
+            </p>
+          </div>
+          <ChevronDown
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </CardHeader>
 
         <CollapsibleContent>
           <div className="mt-1 border-2 border-black rounded-md bg-card divide-y-2 divide-black/10">
@@ -461,6 +558,7 @@ function EixoSection({
 
 function useEspecialidadesFilter(group: RamoGroup, startedIds: Set<string>) {
   const { q, f: filter } = Route.useSearch();
+  const plannedIds = useContext(CatalogPlanContext)?.plannedIds;
   const navigate = Route.useNavigate();
   const query = q ?? "";
 
@@ -477,9 +575,11 @@ function useEspecialidadesFilter(group: RamoGroup, startedIds: Set<string>) {
       (e) =>
         (filter === "minhas"
           ? startedIds.has(e.id)
-          : !filter || e.eixoId === filter) && matchEntry(e, query).matched,
+          : filter === "plano"
+            ? !!plannedIds?.has(e.id)
+            : !filter || e.eixoId === filter) && matchEntry(e, query).matched,
     );
-  }, [group, startedIds, query, filter]);
+  }, [group, startedIds, plannedIds, query, filter]);
 
   return { query, filter, setSearch, results };
 }
@@ -494,6 +594,7 @@ function EspecialidadesFilterBar({
 >) {
   const toggle = (f: string) =>
     setSearch({ f: filter === f ? undefined : f });
+  const hasPlan = useContext(CatalogPlanContext) !== null;
   return (
     <div>
       <SearchField value={query} onChange={(q) => setSearch({ q })} />
@@ -504,6 +605,12 @@ function EspecialidadesFilterBar({
         <FilterChip on={filter === "minhas"} onClick={() => toggle("minhas")}>
           Minhas
         </FilterChip>
+        {hasPlan && (
+          <FilterChip on={filter === "plano"} onClick={() => toggle("plano")}>
+            <Star className="size-3" />
+            No plano
+          </FilterChip>
+        )}
         {Object.entries(EIXO_LABELS).map(([id, meta]) => (
           <FilterChip key={id} on={filter === id} onClick={() => toggle(id)}>
             <EixoDot color={meta.color} />
@@ -530,7 +637,9 @@ function FilterResults({
         <b className="block text-[15px] text-foreground">Nada encontrado</b>
         {filter === "minhas"
           ? "Você ainda não começou nenhuma especialidade aqui."
-          : "Tente outro termo ou limpe o filtro."}
+          : filter === "plano"
+            ? "Toque na estrela de uma especialidade para colocá-la no seu plano."
+            : "Tente outro termo ou limpe o filtro."}
       </p>
     );
   }
@@ -624,7 +733,9 @@ function YoungerEspecialidadesContent({
     convexQuery(api.specialties.getMySpecialtyItems, {}),
   );
   return (
-    <YoungerEspecialidadesView items={myItems} highlightId={highlightId} />
+    <CatalogPlanProvider>
+      <YoungerEspecialidadesView items={myItems} highlightId={highlightId} />
+    </CatalogPlanProvider>
   );
 }
 
@@ -869,34 +980,32 @@ function OlderSpecialtyCard({
   return (
     <div ref={ref} className="scroll-mt-4">
       <Collapsible open={open} onOpenChange={setOpen}>
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className={`w-full flex items-center gap-3 p-3 rounded-md border-2 border-black bg-card hover:bg-muted/50 transition-colors text-left shadow-[2px_2px_0px_0px_#000] ${
-              highlighted ? "ring-2 ring-primary ring-offset-2" : ""
-            }`}
-          >
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-sm text-foreground">
-                  {specialty.name}
-                </span>
-                {earned && (
-                  <Badge className="gap-1 bg-yellow-400 text-yellow-900 border-2 border-yellow-600 font-bold text-xs px-1.5 py-0.5">
-                    <Trophy className="size-3" />
-                    Conquistada
-                  </Badge>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {approvedCount}/3 etapas aprovadas
-              </p>
+        <CardHeader
+          specialtyId={specialty.id}
+          name={specialty.name}
+          eixoId={specialty.eixoId}
+          highlighted={highlighted}
+        >
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-sm text-foreground">
+                {specialty.name}
+              </span>
+              {earned && (
+                <Badge className="gap-1 bg-yellow-400 text-yellow-900 border-2 border-yellow-600 font-bold text-xs px-1.5 py-0.5">
+                  <Trophy className="size-3" />
+                  Conquistada
+                </Badge>
+              )}
             </div>
-            <ChevronDown
-              className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
-            />
-          </button>
-        </CollapsibleTrigger>
+            <p className="text-xs text-muted-foreground mt-1">
+              {approvedCount}/3 etapas aprovadas
+            </p>
+          </div>
+          <ChevronDown
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </CardHeader>
 
         <CollapsibleContent>
           <div className="mt-1 space-y-2 pl-3">
@@ -1000,7 +1109,9 @@ function OlderEspecialidadesContent({ highlightId }: { highlightId?: string }) {
     convexQuery(api.specialties.getMySpecialtyReports, {}),
   );
   return (
-    <OlderEspecialidadesView reports={myReports} highlightId={highlightId} />
+    <CatalogPlanProvider>
+      <OlderEspecialidadesView reports={myReports} highlightId={highlightId} />
+    </CatalogPlanProvider>
   );
 }
 

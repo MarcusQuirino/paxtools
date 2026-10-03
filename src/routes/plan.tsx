@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   DndContext,
   PointerSensor,
@@ -30,10 +31,13 @@ import {
   resolvePlanItems,
   isResolvedComplete,
   sortForLinearView,
+  buildSpecialtyProgress,
   type PlanItemResolved,
 } from "@/lib/plan-view";
+import { catalogFor, ramoGroupOf } from "@/components/escotista/especialidades/ui";
+import { PlanStar } from "@/components/progression/plan-star";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Award, Clock, GripVertical, Sparkles } from "lucide-react";
+import { Award, Clock, GripVertical, Sparkles, Trophy } from "lucide-react";
 import { Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/plan")({
@@ -44,6 +48,12 @@ export const Route = createFileRoute("/plan")({
       ),
       context.queryClient.ensureQueryData(
         convexQuery(api.plan.getMyPlan, {}),
+      ),
+      context.queryClient.ensureQueryData(
+        convexQuery(api.specialties.getMySpecialtyItems, {}),
+      ),
+      context.queryClient.ensureQueryData(
+        convexQuery(api.specialties.getMySpecialtyReports, {}),
       ),
     ]);
   },
@@ -76,6 +86,7 @@ type ViewMode = "byArea" | "ordered";
 function PlanDashboard() {
   const [viewMode, setViewMode] = useState<ViewMode>("byArea");
   const {
+    ramo,
     eixos,
     approvedActionIds,
     pendingActionIds,
@@ -89,6 +100,27 @@ function PlanDashboard() {
   const { items, plannedKeys, togglePlanned, reorderPlan } = usePlan();
 
   const catalog = useMemo(() => buildCatalogIndex(eixos), [eixos]);
+
+  // Especialidades starred on /especialidades (`especialidade:` keys) resolve
+  // against the current ramoGroup's catalog, with progress from its items
+  // (younger) or etapa reports (older).
+  const { data: specialtyItems } = useSuspenseQuery(
+    convexQuery(api.specialties.getMySpecialtyItems, {}),
+  );
+  const { data: specialtyReports } = useSuspenseQuery(
+    convexQuery(api.specialties.getMySpecialtyReports, {}),
+  );
+  const specialtyCatalog = useMemo(() => catalogFor(ramoGroupOf(ramo)), [ramo]);
+  const specialtyProgress = useMemo(
+    () =>
+      buildSpecialtyProgress(
+        ramoGroupOf(ramo),
+        specialtyCatalog,
+        specialtyItems,
+        specialtyReports,
+      ),
+    [ramo, specialtyCatalog, specialtyItems, specialtyReports],
+  );
   const resolved = useMemo(
     () =>
       resolvePlanItems(items, {
@@ -98,6 +130,8 @@ function PlanDashboard() {
         actionStatusMap,
         earnedSpecialtyIds,
         customActions,
+        specialtyCatalog,
+        specialtyProgress,
       }),
     [
       items,
@@ -107,6 +141,8 @@ function PlanDashboard() {
       actionStatusMap,
       earnedSpecialtyIds,
       customActions,
+      specialtyCatalog,
+      specialtyProgress,
     ],
   );
 
@@ -125,19 +161,39 @@ function PlanDashboard() {
     );
   }
 
-  const plannedBlocoIds = new Set(resolved.map((r) => r.bloco.id));
+  const plannedBlocoIds = new Set<string>();
+  const especialidadesByEixo = new Map<string, EspecialidadeItem[]>();
+  for (const r of resolved) {
+    if (r.kind === "especialidade") {
+      const list = especialidadesByEixo.get(r.eixo.id) ?? [];
+      list.push(r);
+      especialidadesByEixo.set(r.eixo.id, list);
+    } else {
+      plannedBlocoIds.add(r.bloco.id);
+    }
+  }
 
   return (
     <div className="space-y-4">
       <ViewToggle viewMode={viewMode} onChange={setViewMode} />
 
       {viewMode === "byArea" ? (
-        eixos.filter((eixo) =>
-          eixo.blocos.some((b) => plannedBlocoIds.has(b.id)),
+        eixos.filter(
+          (eixo) =>
+            eixo.blocos.some((b) => plannedBlocoIds.has(b.id)) ||
+            especialidadesByEixo.has(eixo.id),
         ).map((eixo) => (
           <EixoSection
             key={eixo.id}
             eixo={eixo}
+            footer={
+              especialidadesByEixo.has(eixo.id) && (
+                <PlannedEspecialidades
+                  items={especialidadesByEixo.get(eixo.id)!}
+                  onTogglePlanned={(itemKey) => togglePlanned({ itemKey })}
+                />
+              )
+            }
             approvedActionIds={approvedActionIds}
             pendingActionIds={pendingActionIds}
             actionStatusMap={actionStatusMap}
@@ -210,8 +266,8 @@ function EmptyState() {
       <Sparkles className="size-8 mx-auto text-primary" />
       <p className="text-sm font-black uppercase">Seu plano está vazio</p>
       <p className="text-xs font-medium text-muted-foreground">
-        Vá em <b>Progressão</b> e toque na estrela ao lado dos itens que você
-        quer focar. Eles vão aparecer aqui.
+        Vá em <b>Progressão</b> ou <b>Especialidades</b> e toque na estrela ao
+        lado dos itens que você quer focar. Eles vão aparecer aqui.
       </p>
     </div>
   );
@@ -341,7 +397,7 @@ function SortableRow({
             className="text-[10px] font-semibold uppercase tracking-wider"
             style={{ color: item.eixo.color }}
           >
-            {item.bloco.name}
+            {item.kind === "especialidade" ? "Especialidade" : item.bloco.name}
           </span>
           {done && (
             <span className="text-[10px] text-muted-foreground">
@@ -380,6 +436,14 @@ function RowBody({
         planned
         onTogglePlanned={() => onTogglePlanned(item.itemKey)}
         lockApproved
+      />
+    );
+  }
+  if (item.kind === "especialidade") {
+    return (
+      <EspecialidadeRow
+        item={item}
+        onTogglePlanned={() => onTogglePlanned(item.itemKey)}
       />
     );
   }
@@ -445,6 +509,92 @@ function RowBody({
           <Trash2 className="size-4" />
         </button>
       )}
+    </div>
+  );
+}
+
+type EspecialidadeItem = Extract<PlanItemResolved, { kind: "especialidade" }>;
+
+/** An eixo's starred especialidades, below its blocos in "Por Área". */
+function PlannedEspecialidades({
+  items,
+  onTogglePlanned,
+}: {
+  items: EspecialidadeItem[];
+  onTogglePlanned: (itemKey: string) => void;
+}) {
+  return (
+    <div className="border-t-2 border-black">
+      <div className="flex items-center gap-2 px-4 pt-3 text-xs font-semibold text-muted-foreground uppercase">
+        <Award className="size-3.5" />
+        Especialidades
+      </div>
+      <div className="pb-1">
+        {items.map((item) => (
+          <EspecialidadeRow
+            key={item.itemKey}
+            item={item}
+            onTogglePlanned={() => onTogglePlanned(item.itemKey)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A starred catalog especialidade: progress at a glance, tap to open its card
+ * on /especialidades (where items/etapas are marked). Done = earned.
+ */
+function EspecialidadeRow({
+  item,
+  onTogglePlanned,
+}: {
+  item: EspecialidadeItem;
+  onTogglePlanned: () => void;
+}) {
+  const { approved, total, unit } = item.progress;
+  const pct = total > 0 ? Math.round((approved / total) * 100) : 0;
+  return (
+    <div className="flex items-center gap-3 min-h-[44px] px-3 py-2">
+      <Link
+        to="/especialidades"
+        search={{ specialty: item.specialtyId }}
+        aria-label={`abrir ${item.name}`}
+        className="flex-1 min-w-0 flex items-center gap-3"
+      >
+        {item.checked ? (
+          <Trophy className="size-4 text-yellow-600 shrink-0" />
+        ) : (
+          <Award className="size-4 text-muted-foreground shrink-0" />
+        )}
+        <div className="flex-1 min-w-0">
+          <span
+            className={`text-sm ${
+              item.checked ? "line-through text-muted-foreground" : ""
+            }`}
+          >
+            {item.name}
+          </span>
+          <div className="mt-1 flex items-center gap-2">
+            <div className="h-1.5 flex-1 rounded-full bg-muted border border-black/20 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${pct}%`, backgroundColor: item.eixo.color }}
+              />
+            </div>
+            <span className="text-[11px] text-muted-foreground shrink-0">
+              {approved}/{total} {unit}
+            </span>
+          </div>
+        </div>
+      </Link>
+      <PlanStar
+        planned
+        onToggle={onTogglePlanned}
+        color={item.eixo.color}
+        label={`Remover ${item.name} do plano`}
+      />
     </div>
   );
 }

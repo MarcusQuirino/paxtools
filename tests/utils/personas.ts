@@ -87,6 +87,8 @@ export const MANIFEST: readonly ManifestEntry[] = [
   { slug: "sim-troop-escoteiro-10", email: `sim-troop-escoteiro-10${SUFFIX}`, name: "João Mendes",
     ownedBy: M("m21-secoes.spec.ts"),
     notes: "level2 younger especialidade (R4 reads it); M21 mutates ONLY sectionId, which no readonly spec asserts" },
+  { slug: "sim-troop-escoteiro-11", email: `sim-troop-escoteiro-11${SUFFIX}`, name: "Kelly Faria",
+    ownedBy: M("m22-plan-especialidade.spec.ts"), notes: "11 blocos, empty plano, no especialidades" },
   { slug: "sim-troop-escoteiro-15", email: `sim-troop-escoteiro-15${SUFFIX}`, name: "Otávio Freitas",
     ownedBy: null, notes: "18 blocos, IRR full — Lis de Ouro trophy (R2)" },
 
