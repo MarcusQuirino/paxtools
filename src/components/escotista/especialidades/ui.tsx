@@ -7,7 +7,7 @@
  */
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { YOUNGER_SPECIALTIES } from "@/data/specialty-data/younger";
 import { OLDER_SPECIALTIES } from "@/data/specialty-data/older";
 
@@ -257,6 +257,83 @@ export function SectionHeading({
         <span className="text-[13px] font-bold text-[#8A887F]">{meta}</span>
       )}
     </div>
+  );
+}
+
+/** Search box over names and item/suggestion text, with a clear button. */
+export function SearchField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string | undefined) => void;
+}) {
+  return (
+    <label className="mb-2.5 flex min-h-12 items-center gap-2.5 rounded-[10px] border-2 border-[#141414] bg-white px-3 focus-within:ring-2 focus-within:ring-[#0E6B4E]/40">
+      <Search className="size-[22px] shrink-0 text-[#8A887F]" strokeWidth={2.5} />
+      <input
+        type="search"
+        inputMode="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value || undefined)}
+        placeholder="Buscar por nome ou requisito"
+        aria-label="Buscar por nome ou requisito"
+        className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#8A887F] [&::-webkit-search-cancel-button]:appearance-none"
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange(undefined)}
+          aria-label="Limpar busca"
+          className="-mr-2 grid size-11 place-items-center text-[#4A4A44]"
+        >
+          <X className="size-5" />
+        </button>
+      )}
+    </label>
+  );
+}
+
+/** Horizontally-scrolling filter chip row. */
+export function ChipRow({ children }: { children: ReactNode }) {
+  return (
+    <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+      {children}
+    </div>
+  );
+}
+
+/** Toggleable filter chip; ink-filled when on. */
+export function FilterChip({
+  on,
+  onClick,
+  children,
+}: {
+  on: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-[#141414] px-3 text-[14px] font-extrabold ${
+        on ? "bg-[#141414] text-white" : "bg-white text-[#141414]"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Eixo colour dot for an eixo filter chip. */
+export function EixoDot({ color }: { color: string }) {
+  return (
+    <span
+      className="size-2.5 rounded-full border-2 border-current"
+      style={{ background: color }}
+    />
   );
 }
 

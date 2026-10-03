@@ -2,16 +2,20 @@ import { useMemo } from "react";
 import { convexQuery } from "@convex-dev/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Search, Users, X } from "lucide-react";
+import { Users } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { formatGroupIdentity } from "@/lib/group-identity";
 import {
   AvatarStack,
+  ChipRow,
   defaultRamoGroup,
+  EixoDot,
   EIXOS,
+  FilterChip,
   ListBox,
   RAMO_GROUP_LABEL,
   RowChevron,
+  SearchField,
   SectionHeading,
   catalogFor,
   eixoMeta,
@@ -154,30 +158,9 @@ function EspecialidadesCatalog() {
         </div>
       )}
 
-      <label className="mb-2.5 flex min-h-12 items-center gap-2.5 rounded-[10px] border-2 border-[#141414] bg-white px-3 focus-within:ring-2 focus-within:ring-[#0E6B4E]/40">
-        <Search className="size-[22px] shrink-0 text-[#8A887F]" strokeWidth={2.5} />
-        <input
-          type="search"
-          inputMode="search"
-          value={query}
-          onChange={(e) => setSearch({ q: e.target.value || undefined })}
-          placeholder="Buscar por nome ou requisito"
-          aria-label="Buscar por nome ou requisito"
-          className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#8A887F]"
-        />
-        {query && (
-          <button
-            type="button"
-            onClick={() => setSearch({ q: undefined })}
-            aria-label="Limpar busca"
-            className="-mr-2 grid size-11 place-items-center text-[#4A4A44]"
-          >
-            <X className="size-5" />
-          </button>
-        )}
-      </label>
+      <SearchField value={query} onChange={(q) => setSearch({ q })} />
 
-      <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+      <ChipRow>
         <FilterChip on={!filter} onClick={() => setSearch({ f: undefined })}>
           Todas
         </FilterChip>
@@ -194,14 +177,11 @@ function EspecialidadesCatalog() {
             on={filter === e.id}
             onClick={() => setSearch({ f: filter === e.id ? undefined : e.id })}
           >
-            <span
-              className="size-2.5 rounded-full border-2 border-current"
-              style={{ background: e.color }}
-            />
+            <EixoDot color={e.color} />
             {e.name}
           </FilterChip>
         ))}
-      </div>
+      </ChipRow>
 
       {!summary ? (
         <p className="rounded-[10px] border-2 border-dashed border-[#8A887F] p-5 text-center text-sm text-[#4A4A44]">
@@ -346,29 +326,6 @@ function EspecialidadesCatalog() {
         </>
       )}
     </div>
-  );
-}
-
-function FilterChip({
-  on,
-  onClick,
-  children,
-}: {
-  on: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={on}
-      onClick={onClick}
-      className={`inline-flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-[#141414] px-3 text-[14px] font-extrabold ${
-        on ? "bg-[#141414] text-white" : "bg-white text-[#141414]"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 
