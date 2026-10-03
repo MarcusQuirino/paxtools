@@ -19,10 +19,12 @@ import {
 import { ChevronDown, Award, Trophy, CheckCircle2 } from "lucide-react";
 import {
   YOUNGER_SPECIALTIES_BY_EIXO,
+  YOUNGER_SPECIALTY_BY_ID,
   type YoungSpecialty,
 } from "@/data/specialty-data/younger";
 import {
   OLDER_SPECIALTIES_BY_EIXO,
+  OLDER_SPECIALTY_BY_ID,
   PROJECT_STEPS,
   PROJECT_STEP_LABELS,
   type OlderSpecialty,
@@ -30,6 +32,17 @@ import {
 } from "@/data/specialty-data/older";
 import { getSpecialtyLevel } from "@/lib/completion-logic";
 import { EscotistaFicha } from "@/components/escotista/especialidades/ficha";
+import {
+  catalogFor,
+  ChipRow,
+  EixoDot,
+  FilterChip,
+  matchEntry,
+  plural,
+  SearchField,
+  type CatalogEntry,
+  type RamoGroup,
+} from "@/components/escotista/especialidades/ui";
 
 // ---------------------------------------------------------------------------
 // Deep-link helpers (#44)
@@ -59,6 +72,13 @@ function useDeepLinkHighlight(highlighted: boolean) {
   return { ref, open, setOpen };
 }
 
+type EspecialidadesSearch = {
+  specialty?: string;
+  escoteiroId?: string;
+  q?: string;
+  f?: string;
+};
+
 export const Route = createFileRoute("/especialidades")({
   // Deep-link target (#44): `?specialty=<slug>` highlights and scrolls to a
   // specialty. Bloco cards link here for their alternativeCompletions.
@@ -66,13 +86,16 @@ export const Route = createFileRoute("/especialidades")({
   // Escotista access (#53): `?escoteiroId=<id>` opens a scout's especialidade
   // detail read-only for an escotista with ramo visibility. The bloco "ver"
   // link carries it when rendered inside the impersonation Dashboard.
-  validateSearch: (
-    search: Record<string, unknown>,
-  ): { specialty?: string; escoteiroId?: string } => ({
+  //
+  // `?q=` / `?f=` drive the escoteiro's search + filter chips: free text over
+  // names and item/suggestion text, and "minhas" or an eixoId.
+  validateSearch: (search: Record<string, unknown>): EspecialidadesSearch => ({
     specialty:
       typeof search.specialty === "string" ? search.specialty : undefined,
     escoteiroId:
       typeof search.escoteiroId === "string" ? search.escoteiroId : undefined,
+    q: typeof search.q === "string" && search.q ? search.q : undefined,
+    f: typeof search.f === "string" && search.f ? search.f : undefined,
   }),
   loaderDeps: ({ search: { escoteiroId } }) => ({ escoteiroId }),
   loader: async ({ context, deps }) => {
@@ -432,6 +455,96 @@ function EixoSection({
 }
 
 // ---------------------------------------------------------------------------
+// Search + filter chips — a simpler cut of the escotista catalog's: Todas /
+// Minhas (already started) / one chip per eixo.
+// ---------------------------------------------------------------------------
+
+function useEspecialidadesFilter(group: RamoGroup, startedIds: Set<string>) {
+  const { q, f: filter } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const query = q ?? "";
+
+  const setSearch = (patch: Pick<EspecialidadesSearch, "q" | "f">) =>
+    void navigate({
+      search: (prev) => ({ ...prev, ...patch }),
+      replace: true,
+    });
+
+  // null when no search/filter is active: the page shows the eixo sections.
+  const results = useMemo((): CatalogEntry[] | null => {
+    if (!query.trim() && !filter) return null;
+    return catalogFor(group).filter(
+      (e) =>
+        (filter === "minhas"
+          ? startedIds.has(e.id)
+          : !filter || e.eixoId === filter) && matchEntry(e, query).matched,
+    );
+  }, [group, startedIds, query, filter]);
+
+  return { query, filter, setSearch, results };
+}
+
+function EspecialidadesFilterBar({
+  query,
+  filter,
+  setSearch,
+}: Pick<
+  ReturnType<typeof useEspecialidadesFilter>,
+  "query" | "filter" | "setSearch"
+>) {
+  const toggle = (f: string) =>
+    setSearch({ f: filter === f ? undefined : f });
+  return (
+    <div>
+      <SearchField value={query} onChange={(q) => setSearch({ q })} />
+      <ChipRow>
+        <FilterChip on={!filter} onClick={() => setSearch({ f: undefined })}>
+          Todas
+        </FilterChip>
+        <FilterChip on={filter === "minhas"} onClick={() => toggle("minhas")}>
+          Minhas
+        </FilterChip>
+        {Object.entries(EIXO_LABELS).map(([id, meta]) => (
+          <FilterChip key={id} on={filter === id} onClick={() => toggle(id)}>
+            <EixoDot color={meta.color} />
+            {meta.name}
+          </FilterChip>
+        ))}
+      </ChipRow>
+    </div>
+  );
+}
+
+function FilterResults({
+  count,
+  filter,
+  children,
+}: {
+  count: number;
+  filter?: string;
+  children: ReactNode;
+}) {
+  if (count === 0) {
+    return (
+      <p className="rounded-md border-2 border-dashed border-muted-foreground p-5 text-center text-sm text-muted-foreground">
+        <b className="block text-[15px] text-foreground">Nada encontrado</b>
+        {filter === "minhas"
+          ? "Você ainda não começou nenhuma especialidade aqui."
+          : "Tente outro termo ou limpe o filtro."}
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-bold text-muted-foreground px-1">
+        {plural(count, "especialidade", "especialidades")}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -549,10 +662,35 @@ function YoungerEspecialidadesView({
     toggleItem({ specialtyId, itemIndex });
   };
 
+  const startedIds = useMemo(
+    () => new Set(itemsBySpecialty.keys()),
+    [itemsBySpecialty],
+  );
+  const { results, ...filterBar } = useEspecialidadesFilter(
+    "younger",
+    startedIds,
+  );
+
   const eixoIds = Object.keys(YOUNGER_SPECIALTIES_BY_EIXO);
 
   return (
     <EspecialidadesFrame readOnly={readOnly}>
+      <EspecialidadesFilterBar {...filterBar} />
+      {results ? (
+        <FilterResults count={results.length} filter={filterBar.filter}>
+          {results.map((e) => (
+            <SpecialtyCard
+              key={e.id}
+              specialty={YOUNGER_SPECIALTY_BY_ID.get(e.id)!}
+              items={itemsBySpecialty.get(e.id) ?? []}
+              onToggle={handleToggle}
+              isToggling={isToggling}
+              highlighted={e.id === highlightId}
+              readOnly={readOnly}
+            />
+          ))}
+        </FilterResults>
+      ) : (
       <div className="space-y-2">
         {eixoIds.map((eixoId) => {
           const specialties = YOUNGER_SPECIALTIES_BY_EIXO[eixoId] ?? [];
@@ -570,6 +708,7 @@ function YoungerEspecialidadesView({
           );
         })}
       </div>
+      )}
     </EspecialidadesFrame>
   );
 }
@@ -901,6 +1040,15 @@ function OlderEspecialidadesView({
     submitStep({ specialtyId, step, text });
   };
 
+  const startedIds = useMemo(
+    () => new Set(reportsBySpecialty.keys()),
+    [reportsBySpecialty],
+  );
+  const { results, ...filterBar } = useEspecialidadesFilter(
+    "older",
+    startedIds,
+  );
+
   const eixoIds = Object.keys(OLDER_SPECIALTIES_BY_EIXO);
 
   return (
@@ -911,6 +1059,22 @@ function OlderEspecialidadesView({
         especialidade é conquistada quando as três etapas forem aprovadas.
       </p>
 
+      <EspecialidadesFilterBar {...filterBar} />
+      {results ? (
+        <FilterResults count={results.length} filter={filterBar.filter}>
+          {results.map((e) => (
+            <OlderSpecialtyCard
+              key={e.id}
+              specialty={OLDER_SPECIALTY_BY_ID.get(e.id)!}
+              reports={reportsBySpecialty.get(e.id) ?? new Map()}
+              onSubmit={handleSubmit}
+              isSubmitting={isSubmitting}
+              highlighted={e.id === highlightId}
+              readOnly={readOnly}
+            />
+          ))}
+        </FilterResults>
+      ) : (
       <div className="space-y-2">
         {eixoIds.map((eixoId) => (
           <OlderEixoSection
@@ -925,6 +1089,7 @@ function OlderEspecialidadesView({
           />
         ))}
       </div>
+      )}
     </EspecialidadesFrame>
   );
 }
