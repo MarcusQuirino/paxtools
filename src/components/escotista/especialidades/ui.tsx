@@ -278,7 +278,7 @@ export function SearchField({
         onChange={(e) => onChange(e.target.value || undefined)}
         placeholder="Buscar por nome ou requisito"
         aria-label="Buscar por nome ou requisito"
-        className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#8A887F]"
+        className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#8A887F] [&::-webkit-search-cancel-button]:appearance-none"
       />
       {value && (
         <button
