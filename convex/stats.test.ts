@@ -4,6 +4,10 @@ import { convexTest } from "convex-test";
 import schema from "./schema";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { YOUNGER_SPECIALTY_BY_ID } from "../src/data/specialty-data/younger";
+import { OLDER_SPECIALTIES } from "../src/data/specialty-data/older";
+import { getEixosForRamo } from "../src/data/progression-data";
+import { getEarnedSpecialtyBlocoIds } from "../src/lib/completion-logic";
 
 const modules = {
   "./_generated/api.js": () => import("./_generated/api.js"),
@@ -299,5 +303,183 @@ describe("getRamoScouts (Task 4)", () => {
     const olderRow = rows.find((r) => r._id === olderId)!;
     expect(olderRow.joinedAt).toBeLessThanOrEqual(newerRow.joinedAt);
     expect(rows.indexOf(olderRow)).toBeLessThan(rows.indexOf(newerRow));
+  });
+});
+
+describe("seção observada scopes the stats cohort", () => {
+  async function seedSections(t: ReturnType<typeof convexTest>) {
+    const base = await seed(t);
+    const [norte, sul] = await t.run(async (ctx) => [
+      await ctx.db.insert("sections", { groupId: base.groupId, name: "Norte", ramo: "escoteiro" }),
+      await ctx.db.insert("sections", { groupId: base.groupId, name: "Sul", ramo: "escoteiro" }),
+    ]);
+    // base.scout stays unplaced; one in Norte, one in Sul.
+    for (const [name, sectionId] of [["N", norte], ["Su", sul]] as const) {
+      await t.run((ctx) =>
+        ctx.db.insert("users", {
+          name, role: "escoteiro", ramo: "escoteiro", groupId: base.groupId,
+          membershipStatus: "approved", sectionId,
+        }),
+      );
+    }
+    return { ...base, norte, sul };
+  }
+
+  test("no observed seção → whole ramo", async () => {
+    const t = convexTest(schema, modules);
+    const { escotistaId } = await seedSections(t);
+    const cov = await as(t, escotistaId).query(api.stats.getRamoCoverage, { ramo: "escoteiro" });
+    expect(cov.scoutCount).toBe(3);
+    expect(cov.observedSectionName).toBeNull();
+  });
+
+  test("observed seção narrows coverage, roster and especialidades (unplaced kept)", async () => {
+    const t = convexTest(schema, modules);
+    const { escotistaId, norte } = await seedSections(t);
+    await t.run((ctx) => ctx.db.patch(escotistaId, { observedSectionId: norte }));
+    const cov = await as(t, escotistaId).query(api.stats.getRamoCoverage, { ramo: "escoteiro" });
+    expect(cov.scoutCount).toBe(2);
+    expect(cov.observedSectionName).toBe("Norte");
+    const rows = await as(t, escotistaId).query(api.stats.getRamoScouts, { ramo: "escoteiro" });
+    expect(rows.map((r) => r.name).sort((a, b) => (a ?? "").localeCompare(b ?? ""))).toEqual(["N", "S"]);
+    const esp = await as(t, escotistaId).query(api.stats.getRamoSpecialties, { ramo: "escoteiro" });
+    expect(esp.scoutCount).toBe(2);
+  });
+});
+
+describe("getRamoSpecialties", () => {
+  const YOUNGER_ID = "administracao";
+  const YOUNGER_ITEMS = YOUNGER_SPECIALTY_BY_ID.get(YOUNGER_ID)!.items.length;
+  const OLDER_ID = OLDER_SPECIALTIES[0]!.id;
+
+  async function addScout(
+    t: ReturnType<typeof convexTest>,
+    groupId: Id<"groups">,
+    name: string,
+    ramo: "escoteiro" | "lobinho" | "senior",
+  ): Promise<Id<"users">> {
+    return t.run((ctx) =>
+      ctx.db.insert("users", { name, role: "escoteiro", ramo, groupId, membershipStatus: "approved" }),
+    );
+  }
+
+  async function items(
+    t: ReturnType<typeof convexTest>,
+    userId: Id<"users">,
+    specialtyId: string,
+    approved: number,
+    pending: number,
+    completedAt = 100,
+  ) {
+    await t.run(async (ctx) => {
+      for (let i = 0; i < approved + pending; i++) {
+        await ctx.db.insert("specialtyItemCompletions", {
+          userId, ramoGroup: "younger", specialtyId, itemIndex: i,
+          completedAt: completedAt + i, status: i < approved ? "approved" : "pending",
+        });
+      }
+    });
+  }
+
+  test("younger: earned / level2 / in progress / pending / scoutsWithNone", async () => {
+    const t = convexTest(schema, modules);
+    const { escotistaId, groupId, scout } = await seed(t);
+    const half = YOUNGER_ITEMS / 2;
+    const l1 = await addScout(t, groupId, "L1", "escoteiro");
+    const l2 = await addScout(t, groupId, "L2", "escoteiro");
+    const wip = await addScout(t, groupId, "Wip", "escoteiro");
+    // Lobinho-era record carries over but a lobinho scout is not in the cohort.
+    const lob = await addScout(t, groupId, "Lob", "lobinho");
+    await items(t, l1, YOUNGER_ID, half, 0);
+    await items(t, l2, YOUNGER_ID, YOUNGER_ITEMS, 0);
+    await items(t, wip, YOUNGER_ID, 1, 2, 50);
+    await items(t, lob, YOUNGER_ID, YOUNGER_ITEMS, 0);
+
+    const esp = await as(t, escotistaId).query(api.stats.getRamoSpecialties, { ramo: "escoteiro" });
+    expect(esp.ramoGroup).toBe("younger");
+    expect(esp.scoutCount).toBe(4);
+    expect(esp.totals).toEqual({
+      earned: 2, level2: 1, inProgress: 1, pending: 2, distinctEarned: 1, scoutsWithNone: 1,
+    });
+    expect(esp.topEarned).toEqual([
+      { specialtyId: YOUNGER_ID, eixoId: expect.any(String), earnedCount: 2, inProgressCount: 1 },
+    ]);
+    expect(esp.pending).toEqual([
+      { specialtyId: YOUNGER_ID, escoteiroId: wip, escoteiroName: "Wip", count: 2, oldestAt: 51 },
+    ]);
+    expect(scout).toBeDefined();
+  });
+
+  test("younger: earned especialidade lists the bloco it completes", async () => {
+    const t = convexTest(schema, modules);
+    const { escotistaId, groupId } = await seed(t);
+    const s = await addScout(t, groupId, "B", "escoteiro");
+    await items(t, s, YOUNGER_ID, YOUNGER_ITEMS / 2, 0);
+    const expected = getEarnedSpecialtyBlocoIds(getEixosForRamo("escoteiro"), new Set([YOUNGER_ID]));
+    expect(expected.size).toBeGreaterThan(0);
+    const esp = await as(t, escotistaId).query(api.stats.getRamoSpecialties, { ramo: "escoteiro" });
+    expect(esp.blocosViaEspecialidade.map((b) => b.blocoId).sort((a, b) => a.localeCompare(b))).toEqual([...expected].sort((a, b) => a.localeCompare(b)));
+    expect(esp.blocosViaEspecialidade.every((b) => b.scoutCount === 1 && b.blocoName)).toBe(true);
+  });
+
+  test("older: binary — 2/3 approved is in progress, 3/3 is earned", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seed(t);
+    const done = await addScout(t, groupId, "Done", "senior");
+    const half = await addScout(t, groupId, "Half", "senior");
+    await t.run(async (ctx) => {
+      for (const step of ["conhecer", "fazer", "compartilhar"] as const) {
+        await ctx.db.insert("specialtyProjectReports", {
+          userId: done, ramoGroup: "older", specialtyId: OLDER_ID, step, text: "x",
+          completedAt: 1, status: "approved",
+        });
+      }
+      await ctx.db.insert("specialtyProjectReports", {
+        userId: half, ramoGroup: "older", specialtyId: OLDER_ID, step: "conhecer", text: "x",
+        completedAt: 1, status: "approved",
+      });
+      await ctx.db.insert("specialtyProjectReports", {
+        userId: half, ramoGroup: "older", specialtyId: OLDER_ID, step: "fazer", text: "x",
+        completedAt: 7, status: "pending",
+      });
+    });
+    const esp = await as(t, adminId).query(api.stats.getRamoSpecialties, { ramo: "senior" });
+    expect(esp.ramoGroup).toBe("older");
+    expect(esp.totals).toEqual({
+      earned: 1, level2: 0, inProgress: 1, pending: 1, distinctEarned: 1, scoutsWithNone: 0,
+    });
+    expect(esp.pending).toEqual([
+      { specialtyId: OLDER_ID, escoteiroId: half, escoteiroName: "Half", count: 1, oldestAt: 7 },
+    ]);
+  });
+
+  test("demand counts only especialidade: keys of the current ramo", async () => {
+    const t = convexTest(schema, modules);
+    const { escotistaId, groupId, scout } = await seed(t);
+    const other = await addScout(t, groupId, "O", "escoteiro");
+    await items(t, other, YOUNGER_ID, 1, 0);
+    await t.run(async (ctx) => {
+      for (const [userId, ramo, itemKey] of [
+        [scout, "escoteiro", `especialidade:${YOUNGER_ID}`],
+        [other, "escoteiro", `especialidade:${YOUNGER_ID}`],
+        [scout, "lobinho", `especialidade:${YOUNGER_ID}`], // other ramo — ignored
+        [scout, "escoteiro", "action:x"], // not an especialidade
+        [scout, "escoteiro", "especialidade:nao-existe"], // unknown id
+      ] as const) {
+        await ctx.db.insert("plannedItems", { userId, ramo, itemKey, position: 0 });
+      }
+    });
+    const esp = await as(t, escotistaId).query(api.stats.getRamoSpecialties, { ramo: "escoteiro" });
+    expect(esp.demand).toEqual([
+      { specialtyId: YOUNGER_ID, eixoId: expect.any(String), starredCount: 2, startedCount: 1 },
+    ]);
+  });
+
+  test("non-admin is rejected outside their ramos", async () => {
+    const t = convexTest(schema, modules);
+    const { escotistaId } = await seed(t);
+    await expect(
+      as(t, escotistaId).query(api.stats.getRamoSpecialties, { ramo: "senior" }),
+    ).rejects.toThrow("Você não acompanha esse ramo");
   });
 });

@@ -9,6 +9,7 @@ import { StageDistribution } from "@/components/escotista/stats/stage-distributi
 import { MostDone } from "@/components/escotista/stats/most-done";
 import { GapList } from "@/components/escotista/stats/gap-list";
 import { Acompanhamento } from "@/components/escotista/stats/acompanhamento";
+import { EspecialidadesSummary } from "@/components/escotista/stats/especialidades-summary";
 import { AiSuggestionsCard } from "@/components/escotista/ai-suggestions-card";
 
 type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
@@ -134,8 +135,14 @@ function StatsBody({ ramo }: { ramo: Ramo }) {
 
   return (
     <div className="space-y-6" data-testid="stats-sections">
+      <p className="-mb-3 text-xs text-muted-foreground" data-testid="stats-section-scope">
+        {coverage.observedSectionName
+          ? `Seção observada: ${coverage.observedSectionName} · troque no Painel.`
+          : "Todas as seções · troque no Painel."}
+      </p>
       <CoverageBars eixos={coverage.eixos} />
       <StageDistribution ramo={ramo} distribution={coverage.stageDistribution} scoutCount={coverage.scoutCount} />
+      <EspecialidadesSummary ramo={ramo} />
       <MostDone activities={coverage.mostDone} scoutCount={coverage.scoutCount} />
       <div className="space-y-2" data-testid="stats-filters">
         <div className="flex flex-wrap gap-1 rounded-md border-2 border-black bg-muted p-1">
