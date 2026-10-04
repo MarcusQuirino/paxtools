@@ -135,7 +135,7 @@ function StatsBody({ ramo }: { ramo: Ramo }) {
 
   return (
     <div className="space-y-6" data-testid="stats-sections">
-      <p className="-mb-3 text-xs text-muted-foreground" data-testid="stats-section-scope">
+      <p className="text-xs text-muted-foreground" data-testid="stats-section-scope">
         {coverage.observedSectionName
           ? `Seção observada: ${coverage.observedSectionName} · troque no Painel.`
           : "Todas as seções · troque no Painel."}
