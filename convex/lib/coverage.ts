@@ -1,5 +1,5 @@
 import type { QueryCtx } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 // NOTE: this src/ import chain (plan-view → plan-keys → data/*) must stay browser-free AND path-alias-free — convex dev typechecks it under convex/tsconfig.json, which has neither DOM libs nor the "@/" alias.
 import { getEixosForRamo } from "../../src/data/progression-data";
 import { buildCatalogIndex } from "../../src/lib/plan-view";
@@ -47,23 +47,31 @@ function mean(xs: number[]): number {
 
 export async function computeRamoCoverage(
   ctx: QueryCtx,
-  args: { groupId: Id<"groups">; ramo: Ramo },
+  args: {
+    groupId: Id<"groups">;
+    ramo: Ramo;
+    /** Pre-resolved cohort (stats: seção-scoped). Omitted → whole grupo. */
+    scouts?: Doc<"users">[];
+  },
 ): Promise<RamoCoverage> {
   const { groupId, ramo } = args;
   const eixos = getEixosForRamo(ramo);
   const catalog = buildCatalogIndex(eixos);
 
-  // In-scope scouts: approved, non-banned escoteiros of this ramo in the group.
-  const members = await ctx.db
-    .query("users")
-    .withIndex("by_groupId", (q) => q.eq("groupId", groupId))
-    .take(500); // safe cap: a ramo has ≤28 scouts in practice; silent truncation is not a risk at this scale
-  // Grupo-wide on purpose: access to (groupId, ramo) was already asserted
-  // upstream by resolveRamoAccess; the coverage set is ramo-selected, not
-  // re-scoped to any caller's own ramos.
-  const scouts = filterActiveGrupoMembers(groupId, members).filter(
-    (m) => m.role === "escoteiro" && m.ramo === ramo,
-  );
+  let scouts = args.scouts;
+  if (!scouts) {
+    // In-scope scouts: approved, non-banned escoteiros of this ramo in the group.
+    const members = await ctx.db
+      .query("users")
+      .withIndex("by_groupId", (q) => q.eq("groupId", groupId))
+      .take(500); // safe cap: a ramo has ≤28 scouts in practice; silent truncation is not a risk at this scale
+    // Grupo-wide on purpose: access to (groupId, ramo) was already asserted
+    // upstream by resolveRamoAccess; the coverage set is ramo-selected, not
+    // re-scoped to any caller's own ramos.
+    scouts = filterActiveGrupoMembers(groupId, members).filter(
+      (m) => m.role === "escoteiro" && m.ramo === ramo,
+    );
+  }
   const scoutCount = scouts.length;
 
   // Per-actionId approved scout count (restricted to the ramo catalog).
