@@ -102,6 +102,39 @@ marinaTest(
   },
 );
 
+marinaTest(
+  "stats especialidades summary is exact for the lobinho cohort and links into the tab",
+  async ({ page }) => {
+    await page.goto("/escotista/stats");
+    await waitForStats(page);
+
+    // Marina observes no seção → whole-grupo scope line.
+    await expect(page.getByTestId("stats-section-scope")).toHaveText(
+      /Todas as seções/,
+    );
+
+    // Lobinho especialidades from SIM_SPECS: earned Helena + Nara, level2
+    // Kaique (level 2 is also conquered) → Conquistadas 3, Nível 2 = 1.
+    // Cecília is "pending" → the Aguardando list is populated.
+    const esp = page.getByTestId("stats-especialidades");
+    await expect(esp).toBeVisible();
+    await expect(
+      page.getByTestId("stats-esp-earned").getByText("3", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("stats-esp-level2").getByText("1", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("stats-esp-pending-list").getByText("Cecília Moraes"),
+    ).toBeVisible();
+    await expect(page.getByTestId("stats-esp-top").getByRole("link").first()).toBeVisible();
+
+    // A "Mais conquistadas" row opens that especialidade's detail.
+    await page.getByTestId("stats-esp-top").getByRole("link").first().click();
+    await expect(page).toHaveURL(/\/escotista\/especialidades\/[^/?]+\?grupo=younger/);
+  },
+);
+
 escotistaTest(
   "ramo switcher swaps the numbers between the escotista's two ramos",
   async ({ page }) => {
