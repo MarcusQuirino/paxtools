@@ -11,11 +11,9 @@ import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { api } from "../../convex/_generated/api";
-import type { Doc, Id } from "../../convex/_generated/dataModel";
+import type { Id } from "../../convex/_generated/dataModel";
 import { useAuthGate } from "@/hooks/use-auth-gate";
-import { AuthButton } from "@/components/auth/auth-button";
 import { EscoteiroShell } from "@/components/progression/escoteiro-shell";
-import { Footer } from "@/components/footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -38,7 +36,13 @@ import {
   type OlderSpecialty,
   type ProjectStep as Step,
 } from "@/data/specialty-data/older";
-import { getSpecialtyLevel } from "@/lib/completion-logic";
+import {
+  levelThresholds,
+  standingsById,
+  type EtapaState,
+  type OlderStanding,
+  type YoungerStanding,
+} from "@/lib/especialidade-standing";
 import { usePlan } from "@/hooks/use-plan";
 import { encodePlanKey } from "@/lib/plan-keys";
 import { PlanStar } from "@/components/progression/plan-star";
@@ -117,12 +121,7 @@ export const Route = createFileRoute("/especialidades")({
           convexQuery(api.groups.getGroupMembers, {}),
         ),
         context.queryClient.ensureQueryData(
-          convexQuery(api.specialties.getSpecialtyItemsForEscoteiro, {
-            escoteiroId,
-          }),
-        ),
-        context.queryClient.ensureQueryData(
-          convexQuery(api.specialties.getSpecialtyReportsForEscoteiro, {
+          convexQuery(api.specialties.getEscoteiroEspecialidades, {
             escoteiroId,
           }),
         ),
@@ -131,10 +130,7 @@ export const Route = createFileRoute("/especialidades")({
     }
     await Promise.all([
       context.queryClient.ensureQueryData(
-        convexQuery(api.specialties.getMySpecialtyItems, {}),
-      ),
-      context.queryClient.ensureQueryData(
-        convexQuery(api.specialties.getMySpecialtyReports, {}),
+        convexQuery(api.specialties.getMyEspecialidades, {}),
       ),
       context.queryClient.ensureQueryData(convexQuery(api.plan.getMyPlan, {})),
     ]);
@@ -146,40 +142,12 @@ export const Route = createFileRoute("/especialidades")({
 // Page frame
 // ---------------------------------------------------------------------------
 
-/**
- * The escoteiro's own page sits in the tabbed escoteiro shell. The escotista's
- * read-only view of a scout (#53) must not show the escoteiro tab bar, so it
- * keeps a plain header with the account menu.
- */
-function EspecialidadesFrame({
-  readOnly,
-  children,
-}: {
-  readOnly?: boolean;
-  children: ReactNode;
-}) {
-  if (!readOnly) {
-    return <EscoteiroShell title="Especialidades">{children}</EscoteiroShell>;
-  }
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-lg px-4 py-4 space-y-4 pb-20">
-        <header className="flex items-center justify-between">
-          <h1 className="text-lg font-black uppercase text-foreground">
-            Especialidades
-          </h1>
-          <AuthButton />
-        </header>
-        {children}
-        <Footer />
-      </div>
-    </div>
-  );
+function EspecialidadesFrame({ children }: { children: ReactNode }) {
+  return <EscoteiroShell title="Especialidades">{children}</EscoteiroShell>;
 }
 
 // ---------------------------------------------------------------------------
-// Plano stars — only the escoteiro's own page provides this; the escotista
-// read-only view leaves it null, so no stars or "No plano" chip render there.
+// Plano stars — the escoteiro's own page provides the plano context.
 // ---------------------------------------------------------------------------
 
 type CatalogPlan = {
@@ -290,47 +258,26 @@ function LevelBadge({ level }: { level: 0 | 1 | 2 }) {
 // Specialty card (collapsible item checklist)
 // ---------------------------------------------------------------------------
 
-type ItemRow = Doc<"specialtyItemCompletions">;
-
 function SpecialtyCard({
   specialty,
-  items,
+  standing,
   onToggle,
   isToggling,
   highlighted,
-  readOnly,
 }: {
   specialty: YoungSpecialty;
-  items: ItemRow[];
+  standing: YoungerStanding | undefined;
   onToggle: (specialtyId: string, itemIndex: number) => void;
   isToggling: boolean;
   highlighted?: boolean;
-  /** Escotista read-only mode (#53): disable every checkbox. */
-  readOnly?: boolean;
 }) {
   const { ref, open, setOpen } = useDeepLinkHighlight(!!highlighted);
 
-  const itemsByIndex = useMemo(() => {
-    const m = new Map<number, ItemRow>();
-    for (const item of items) {
-      m.set(item.itemIndex, item);
-    }
-    return m;
-  }, [items]);
-
-  const approvedCount = useMemo(
-    () => items.filter((i) => i.status === "approved" || !i.status).length,
-    [items],
-  );
-  const pendingCount = useMemo(
-    () => items.filter((i) => i.status === "pending").length,
-    [items],
-  );
-  const level = getSpecialtyLevel(approvedCount, specialty.items.length) as
-    | 0
-    | 1
-    | 2;
+  const approvedCount = standing?.approvedCount ?? 0;
+  const pendingCount = standing?.pendingCount ?? 0;
+  const level = standing?.level ?? 0;
   const totalItems = specialty.items.length;
+  const thresholds = levelThresholds(totalItems);
   const progressPct = Math.round((approvedCount / totalItems) * 100);
 
   return (
@@ -384,20 +331,19 @@ function SpecialtyCard({
             {/* Level threshold note */}
             <div className="px-4 py-2 bg-muted/30 flex items-center gap-3 text-xs text-muted-foreground">
               <span className="font-medium text-foreground">
-                Nível 1: {totalItems / 2} itens
+                Nível 1: {thresholds.level1} itens
               </span>
               <span>·</span>
               <span className="font-medium text-foreground">
-                Nível 2: {totalItems} itens
+                Nível 2: {thresholds.level2} itens
               </span>
             </div>
 
             {/* Items checklist */}
             <div className="divide-y divide-black/10">
               {specialty.items.map((itemText, index) => {
-                const row = itemsByIndex.get(index);
-                const status = row?.status ?? null;
-                const isApproved = status === "approved" || (!status && !!row);
+                const status = standing?.items[index]?.status ?? null;
+                const isApproved = status === "approved";
                 const isPending = status === "pending";
 
                 return (
@@ -413,7 +359,7 @@ function SpecialtyCard({
                   >
                     <Checkbox
                       checked={isApproved || isPending}
-                      disabled={readOnly || isApproved || isToggling}
+                      disabled={isApproved || isToggling}
                       className={
                         isApproved
                           ? "data-[state=checked]:bg-green-600 data-[state=checked]:border-green-700 mt-0.5"
@@ -422,9 +368,7 @@ function SpecialtyCard({
                             : "mt-0.5"
                       }
                       onCheckedChange={() => {
-                        if (!isApproved && !readOnly) {
-                          onToggle(specialty.id, index);
-                        }
+                        if (!isApproved) onToggle(specialty.id, index);
                       }}
                     />
                     <div className="flex-1 min-w-0">
@@ -479,33 +423,24 @@ const EIXO_LABELS: Record<string, { name: string; color: string }> = {
 function EixoSection({
   eixoId,
   specialties,
-  itemsBySpecialty,
+  standings,
   onToggle,
   isToggling,
   highlightId,
-  readOnly,
 }: {
   eixoId: string;
   specialties: YoungSpecialty[];
-  itemsBySpecialty: Map<string, ItemRow[]>;
+  standings: Map<string, YoungerStanding>;
   onToggle: (specialtyId: string, itemIndex: number) => void;
   isToggling: boolean;
   highlightId?: string;
-  readOnly?: boolean;
 }) {
   const [open, setOpen] = useAutoOpen(
     specialties.some((s) => s.id === highlightId),
   );
   const meta = EIXO_LABELS[eixoId] ?? { name: eixoId, color: "#666" };
 
-  // Count specialties with at least level 1
-  const earnedCount = specialties.filter((s) => {
-    const items = itemsBySpecialty.get(s.id) ?? [];
-    const approved = items.filter(
-      (i) => i.status === "approved" || !i.status,
-    ).length;
-    return getSpecialtyLevel(approved, s.items.length) >= 1;
-  }).length;
+  const earnedCount = specialties.filter((s) => standings.get(s.id)?.earned).length;
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -538,11 +473,10 @@ function EixoSection({
             <SpecialtyCard
               key={s.id}
               specialty={s}
-              items={itemsBySpecialty.get(s.id) ?? []}
+              standing={standings.get(s.id)}
               onToggle={onToggle}
               isToggling={isToggling}
               highlighted={s.id === highlightId}
-              readOnly={readOnly}
             />
           ))}
         </div>
@@ -664,7 +598,7 @@ function EspecialidadesPage() {
   // With an escoteiroId the viewer is an escotista inspecting a scout's
   // detail (#53); without it this is the escoteiro self-service page. The gate
   // requires the matching role so the escotista is no longer bounced.
-  const { ready, user } = useAuthGate(escoteiroId ? "escotista" : "escoteiro");
+  const { ready } = useAuthGate(escoteiroId ? "escotista" : "escoteiro");
 
   if (!ready) {
     return (
@@ -687,96 +621,62 @@ function EspecialidadesPage() {
 
   // Escotista inspecting a scout's especialidade detail (#53): render that
   // scout's data read-only, keyed by the scout's ramo — not the adult's.
+  // The actionable ficha (EscotistaFicha): tap marks/unmarks items, pending
+  // submissions get Aprovar / Rejeitar, older etapas can be registered on the
+  // scout's behalf. Every write re-checks visibilidade de ramo server-side.
   if (escoteiroId) {
-    return (
-      <EscotistaEspecialidadesContent
-        escoteiroId={escoteiroId}
-        highlightId={highlightId}
-      />
-    );
+    return <EscotistaFicha escoteiroId={escoteiroId} specialtyId={highlightId} />;
   }
 
-  const ramo = user?.ramo;
-
-  // Older group (sênior + pioneiro): project-step UI. Younger: item checklist.
-  if (ramo === "senior" || ramo === "pioneiro") {
-    return <OlderEspecialidadesContent highlightId={highlightId} />;
-  }
-
-  return <YoungerEspecialidadesContent highlightId={highlightId} />;
-}
-
-/**
- * Escotista view of a scout's especialidades (#53) — the actionable ficha
- * (EscotistaFicha): tap marks/unmarks items, pending submissions get Aprovar /
- * Rejeitar, older etapas can be registered on the scout's behalf. The scout's
- * ramo (visibility-scoped getGroupMembers) picks younger vs older; every write
- * re-checks visibilidade de ramo server-side.
- */
-function EscotistaEspecialidadesContent({
-  escoteiroId,
-  highlightId,
-}: {
-  escoteiroId: Id<"users">;
-  highlightId?: string;
-}) {
-  return <EscotistaFicha escoteiroId={escoteiroId} specialtyId={highlightId} />;
-}
-
-// Self-service fetcher: the escoteiro's own items (editable).
-function YoungerEspecialidadesContent({
-  highlightId,
-}: {
-  highlightId?: string;
-}) {
-  const { data: myItems } = useSuspenseQuery(
-    convexQuery(api.specialties.getMySpecialtyItems, {}),
-  );
   return (
     <CatalogPlanProvider>
-      <YoungerEspecialidadesView items={myItems} highlightId={highlightId} />
+      <OwnEspecialidades highlightId={highlightId} />
     </CatalogPlanProvider>
   );
 }
 
+/**
+ * The escoteiro's own especialidades. The server picks the ramo group from
+ * their current ramo; older (sênior + pioneiro) gets the three-etapa project
+ * UI, younger the item checklist.
+ */
+function OwnEspecialidades({ highlightId }: { highlightId?: string }) {
+  const { data } = useSuspenseQuery(
+    convexQuery(api.specialties.getMyEspecialidades, {}),
+  );
+  const standings = useMemo(() => standingsById(data.standings), [data.standings]);
+  if (data.ramoGroup === "older") {
+    return (
+      <OlderEspecialidadesView
+        standings={standings as Map<string, OlderStanding>}
+        highlightId={highlightId}
+      />
+    );
+  }
+  return (
+    <YoungerEspecialidadesView
+      standings={standings as Map<string, YoungerStanding>}
+      highlightId={highlightId}
+    />
+  );
+}
+
 function YoungerEspecialidadesView({
-  items: myItems,
+  standings,
   highlightId,
-  readOnly,
 }: {
-  items: Doc<"specialtyItemCompletions">[];
+  standings: Map<string, YoungerStanding>;
   highlightId?: string;
-  /** Escotista read-only mode (#53): disable self-service controls. */
-  readOnly?: boolean;
 }) {
   const toggleItemFn = useConvexMutation(api.specialties.toggleSpecialtyItem);
   const { mutate: toggleItem, isPending: isToggling } = useMutation({
     mutationFn: toggleItemFn,
   });
 
-  // Build a map: specialtyId → items[]
-  const itemsBySpecialty = useMemo(() => {
-    const m = new Map<string, Doc<"specialtyItemCompletions">[]>();
-    for (const item of myItems) {
-      if (item.ramoGroup !== "younger") continue;
-      const arr = m.get(item.specialtyId) ?? [];
-      arr.push(item);
-      m.set(item.specialtyId, arr);
-    }
-    return m;
-  }, [myItems]);
-
-  // In escotista read-only mode, self-service toggling must not fire as the
-  // adult — the controls are disabled and the handler is a no-op (#53).
-  const handleToggle = (specialtyId: string, itemIndex: number) => {
-    if (readOnly) return;
+  const handleToggle = (specialtyId: string, itemIndex: number) =>
     toggleItem({ specialtyId, itemIndex });
-  };
 
-  const startedIds = useMemo(
-    () => new Set(itemsBySpecialty.keys()),
-    [itemsBySpecialty],
-  );
+  const startedIds = useMemo(() => new Set(standings.keys()), [standings]);
   const { results, ...filterBar } = useEspecialidadesFilter(
     "younger",
     startedIds,
@@ -785,7 +685,7 @@ function YoungerEspecialidadesView({
   const eixoIds = Object.keys(YOUNGER_SPECIALTIES_BY_EIXO);
 
   return (
-    <EspecialidadesFrame readOnly={readOnly}>
+    <EspecialidadesFrame>
       <EspecialidadesFilterBar {...filterBar} />
       {results ? (
         <FilterResults count={results.length} filter={filterBar.filter}>
@@ -793,11 +693,10 @@ function YoungerEspecialidadesView({
             <SpecialtyCard
               key={e.id}
               specialty={YOUNGER_SPECIALTY_BY_ID.get(e.id)!}
-              items={itemsBySpecialty.get(e.id) ?? []}
+              standing={standings.get(e.id)}
               onToggle={handleToggle}
               isToggling={isToggling}
               highlighted={e.id === highlightId}
-              readOnly={readOnly}
             />
           ))}
         </FilterResults>
@@ -810,11 +709,10 @@ function YoungerEspecialidadesView({
               key={eixoId}
               eixoId={eixoId}
               specialties={specialties}
-              itemsBySpecialty={itemsBySpecialty}
+              standings={standings}
               onToggle={handleToggle}
               isToggling={isToggling}
               highlightId={highlightId}
-              readOnly={readOnly}
             />
           );
         })}
@@ -827,8 +725,6 @@ function YoungerEspecialidadesView({
 // ===========================================================================
 // Older group (sênior + pioneiro) — three-step project UI
 // ===========================================================================
-
-type ReportRow = Doc<"specialtyProjectReports">;
 
 const STEP_ORDER = PROJECT_STEPS;
 
@@ -843,32 +739,29 @@ function StepCard({
   specialtyId,
   step,
   suggestions,
-  row,
+  etapa,
   onSubmit,
   isSubmitting,
-  readOnly,
 }: {
   specialtyId: string;
   step: Step;
   suggestions: string[];
-  row: ReportRow | undefined;
+  etapa: EtapaState | null;
   onSubmit: (specialtyId: string, step: Step, text: string) => void;
   isSubmitting: boolean;
-  /** Escotista read-only mode (#53): lock the textarea, hide the submit. */
-  readOnly?: boolean;
 }) {
-  const status = row?.status ?? null;
+  const status = etapa?.status ?? null;
   const isApproved = status === "approved";
   const isPending = status === "pending";
-  const [text, setText] = useState(row?.text ?? "");
+  const [text, setText] = useState(etapa?.text ?? "");
 
-  // Keep the local draft in sync when the stored row changes (e.g. approval).
+  // Keep the local draft in sync when the stored relato changes (e.g. approval).
   useEffect(() => {
-    setText(row?.text ?? "");
-  }, [row?._id, row?.text]);
+    setText(etapa?.text ?? "");
+  }, [etapa?.rowId, etapa?.text]);
 
-  const canEdit = !isApproved && !readOnly;
-  const dirty = text.trim() !== (row?.text ?? "").trim();
+  const canEdit = !isApproved;
+  const dirty = text.trim() !== (etapa?.text ?? "").trim();
 
   return (
     <div
@@ -949,26 +842,21 @@ function StepCard({
 
 function OlderSpecialtyCard({
   specialty,
-  reports,
+  standing,
   onSubmit,
   isSubmitting,
   highlighted,
-  readOnly,
 }: {
   specialty: OlderSpecialty;
-  reports: Map<Step, ReportRow>;
+  standing: OlderStanding | undefined;
   onSubmit: (specialtyId: string, step: Step, text: string) => void;
   isSubmitting: boolean;
   highlighted?: boolean;
-  readOnly?: boolean;
 }) {
   const { ref, open, setOpen } = useDeepLinkHighlight(!!highlighted);
 
-  const approvedCount = STEP_ORDER.filter(
-    (s) => reports.get(s)?.status === "approved",
-  ).length;
-  // Earned only once all three steps are approved (ADR 0002).
-  const earned = approvedCount === 3;
+  const approvedCount = standing?.approvedCount ?? 0;
+  const earned = !!standing?.earned;
 
   const suggestionsFor = (step: Step): string[] =>
     step === "conhecer"
@@ -999,7 +887,7 @@ function OlderSpecialtyCard({
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {approvedCount}/3 etapas aprovadas
+              {approvedCount}/{STEP_ORDER.length} etapas aprovadas
             </p>
           </div>
           <ChevronDown
@@ -1018,10 +906,9 @@ function OlderSpecialtyCard({
                 specialtyId={specialty.id}
                 step={step}
                 suggestions={suggestionsFor(step)}
-                row={reports.get(step)}
+                etapa={standing?.etapas[step] ?? null}
                 onSubmit={onSubmit}
                 isSubmitting={isSubmitting}
-                readOnly={readOnly}
               />
             ))}
           </div>
@@ -1034,30 +921,24 @@ function OlderSpecialtyCard({
 function OlderEixoSection({
   eixoId,
   specialties,
-  reportsBySpecialty,
+  standings,
   onSubmit,
   isSubmitting,
   highlightId,
-  readOnly,
 }: {
   eixoId: string;
   specialties: OlderSpecialty[];
-  reportsBySpecialty: Map<string, Map<Step, ReportRow>>;
+  standings: Map<string, OlderStanding>;
   onSubmit: (specialtyId: string, step: Step, text: string) => void;
   isSubmitting: boolean;
   highlightId?: string;
-  readOnly?: boolean;
 }) {
   const [open, setOpen] = useAutoOpen(
     specialties.some((s) => s.id === highlightId),
   );
   const meta = EIXO_LABELS[eixoId] ?? { name: eixoId, color: "#666" };
 
-  // Earned = all three steps approved (ADR 0002).
-  const earnedCount = specialties.filter((s) => {
-    const reports = reportsBySpecialty.get(s.id);
-    return STEP_ORDER.every((step) => reports?.get(step)?.status === "approved");
-  }).length;
+  const earnedCount = specialties.filter((s) => standings.get(s.id)?.earned).length;
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -1090,11 +971,10 @@ function OlderEixoSection({
             <OlderSpecialtyCard
               key={s.id}
               specialty={s}
-              reports={reportsBySpecialty.get(s.id) ?? new Map()}
+              standing={standings.get(s.id)}
               onSubmit={onSubmit}
               isSubmitting={isSubmitting}
               highlighted={s.id === highlightId}
-              readOnly={readOnly}
             />
           ))}
         </div>
@@ -1103,58 +983,25 @@ function OlderEixoSection({
   );
 }
 
-// Self-service fetcher: the escoteiro's own reports (editable).
-function OlderEspecialidadesContent({ highlightId }: { highlightId?: string }) {
-  const { data: myReports } = useSuspenseQuery(
-    convexQuery(api.specialties.getMySpecialtyReports, {}),
-  );
-  return (
-    <CatalogPlanProvider>
-      <OlderEspecialidadesView reports={myReports} highlightId={highlightId} />
-    </CatalogPlanProvider>
-  );
-}
-
 function OlderEspecialidadesView({
-  reports: myReports,
+  standings,
   highlightId,
-  readOnly,
 }: {
-  reports: Doc<"specialtyProjectReports">[];
+  standings: Map<string, OlderStanding>;
   highlightId?: string;
-  /** Escotista read-only mode (#53): disable self-service controls. */
-  readOnly?: boolean;
 }) {
-  // Submitting a step never earns the specialty (that happens on escotista
-  // approval of the compartilhar step), so no level-up toast is expected here.
+  // An escoteiro's own submission stays pending, so it never earns the
+  // especialidade (that happens when an escotista approves the last of the
+  // three etapas) and no level-up toast is expected here.
   const submitStepFn = useConvexMutation(api.specialties.submitSpecialtyStep);
   const { mutate: submitStep, isPending: isSubmitting } = useMutation({
     mutationFn: submitStepFn,
   });
 
-  // specialtyId → (step → row), older ramoGroup only.
-  const reportsBySpecialty = useMemo(() => {
-    const m = new Map<string, Map<Step, ReportRow>>();
-    for (const row of myReports) {
-      if (row.ramoGroup !== "older") continue;
-      const inner = m.get(row.specialtyId) ?? new Map<Step, ReportRow>();
-      inner.set(row.step as Step, row);
-      m.set(row.specialtyId, inner);
-    }
-    return m;
-  }, [myReports]);
-
-  // In escotista read-only mode, submitting as the scout must not fire as the
-  // adult — the textareas are disabled and the handler is a no-op (#53).
-  const handleSubmit = (specialtyId: string, step: Step, text: string) => {
-    if (readOnly) return;
+  const handleSubmit = (specialtyId: string, step: Step, text: string) =>
     submitStep({ specialtyId, step, text });
-  };
 
-  const startedIds = useMemo(
-    () => new Set(reportsBySpecialty.keys()),
-    [reportsBySpecialty],
-  );
+  const startedIds = useMemo(() => new Set(standings.keys()), [standings]);
   const { results, ...filterBar } = useEspecialidadesFilter(
     "older",
     startedIds,
@@ -1163,7 +1010,7 @@ function OlderEspecialidadesView({
   const eixoIds = Object.keys(OLDER_SPECIALTIES_BY_EIXO);
 
   return (
-    <EspecialidadesFrame readOnly={readOnly}>
+    <EspecialidadesFrame>
       <p className="text-xs text-muted-foreground px-1">
         Cada especialidade é um projeto em três etapas: Conhecer, Fazer e
         Compartilhar. Você pode escrever os relatos em qualquer ordem; a
@@ -1177,11 +1024,10 @@ function OlderEspecialidadesView({
             <OlderSpecialtyCard
               key={e.id}
               specialty={OLDER_SPECIALTY_BY_ID.get(e.id)!}
-              reports={reportsBySpecialty.get(e.id) ?? new Map()}
+              standing={standings.get(e.id)}
               onSubmit={handleSubmit}
               isSubmitting={isSubmitting}
               highlighted={e.id === highlightId}
-              readOnly={readOnly}
             />
           ))}
         </FilterResults>
@@ -1192,11 +1038,10 @@ function OlderEspecialidadesView({
             key={eixoId}
             eixoId={eixoId}
             specialties={OLDER_SPECIALTIES_BY_EIXO[eixoId] ?? []}
-            reportsBySpecialty={reportsBySpecialty}
+            standings={standings}
             onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
             highlightId={highlightId}
-            readOnly={readOnly}
           />
         ))}
       </div>

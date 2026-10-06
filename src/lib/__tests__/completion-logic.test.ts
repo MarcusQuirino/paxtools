@@ -3,7 +3,6 @@ import type { Action, Bloco, Eixo } from "@/data/types";
 import {
   getBlocoProgress,
   getCompletedBlockIds,
-  getEarnedSpecialtyIds,
   getEarnedSpecialtyBlocoIds,
   getSpecialtyLevel,
   isSpecialtyEarned,
@@ -399,56 +398,6 @@ describe("getCompletedBlockIds", () => {
     expect(result.approved.has("complete-bloco")).toBe(true);
     expect(result.approved.has("incomplete-bloco")).toBe(false);
     expect(result.approved.size).toBe(1);
-  });
-});
-
-// ── getEarnedSpecialtyIds ──────────────────────────────────────
-
-describe("getEarnedSpecialtyIds", () => {
-  const totals = new Map([
-    ["administracao", 6],
-    ["idiomas", 8],
-  ]);
-  const getTotal = (id: string) => totals.get(id) ?? 0;
-
-  it("includes a specialty at level 1 (half approved)", () => {
-    const items = Array.from({ length: 3 }, () => ({
-      specialtyId: "administracao",
-    }));
-    expect(getEarnedSpecialtyIds(items, getTotal)).toEqual(
-      new Set(["administracao"]),
-    );
-  });
-
-  it("includes a specialty at level 2 (all approved)", () => {
-    const items = Array.from({ length: 8 }, () => ({ specialtyId: "idiomas" }));
-    expect(getEarnedSpecialtyIds(items, getTotal)).toEqual(
-      new Set(["idiomas"]),
-    );
-  });
-
-  it("excludes a specialty below the level-1 threshold", () => {
-    const items = [{ specialtyId: "administracao" }, { specialtyId: "administracao" }];
-    expect(getEarnedSpecialtyIds(items, getTotal).size).toBe(0);
-  });
-
-  it("ignores items for unknown specialtyIds (0 total)", () => {
-    const items = Array.from({ length: 5 }, () => ({
-      specialtyId: "nao-existe",
-    }));
-    expect(getEarnedSpecialtyIds(items, getTotal).size).toBe(0);
-  });
-
-  it("counts each specialty independently", () => {
-    const items = [
-      { specialtyId: "administracao" },
-      { specialtyId: "administracao" },
-      { specialtyId: "administracao" },
-      { specialtyId: "idiomas" }, // only 1/8 → not earned
-    ];
-    expect(getEarnedSpecialtyIds(items, getTotal)).toEqual(
-      new Set(["administracao"]),
-    );
   });
 });
 

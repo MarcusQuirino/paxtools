@@ -31,10 +31,10 @@ import {
   resolvePlanItems,
   isResolvedComplete,
   sortForLinearView,
-  buildSpecialtyProgress,
   type PlanItemResolved,
 } from "@/lib/plan-view";
-import { catalogFor, ramoGroupOf } from "@/components/escotista/especialidades/ui";
+import { catalogFor } from "@/data/specialty-data/catalog";
+import { standingsById } from "@/lib/especialidade-standing";
 import { PlanStar } from "@/components/progression/plan-star";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Award, Clock, GripVertical, Sparkles, Trophy } from "lucide-react";
@@ -50,10 +50,7 @@ export const Route = createFileRoute("/plan")({
         convexQuery(api.plan.getMyPlan, {}),
       ),
       context.queryClient.ensureQueryData(
-        convexQuery(api.specialties.getMySpecialtyItems, {}),
-      ),
-      context.queryClient.ensureQueryData(
-        convexQuery(api.specialties.getMySpecialtyReports, {}),
+        convexQuery(api.specialties.getMyEspecialidades, {}),
       ),
     ]);
   },
@@ -86,7 +83,6 @@ type ViewMode = "byArea" | "ordered";
 function PlanDashboard() {
   const [viewMode, setViewMode] = useState<ViewMode>("byArea");
   const {
-    ramo,
     eixos,
     approvedActionIds,
     pendingActionIds,
@@ -102,24 +98,15 @@ function PlanDashboard() {
   const catalog = useMemo(() => buildCatalogIndex(eixos), [eixos]);
 
   // Especialidades starred on /especialidades (`especialidade:` keys) resolve
-  // against the current ramoGroup's catalog, with progress from its items
-  // (younger) or etapa reports (older).
-  const { data: specialtyItems } = useSuspenseQuery(
-    convexQuery(api.specialties.getMySpecialtyItems, {}),
+  // against the current ramo group's catalog, with their standing — the same
+  // progress and "earned" the especialidades page shows.
+  const { data: especialidadesRecord } = useSuspenseQuery(
+    convexQuery(api.specialties.getMyEspecialidades, {}),
   );
-  const { data: specialtyReports } = useSuspenseQuery(
-    convexQuery(api.specialties.getMySpecialtyReports, {}),
-  );
-  const specialtyCatalog = useMemo(() => catalogFor(ramoGroupOf(ramo)), [ramo]);
-  const specialtyProgress = useMemo(
-    () =>
-      buildSpecialtyProgress(
-        ramoGroupOf(ramo),
-        specialtyCatalog,
-        specialtyItems,
-        specialtyReports,
-      ),
-    [ramo, specialtyCatalog, specialtyItems, specialtyReports],
+  const specialtyCatalog = catalogFor(especialidadesRecord.ramoGroup);
+  const especialidades = useMemo(
+    () => standingsById(especialidadesRecord.standings),
+    [especialidadesRecord],
   );
   const resolved = useMemo(
     () =>
@@ -131,7 +118,7 @@ function PlanDashboard() {
         earnedSpecialtyIds,
         customActions,
         specialtyCatalog,
-        specialtyProgress,
+        especialidades,
       }),
     [
       items,
@@ -142,7 +129,7 @@ function PlanDashboard() {
       earnedSpecialtyIds,
       customActions,
       specialtyCatalog,
-      specialtyProgress,
+      especialidades,
     ],
   );
 

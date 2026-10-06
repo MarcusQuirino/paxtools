@@ -7,7 +7,6 @@ import {
   isResolvedComplete,
   buildCatalogIndex,
   resolvePlanItems,
-  buildSpecialtyProgress,
   type PlanItemResolved,
 } from "@/lib/plan-view";
 import { encodePlanKey, decodePlanKey } from "@/lib/plan-keys";
@@ -217,18 +216,20 @@ describe("resolvePlanItems: catalog especialidades", () => {
     { id: "proj", name: "Projeto", eixoId: "e1", itemCount: null },
     { id: "orphan", name: "Órfã", eixoId: "nope", itemCount: 4 },
   ];
-  const input = (
-    earnedSpecialtyIds = new Set<string>(),
-    specialtyProgress = new Map(),
-  ) => ({
+  type StandingLike = {
+    kind: "younger" | "older";
+    approvedCount: number;
+    total: number;
+    earned: boolean;
+  };
+  const input = (especialidades = new Map<string, StandingLike>()) => ({
     catalog,
     approvedActionIds: new Set<string>(),
     pendingActionIds: new Set<string>(),
     actionStatusMap: new Map<string, "pending" | "approved">(),
-    earnedSpecialtyIds,
     customActions: [],
     specialtyCatalog,
-    specialtyProgress,
+    especialidades,
   });
 
   function resolveOne(id: string, ...rest: Parameters<typeof input>) {
@@ -250,57 +251,30 @@ describe("resolvePlanItems: catalog especialidades", () => {
     });
   });
 
-  it("uses supplied progress and marks earned as complete", () => {
+  it("takes progress and earned from the especialidade standing", () => {
     const item = resolveOne(
       "adm",
-      new Set(["adm"]),
-      new Map([["adm", { approved: 3, total: 6, unit: "itens" as const }]]),
+      new Map([
+        ["adm", { kind: "younger" as const, approvedCount: 3, total: 6, earned: true }],
+      ]),
     );
-    expect(item.progress.approved).toBe(3);
+    expect(item.progress).toEqual({ approved: 3, total: 6, unit: "itens" });
     expect(item.checked).toBe(true);
     expect(isResolvedComplete(item)).toBe(true);
+
+    const project = resolveOne(
+      "proj",
+      new Map([
+        ["proj", { kind: "older" as const, approvedCount: 2, total: 3, earned: false }],
+      ]),
+    );
+    expect(project.progress).toEqual({ approved: 2, total: 3, unit: "etapas" });
+    expect(project.checked).toBe(false);
   });
 
   it("skips ids missing from the catalog or whose eixo isn't in this ramo", () => {
     expect(resolvePlanItems(planned("ghost"), input())).toEqual([]);
     expect(resolvePlanItems(planned("orphan"), input())).toEqual([]);
-  });
-});
-
-describe("buildSpecialtyProgress", () => {
-  const cat = [
-    { id: "a", itemCount: 4 },
-    { id: "b", itemCount: null },
-  ];
-
-  it("younger: counts non-pending items of the younger group only", () => {
-    const m = buildSpecialtyProgress(
-      "younger",
-      cat,
-      [
-        { specialtyId: "a", ramoGroup: "younger", status: "approved" },
-        { specialtyId: "a", ramoGroup: "younger" },
-        { specialtyId: "a", ramoGroup: "younger", status: "pending" },
-        { specialtyId: "a", ramoGroup: "older", status: "approved" },
-        { specialtyId: "zz", ramoGroup: "younger", status: "approved" },
-      ],
-      [],
-    );
-    expect(m.get("a")).toEqual({ approved: 2, total: 4, unit: "itens" });
-    expect(m.has("zz")).toBe(false);
-  });
-
-  it("older: counts approved etapas out of 3", () => {
-    const m = buildSpecialtyProgress(
-      "older",
-      cat,
-      [],
-      [
-        { specialtyId: "b", ramoGroup: "older", status: "approved" },
-        { specialtyId: "b", ramoGroup: "older", status: "pending" },
-      ],
-    );
-    expect(m.get("b")).toEqual({ approved: 1, total: 3, unit: "etapas" });
   });
 });
 

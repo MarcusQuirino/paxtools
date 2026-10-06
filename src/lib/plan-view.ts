@@ -2,6 +2,7 @@ import type { Bloco, CustomAction, Eixo } from "../data/types";
 import type { Doc } from "../../convex/_generated/dataModel";
 import { decodePlanKey } from "./plan-keys";
 import { isSpecialtyEarned } from "./completion-logic";
+import type { Standing } from "./especialidade-standing";
 
 export type PlanItemResolved =
   | {
@@ -120,8 +121,11 @@ export type ResolverInput = {
   customActions: CustomAction[];
   /** Current ramoGroup's especialidade catalog, for `especialidade:` keys. */
   specialtyCatalog?: SpecialtyCatalogEntry[];
-  /** specialtyId → progress; missing = not started. */
-  specialtyProgress?: Map<string, SpecialtyProgress>;
+  /** specialtyId → especialidade standing; missing = not started. */
+  especialidades?: Map<
+    string,
+    Pick<Standing, "kind" | "approvedCount" | "total" | "earned">
+  >;
 };
 
 export function resolvePlanItems(
@@ -183,7 +187,8 @@ export function resolvePlanItems(
       const spec = specialtyById.get(decoded.specialtyId);
       const eixo = spec && eixosById.get(spec.eixoId);
       if (!spec || !eixo) continue;
-      const earned = (input.earnedSpecialtyIds ?? new Set()).has(spec.id);
+      const standing = input.especialidades?.get(spec.id);
+      const earned = !!standing?.earned;
       resolved.push({
         itemKey: p.itemKey,
         position: p.position,
@@ -191,11 +196,17 @@ export function resolvePlanItems(
         eixo,
         specialtyId: spec.id,
         name: spec.name,
-        progress: input.specialtyProgress?.get(spec.id) ?? {
-          approved: 0,
-          total: spec.itemCount ?? 3,
-          unit: spec.itemCount === null ? "etapas" : "itens",
-        },
+        progress: standing
+          ? {
+              approved: standing.approvedCount,
+              total: standing.total,
+              unit: standing.kind === "younger" ? "itens" : "etapas",
+            }
+          : {
+              approved: 0,
+              total: spec.itemCount ?? 3,
+              unit: spec.itemCount === null ? "etapas" : "itens",
+            },
         checked: earned,
         status: earned ? "approved" : undefined,
       });
@@ -239,39 +250,4 @@ export function sortForLinearView(
     (isResolvedChecked(item) ? done : open).push(item);
   }
   return [...open, ...done];
-}
-
-type SpecialtyRow = {
-  specialtyId: string;
-  ramoGroup: string;
-  status?: string;
-};
-
-/**
- * Per-specialty progress for the plano's `especialidade:` rows. Younger counts
- * approved items (a missing status counts as approved, like /especialidades);
- * older counts approved etapas out of 3. Only started specialties get an entry.
- */
-export function buildSpecialtyProgress(
-  group: "younger" | "older",
-  catalog: { id: string; itemCount: number | null }[],
-  items: SpecialtyRow[],
-  reports: SpecialtyRow[],
-): Map<string, SpecialtyProgress> {
-  const totals = new Map(catalog.map((e) => [e.id, e.itemCount]));
-  const progress = new Map<string, SpecialtyProgress>();
-  const rows = group === "younger" ? items : reports;
-  for (const row of rows) {
-    if (row.ramoGroup !== group || !totals.has(row.specialtyId)) continue;
-    const entry = progress.get(row.specialtyId) ?? {
-      approved: 0,
-      total: group === "younger" ? (totals.get(row.specialtyId) ?? 0) : 3,
-      unit: group === "younger" ? "itens" : "etapas",
-    };
-    const approved =
-      group === "younger" ? row.status !== "pending" : row.status === "approved";
-    if (approved) entry.approved += 1;
-    progress.set(row.specialtyId, entry);
-  }
-  return progress;
 }

@@ -1,7 +1,9 @@
 /**
- * Specialty system backend — younger ramoGroup (lobinho + escoteiro).
- * Issue #42: item-level toggle, approval, rejection, and query for the
- * /especialidades route and the escotista pending queue.
+ * Especialidades backend. Reads return the especialidade *standing* (see
+ * src/lib/especialidade-standing) — never raw rows — so every surface agrees
+ * on what is approved, waiting, earned and missing. Writes cover the younger
+ * item checklist (lobinho + escoteiro) and the older three-etapa project
+ * (sênior + pioneiro).
  */
 
 import { query, mutation } from "./_generated/server";
@@ -27,138 +29,67 @@ import {
   filterToObservedSection,
   resolveObservedSection,
 } from "./lib/sections";
+import { readStandings } from "./lib/especialidades";
 import {
   compareByProximity,
-  olderProgress,
-  youngerProgress,
+  emptyStanding,
+  type OlderStanding,
+  type RamoGroup,
+  type Standing,
+  type YoungerStanding,
+} from "../src/lib/especialidade-standing";
+import { YOUNGER_SPECIALTY_BY_ID } from "../src/data/specialty-data/younger";
+import {
   PROJECT_STEPS,
   type ProjectStep as RosterStep,
-  type StepStatus,
-} from "./lib/specialtyProgress";
-import { YOUNGER_SPECIALTY_BY_ID } from "../src/data/specialty-data/younger";
-import { OLDER_SPECIALTY_BY_ID } from "../src/data/specialty-data/older";
-
-// ramoGroup derivation lives in ./lib/progression (shared with snapshotProgression).
+} from "../src/data/specialty-data/older";
 
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
 
+/** An escoteiro's especialidades in their current ramo group. */
+export type EspecialidadesRecord = {
+  ramoGroup: RamoGroup;
+  standings: Standing[];
+};
+
+async function recordFor(
+  ctx: QueryCtx,
+  user: Doc<"users">,
+): Promise<EspecialidadesRecord> {
+  const ramoGroup = ramoGroupForRamo(user.ramo);
+  return { ramoGroup, standings: await readStandings(ctx, user._id, ramoGroup) };
+}
+
 /**
- * Return all specialtyItemCompletions for the current user (any ramoGroup).
- * The UI uses this to render checked/pending/approved state for each item.
+ * The caller's own especialidades: one standing per especialidade they have
+ * touched in their current ramo group (the group's catalog lists the rest).
+ * Especialidades of a past ramo group are retained but never shown here.
  */
-export const getMySpecialtyItems = query({
+export const getMyEspecialidades = query({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<EspecialidadesRecord> => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-
-    const user = await ctx.db.get(userId);
-    if (!user || user.bannedAt) return [];
-
-    return ctx.db
-      .query("specialtyItemCompletions")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(1000);
+    const user = userId ? await ctx.db.get(userId) : null;
+    if (!user || user.bannedAt) return { ramoGroup: "younger", standings: [] };
+    return recordFor(ctx, user);
   },
 });
 
 /**
- * Return all specialtyItemCompletions for a specific escoteiro.
- * Used by the escotista to view an escoteiro's specialty progress.
+ * One escoteiro's especialidades, for an escotista who can see them
+ * (visibilidade de ramo) — the per-escoteiro ficha. Null when not visible.
  */
-export const getSpecialtyItemsForEscoteiro = query({
+export const getEscoteiroEspecialidades = query({
   args: { escoteiroId: v.id("users") },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<EspecialidadesRecord | null> => {
     const viewer = await tryResolveRamoViewer(ctx);
-    if (!viewer) return [];
-
-    // Verify the escoteiro is visible to this viewer
+    if (!viewer) return null;
     const escoteiro = await ctx.db.get(args.escoteiroId);
-    if (!escoteiro) return [];
-    const visible = filterVisibleEscoteiros(viewer, [escoteiro]);
-    if (visible.length === 0) return [];
-
-    return ctx.db
-      .query("specialtyItemCompletions")
-      .withIndex("by_userId", (q) => q.eq("userId", args.escoteiroId))
-      .take(1000);
-  },
-});
-
-/**
- * Return pending specialtyItemCompletions for all visible escoteiros.
- * Grouped by (escoteiroId, specialtyId) so the escotista sees one card per specialty.
- *
- * Returns: Array of { escoteiro, specialtyId, ramoGroup, pendingItems }
- */
-export const getPendingSpecialtyItemsForGroup = query({
-  args: {},
-  handler: async (ctx) => {
-    const viewer = await tryResolveRamoViewer(ctx);
-    if (!viewer) return [];
-
-    const all = await ctx.db
-      .query("users")
-      .withIndex("by_groupId_and_role", (q) =>
-        q.eq("groupId", viewer.groupId).eq("role", "escoteiro"),
-      )
-      .take(500);
-
-    const escoteiros = filterVisibleEscoteiros(viewer, all);
-
-    const result: {
-      escoteiroId: Id<"users">;
-      escoteiroName: string | undefined;
-      escoteiroImage: string | undefined;
-      escoteiroRamo: string | null;
-      specialtyId: string;
-      ramoGroup: "younger" | "older";
-      pendingItems: Doc<"specialtyItemCompletions">[];
-    }[] = [];
-
-    for (const escoteiro of escoteiros) {
-      const pendingItems = await ctx.db
-        .query("specialtyItemCompletions")
-        .withIndex("by_userId_and_status", (q) =>
-          q.eq("userId", escoteiro._id).eq("status", "pending"),
-        )
-        .take(200);
-
-      if (pendingItems.length === 0) continue;
-
-      // Group by (ramoGroup, specialtyId)
-      const bySpecialty = new Map<
-        string,
-        {
-          ramoGroup: "younger" | "older";
-          items: Doc<"specialtyItemCompletions">[];
-        }
-      >();
-      for (const item of pendingItems) {
-        const key = `${item.ramoGroup}:${item.specialtyId}`;
-        if (!bySpecialty.has(key)) {
-          bySpecialty.set(key, { ramoGroup: item.ramoGroup, items: [] });
-        }
-        bySpecialty.get(key)!.items.push(item);
-      }
-
-      for (const [key, { ramoGroup, items }] of bySpecialty) {
-        const specialtyId = key.slice(ramoGroup.length + 1);
-        result.push({
-          escoteiroId: escoteiro._id,
-          escoteiroName: escoteiro.name,
-          escoteiroImage: escoteiro.image,
-          escoteiroRamo: escoteiro.ramo ?? null,
-          specialtyId,
-          ramoGroup,
-          pendingItems: items,
-        });
-      }
-    }
-
-    return result;
+    if (!escoteiro) return null;
+    if (filterVisibleEscoteiros(viewer, [escoteiro]).length === 0) return null;
+    return recordFor(ctx, escoteiro);
   },
 });
 
@@ -425,49 +356,6 @@ const projectStep = v.union(
   v.literal("compartilhar"),
 );
 
-/**
- * Return all specialtyProjectReports for the current user.
- * The older /especialidades UI uses this to render each step's status and
- * to show how many of the three steps are approved.
- */
-export const getMySpecialtyReports = query({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-
-    const user = await ctx.db.get(userId);
-    if (!user || user.bannedAt) return [];
-
-    return ctx.db
-      .query("specialtyProjectReports")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(1000);
-  },
-});
-
-/**
- * Return all specialtyProjectReports for a specific escoteiro.
- * Used by the escotista to view an escoteiro's project progress.
- */
-export const getSpecialtyReportsForEscoteiro = query({
-  args: { escoteiroId: v.id("users") },
-  handler: async (ctx, args) => {
-    const viewer = await tryResolveRamoViewer(ctx);
-    if (!viewer) return [];
-
-    const escoteiro = await ctx.db.get(args.escoteiroId);
-    if (!escoteiro) return [];
-    const visible = filterVisibleEscoteiros(viewer, [escoteiro]);
-    if (visible.length === 0) return [];
-
-    return ctx.db
-      .query("specialtyProjectReports")
-      .withIndex("by_userId", (q) => q.eq("userId", args.escoteiroId))
-      .take(1000);
-  },
-});
-
 /** Find a user's report row for a given (ramoGroup, specialtyId, step). */
 async function findReport(
   ctx: QueryCtx,
@@ -692,7 +580,6 @@ export const rejectSpecialtyStep = mutation({
 // ---------------------------------------------------------------------------
 
 const ramoGroupArg = v.union(v.literal("younger"), v.literal("older"));
-type RamoGroup = "younger" | "older";
 
 /** Upper bound on escoteiros per grupo read at once (same as the pending list). */
 const MAX_ESCOTEIROS = 500;
@@ -745,24 +632,13 @@ function personRef(u: Doc<"users">): PersonRef {
   return { _id: u._id, name: u.name ?? null, image: u.image ?? null };
 }
 
-type Standing = { person: PersonRef; approvedCount: number; pendingCount: number };
+type PersonStanding = { person: PersonRef; approvedCount: number; pendingCount: number };
 
-function byProximity(a: Standing, b: Standing): number {
+function byProximity(a: PersonStanding, b: PersonStanding): number {
   return compareByProximity(
     { ...a, name: a.person.name },
     { ...b, name: b.person.name },
   );
-}
-
-function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
-  const m = new Map<string, T[]>();
-  for (const r of rows) {
-    const k = key(r);
-    const arr = m.get(k);
-    if (arr) arr.push(r);
-    else m.set(k, [r]);
-  }
-  return m;
 }
 
 /** Avatars shown per specialty row in the catalog. */
@@ -793,9 +669,13 @@ export const getGroupSpecialtySummary = query({
       args.ramoGroup,
     );
 
-    type Entry = { earned: Standing[]; inProgress: Standing[]; pendingCount: number };
+    type Entry = {
+      earned: PersonStanding[];
+      inProgress: PersonStanding[];
+      pendingCount: number;
+    };
     const bySpecialty = new Map<string, Entry>();
-    const record = (specialtyId: string, s: Standing, earned: boolean) => {
+    const record = (specialtyId: string, s: PersonStanding, earned: boolean) => {
       let e = bySpecialty.get(specialtyId);
       if (!e) {
         e = { earned: [], inProgress: [], pendingCount: 0 };
@@ -807,47 +687,13 @@ export const getGroupSpecialtySummary = query({
 
     for (const escoteiro of escoteiros) {
       const person = personRef(escoteiro);
-      if (args.ramoGroup === "younger") {
-        const rows = await ctx.db
-          .query("specialtyItemCompletions")
-          .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
-            q.eq("userId", escoteiro._id).eq("ramoGroup", "younger"),
-          )
-          .take(2000);
-        for (const [specialtyId, specialtyRows] of groupBy(
-          rows,
-          (r) => r.specialtyId,
-        )) {
-          const specialty = YOUNGER_SPECIALTY_BY_ID.get(specialtyId);
-          if (!specialty) continue;
-          const p = youngerProgress(specialtyRows, specialty.items.length);
-          if (p.approvedCount === 0 && p.pendingCount === 0) continue;
-          record(
-            specialtyId,
-            { person, approvedCount: p.approvedCount, pendingCount: p.pendingCount },
-            p.level >= 1,
-          );
-        }
-      } else {
-        const rows = await ctx.db
-          .query("specialtyProjectReports")
-          .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
-            q.eq("userId", escoteiro._id).eq("ramoGroup", "older"),
-          )
-          .take(2000);
-        for (const [specialtyId, specialtyRows] of groupBy(
-          rows,
-          (r) => r.specialtyId,
-        )) {
-          if (!OLDER_SPECIALTY_BY_ID.has(specialtyId)) continue;
-          const p = olderProgress(specialtyRows);
-          if (p.approvedCount === 0 && p.pendingCount === 0) continue;
-          record(
-            specialtyId,
-            { person, approvedCount: p.approvedCount, pendingCount: p.pendingCount },
-            p.earned,
-          );
-        }
+      for (const st of await readStandings(ctx, escoteiro._id, args.ramoGroup)) {
+        if (st.approvedCount === 0 && st.pendingCount === 0) continue;
+        record(
+          st.specialtyId,
+          { person, approvedCount: st.approvedCount, pendingCount: st.pendingCount },
+          st.earned,
+        );
       }
     }
 
@@ -916,41 +762,41 @@ export const getSpecialtyRoster = query({
       observedSectionName: observedSection?.name ?? null,
     };
 
+    // The not-started standing doubles as the catalog check: null = unknown id.
+    if (!emptyStanding(args.ramoGroup, args.specialtyId)) return null;
+    const standings: { escoteiro: Doc<"users">; standing: Standing }[] = [];
+    for (const escoteiro of escoteiros) {
+      const [standing] = await readStandings(
+        ctx,
+        escoteiro._id,
+        args.ramoGroup,
+        args.specialtyId,
+      );
+      if (!standing) continue;
+      if (standing.approvedCount === 0 && standing.pendingCount === 0) continue;
+      standings.push({ escoteiro, standing });
+    }
+
     if (args.ramoGroup === "younger") {
-      const specialty = YOUNGER_SPECIALTY_BY_ID.get(args.specialtyId);
-      if (!specialty) return null;
-      const total = specialty.items.length;
-      const items = specialty.items.map(() => ({
+      const total = YOUNGER_SPECIALTY_BY_ID.get(args.specialtyId)!.items.length;
+      const items = Array.from({ length: total }, () => ({
         approvedCount: 0,
         pendingCount: 0,
       }));
-      const people: (PersonRef & {
-        approvedCount: number;
-        pendingCount: number;
-        level: 0 | 1 | 2;
-      })[] = [];
-
-      for (const escoteiro of escoteiros) {
-        const rows = await ctx.db
-          .query("specialtyItemCompletions")
-          .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
-            q
-              .eq("userId", escoteiro._id)
-              .eq("ramoGroup", "younger")
-              .eq("specialtyId", args.specialtyId),
-          )
-          .take(200);
-        const p = youngerProgress(rows, total);
-        if (p.approvedCount === 0 && p.pendingCount === 0) continue;
-        for (const i of p.approvedIndexes) items[i]!.approvedCount++;
-        for (const i of p.pendingIndexes) items[i]!.pendingCount++;
-        people.push({
-          ...personRef(escoteiro),
-          approvedCount: p.approvedCount,
-          pendingCount: p.pendingCount,
-          level: p.level,
+      const people = standings.map(({ escoteiro, standing }) => {
+        const st = standing as YoungerStanding;
+        st.items.forEach((state, i) => {
+          if (state?.status === "approved") items[i]!.approvedCount++;
+          if (state?.status === "pending") items[i]!.pendingCount++;
         });
-      }
+        return {
+          ...personRef(escoteiro),
+          approvedCount: st.approvedCount,
+          pendingCount: st.pendingCount,
+          level: st.level,
+          missingForNextLevel: st.missingForNextLevel,
+        };
+      });
       people.sort(compareByProximity);
       return {
         ...base,
@@ -962,7 +808,6 @@ export const getSpecialtyRoster = query({
       };
     }
 
-    if (!OLDER_SPECIALTY_BY_ID.has(args.specialtyId)) return null;
     const steps: Record<
       RosterStep,
       { approvedCount: number; pendingCount: number }
@@ -971,12 +816,6 @@ export const getSpecialtyRoster = query({
       fazer: { approvedCount: 0, pendingCount: 0 },
       compartilhar: { approvedCount: 0, pendingCount: 0 },
     };
-    const people: (PersonRef & {
-      approvedCount: number;
-      pendingCount: number;
-      steps: Record<RosterStep, StepStatus>;
-      earned: boolean;
-    })[] = [];
     const pendingReports: {
       reportId: Id<"specialtyProjectReports">;
       escoteiroId: Id<"users">;
@@ -986,43 +825,34 @@ export const getSpecialtyRoster = query({
       text: string;
       completedAt: number;
     }[] = [];
-
-    for (const escoteiro of escoteiros) {
-      const rows = await ctx.db
-        .query("specialtyProjectReports")
-        .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
-          q
-            .eq("userId", escoteiro._id)
-            .eq("ramoGroup", "older")
-            .eq("specialtyId", args.specialtyId),
-        )
-        .take(10);
-      const p = olderProgress(rows);
-      if (p.approvedCount === 0 && p.pendingCount === 0) continue;
+    const people = standings.map(({ escoteiro, standing }) => {
+      const st = standing as OlderStanding;
+      const stepStatus = {} as Record<RosterStep, "approved" | "pending" | null>;
       for (const s of PROJECT_STEPS) {
-        if (p.steps[s] === "approved") steps[s].approvedCount++;
-        if (p.steps[s] === "pending") steps[s].pendingCount++;
+        const etapa = st.etapas[s];
+        stepStatus[s] = etapa?.status ?? null;
+        if (etapa?.status === "approved") steps[s].approvedCount++;
+        if (etapa?.status === "pending") {
+          steps[s].pendingCount++;
+          pendingReports.push({
+            reportId: etapa.rowId,
+            escoteiroId: escoteiro._id,
+            escoteiroName: escoteiro.name ?? null,
+            escoteiroImage: escoteiro.image ?? null,
+            step: s,
+            text: etapa.text,
+            completedAt: etapa.completedAt,
+          });
+        }
       }
-      for (const r of rows) {
-        if (r.status !== "pending") continue;
-        pendingReports.push({
-          reportId: r._id,
-          escoteiroId: escoteiro._id,
-          escoteiroName: escoteiro.name ?? null,
-          escoteiroImage: escoteiro.image ?? null,
-          step: r.step,
-          text: r.text,
-          completedAt: r.completedAt,
-        });
-      }
-      people.push({
+      return {
         ...personRef(escoteiro),
-        approvedCount: p.approvedCount,
-        pendingCount: p.pendingCount,
-        steps: p.steps,
-        earned: p.earned,
-      });
-    }
+        approvedCount: st.approvedCount,
+        pendingCount: st.pendingCount,
+        steps: stepStatus,
+        earned: st.earned,
+      };
+    });
     people.sort(compareByProximity);
     // Oldest submission first — it has waited longest.
     pendingReports.sort((a, b) => a.completedAt - b.completedAt);

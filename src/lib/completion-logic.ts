@@ -136,37 +136,6 @@ export function getSpecialtyLevel(
 }
 
 /**
- * Given a user's *approved* specialty item completions, return the set of
- * specialtyId slugs the user has earned at level ≥ 1.
- *
- * Pure and catalog-agnostic: `getTotalItems` resolves a specialtyId to its
- * catalog item count (0 for unknown ids). Callers wire this to the younger
- * catalog. An item whose specialtyId is unknown (0 total) can never reach a
- * level and is silently ignored.
- */
-export function getEarnedSpecialtyIds(
-  approvedItems: { specialtyId: string }[],
-  getTotalItems: (specialtyId: string) => number,
-): Set<string> {
-  const approvedCountBySpecialty = new Map<string, number>();
-  for (const item of approvedItems) {
-    approvedCountBySpecialty.set(
-      item.specialtyId,
-      (approvedCountBySpecialty.get(item.specialtyId) ?? 0) + 1,
-    );
-  }
-
-  const earned = new Set<string>();
-  for (const [specialtyId, approvedCount] of approvedCountBySpecialty) {
-    const total = getTotalItems(specialtyId);
-    if (getSpecialtyLevel(approvedCount, total) >= 1) {
-      earned.add(specialtyId);
-    }
-  }
-  return earned;
-}
-
-/**
  * Map a set of earned specialtyId slugs to the set of blocoIds whose
  * `alternativeCompletions` (of type "especialidade") name one of those
  * specialties. A bloco's variable section is satisfied when any of its linked
