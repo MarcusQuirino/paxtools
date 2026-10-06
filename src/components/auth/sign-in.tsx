@@ -1,4 +1,9 @@
+import { useState } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
+import {
+  MANAGED_PROVIDER,
+  normalizeScoutId,
+} from "../../../convex/lib/managedAccounts";
 
 export function SignInWithGoogle() {
   const { signIn } = useAuthActions();
@@ -28,5 +33,87 @@ export function SignInWithGoogle() {
       </svg>
       Continuar com Google
     </button>
+  );
+}
+
+/**
+ * Sign-in for a conta gerenciada: registro escoteiro + password. Every
+ * failure reads the same so the form does not reveal which registros exist.
+ */
+export function SignInWithScoutId() {
+  const { signIn } = useAuthActions();
+  const [scoutId, setScoutId] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (submitting) return;
+    const id = normalizeScoutId(scoutId);
+    if (!id) {
+      setError("O registro tem 6 dígitos");
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      await signIn(MANAGED_PROVIDER, { email: id, password, flow: "signIn" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      setError(
+        msg.includes("TooManyFailedAttempts")
+          ? "Muitas tentativas. Tente de novo mais tarde ou peça uma nova senha ao seu escotista."
+          : "Registro ou senha incorretos",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-2">
+      <input
+        data-testid="scout-signin-id"
+        inputMode="numeric"
+        autoComplete="username"
+        aria-label="Registro escoteiro"
+        placeholder="Registro escoteiro (6 dígitos)"
+        maxLength={9}
+        value={scoutId}
+        onChange={(e) => {
+          setScoutId(e.target.value);
+          setError("");
+        }}
+        className="rounded-md border-2 border-black bg-white px-3 py-2.5 text-sm font-mono tracking-widest text-foreground placeholder:font-sans placeholder:tracking-normal placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-1"
+      />
+      <input
+        data-testid="scout-signin-password"
+        type="password"
+        autoComplete="current-password"
+        aria-label="Senha"
+        placeholder="Senha"
+        value={password}
+        onChange={(e) => {
+          setPassword(e.target.value);
+          setError("");
+        }}
+        className="rounded-md border-2 border-black bg-white px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-1"
+      />
+      <button
+        data-testid="scout-signin-submit"
+        type="submit"
+        disabled={submitting || !scoutId || !password}
+        className="rounded-md border-2 border-black bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-[3px_3px_0px_0px_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0px_0px_#000] disabled:opacity-50 transition-all cursor-pointer"
+      >
+        {submitting ? "Entrando..." : "Entrar com registro"}
+      </button>
+      {error ? (
+        <p className="text-xs text-destructive font-medium">{error}</p>
+      ) : null}
+      <p className="text-[11px] text-muted-foreground">
+        Sem conta Google? Peça ao seu escotista para criar seu acesso.
+      </p>
+    </form>
   );
 }

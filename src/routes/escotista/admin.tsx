@@ -21,6 +21,7 @@ import {
 import { RamoPicker } from "@/components/onboarding/ramo-picker";
 import { RAMO_LABELS, type Ramo } from "@/lib/ramos";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ResetManagedPasswordButton } from "@/components/escotista/managed-access";
 
 export const Route = createFileRoute("/escotista/admin")({
   component: AdminPage,
@@ -160,6 +161,7 @@ type Member = {
   escotistaRamos?: Ramo[];
   isAdmin: boolean;
   sectionId: Id<"sections"> | null;
+  scoutId: string | null;
 };
 
 type Section = { _id: Id<"sections">; name: string; ramo: Ramo };
@@ -265,6 +267,7 @@ function MemberRow({
             {member.role !== "escotista" && sections.length > 0
               ? ` · ${sections.find((s) => s._id === member.sectionId)?.name ?? "sem seção"}`
               : ""}
+            {member.scoutId ? ` · registro ${member.scoutId}` : ""}
           </p>
         </div>
 
@@ -282,6 +285,14 @@ function MemberRow({
           >
             <TreePine className="size-4" aria-hidden />
           </Button>
+
+          {member.scoutId && !isSelf && (
+            <ResetManagedPasswordButton
+              userId={member._id}
+              name={member.name ?? "este membro"}
+              compact
+            />
+          )}
 
           {member.role === "escotista" && !isSelf && (
             <Button
