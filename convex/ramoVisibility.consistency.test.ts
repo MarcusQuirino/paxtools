@@ -1,9 +1,8 @@
 /// <reference types="bun" />
 import { describe, test, expect } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { as, newTest, type Ramo, type TestConvex } from "./fixtures.testkit";
 
 // The cross-surface consistency suite (#31): one grupo fixture set is run
 // through all seven visibilidade-de-ramo surfaces — pending approvals, group
@@ -13,38 +12,8 @@ import type { Id } from "./_generated/dataModel";
 // viewer archetype. A future inline re-statement of the predicate on any one
 // surface breaks the agreement and fails here.
 
-// Bun's test runner has no `import.meta.glob` (Vite-only). Enumerate convex
-// modules explicitly so the in-memory backend can load them. At least one
-// "_generated/" path must be present so convex-test can find the project root.
-const modules = {
-  "./_generated/api.js": () => import("./_generated/api.js"),
-  "./_generated/server.js": () => import("./_generated/server.js"),
-  "./aiHelpers.ts": () => import("./aiHelpers"),
-  "./approvals.ts": () => import("./approvals"),
-  "./auth.config.ts": () => import("./auth.config"),
-  "./auth.ts": () => import("./auth"),
-  "./events.ts": () => import("./events"),
-  "./featureFlags.ts": () => import("./featureFlags"),
-  "./groups.ts": () => import("./groups"),
-  "./http.ts": () => import("./http"),
-  "./onboarding.ts": () => import("./onboarding"),
-  "./plan.ts": () => import("./plan"),
-  "./progression.ts": () => import("./progression"),
-  "./specialties.ts": () => import("./specialties"),
-  "./stats.ts": () => import("./stats"),
-  "./testing.ts": () => import("./testing"),
-  "./users.ts": () => import("./users"),
-};
-
-type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
 const ALL_RAMOS: Ramo[] = ["lobinho", "escoteiro", "senior", "pioneiro"];
 const SEEDED_EVENT_RAMOS: Ramo[] = ["escoteiro", "senior", "pioneiro"];
-
-// `withIdentity({ subject: userId })` makes @convex-dev/auth's getAuthUserId
-// return `userId` (it splits the JWT subject on "|" and takes the first part).
-function as(t: ReturnType<typeof convexTest>, userId: Id<"users">) {
-  return t.withIdentity({ subject: userId });
-}
 
 type Fixtures = Awaited<ReturnType<typeof buildGrupo>>;
 
@@ -57,7 +26,7 @@ type Fixtures = Awaited<ReturnType<typeof buildGrupo>>;
  * (so the pending list would show them if visible) and each ramo gets one
  * timeline event, plus one group-scoped event and the AI feature flag on.
  */
-async function buildGrupo(t: ReturnType<typeof convexTest>) {
+async function buildGrupo(t: TestConvex) {
   const insertUser = (
     name: string,
     fields: Partial<{
@@ -252,7 +221,7 @@ async function buildGrupo(t: ReturnType<typeof convexTest>) {
 // ---------------------------------------------------------------------------
 
 async function pendingListIds(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   viewer: Id<"users">,
 ) {
   const res = await as(t, viewer).query(api.approvals.getPendingForGroup, {});
@@ -260,7 +229,7 @@ async function pendingListIds(
 }
 
 async function memberListEscoteiroIds(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   viewer: Id<"users">,
 ) {
   const res = await as(t, viewer).query(api.groups.getGroupMembers, {});
@@ -271,7 +240,7 @@ async function memberListEscoteiroIds(
 
 /** The write/read assert surface: which escoteiros can the viewer act on? */
 async function actionableIds(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   viewer: Id<"users">,
   escoteiros: Id<"users">[],
 ) {
@@ -290,7 +259,7 @@ async function actionableIds(
 }
 
 async function timelineView(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   viewer: Id<"users">,
 ) {
   const res = await as(t, viewer).query(api.events.listTimeline, {
@@ -308,7 +277,7 @@ async function timelineView(
 
 /** Which ramos may the viewer request on stats, and whom does each show? */
 async function statsScope(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   viewer: Id<"users">,
 ) {
   const allowed = new Set<string>();
@@ -330,7 +299,7 @@ async function statsScope(
  * many escoteiros the catalog summary counts, across both ramoGroups.
  */
 async function especialidadesView(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   viewer: Id<"users">,
 ) {
   const ids = new Set<string>();
@@ -354,7 +323,7 @@ async function especialidadesView(
 }
 
 /** Which ramos may the viewer request on the AI surface? (flag is on) */
-async function aiScope(t: ReturnType<typeof convexTest>, viewer: Id<"users">) {
+async function aiScope(t: TestConvex, viewer: Id<"users">) {
   const allowed = new Set<string>();
   for (const ramo of ALL_RAMOS) {
     try {
@@ -437,7 +406,7 @@ const ARCHETYPES: Archetype[] = [
 describe("visibilidade de ramo: all seven surfaces agree", () => {
   for (const arch of ARCHETYPES) {
     test(arch.name, async () => {
-      const t = convexTest(schema, modules);
+      const t = newTest();
       const f = await buildGrupo(t);
       const viewer = arch.viewer(f);
       const expectedIds = new Set(arch.expectedVisible(f).map(String));
@@ -485,7 +454,7 @@ describe("visibilidade de ramo: all seven surfaces agree", () => {
 describe("visibilidade de ramo: unauthorized callers", () => {
   const cases: Array<{
     name: string;
-    caller: (f: Fixtures, t: ReturnType<typeof convexTest>) => Promise<Id<"users">>;
+    caller: (f: Fixtures, t: TestConvex) => Promise<Id<"users">>;
   }> = [
     {
       name: "escoteiro caller",
@@ -534,7 +503,7 @@ describe("visibilidade de ramo: unauthorized callers", () => {
 
   for (const c of cases) {
     test(`${c.name}: silent surfaces empty, throwing surfaces throw`, async () => {
-      const t = convexTest(schema, modules);
+      const t = newTest();
       const f = await buildGrupo(t);
       const caller = await c.caller(f, t);
 
@@ -565,7 +534,7 @@ describe("visibilidade de ramo: unauthorized callers", () => {
   }
 
   test("unauthenticated caller: silent surfaces empty, throwing surfaces say Não autenticado", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await buildGrupo(t);
 
     expect(await t.query(api.approvals.getPendingForGroup, {})).toEqual([]);

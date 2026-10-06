@@ -1,21 +1,9 @@
 /// <reference types="bun" />
 import { describe, test, expect } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import type { Id } from "./_generated/dataModel";
 import { drainLegacySpecialtyRow } from "./lib/legacySpecialty";
 import { YOUNGER_SPECIALTY_BY_ID } from "../src/data/specialty-data/younger";
-
-// Per-file modules map (Bun has no import.meta.glob). At least one
-// "_generated/" path is required so convex-test finds the project root.
-const modules = {
-  "./_generated/api.js": () => import("./_generated/api.js"),
-  "./_generated/server.js": () => import("./_generated/server.js"),
-  "./progression.ts": () => import("./progression"),
-  "./specialties.ts": () => import("./specialties"),
-};
-
-type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
+import { newTest, type Ramo, type TestConvex } from "./fixtures.testkit";
 
 const YOUNGER_NAME = "Administração";
 const YOUNGER_ID = "administracao";
@@ -23,14 +11,14 @@ const YOUNGER_ITEM_COUNT = YOUNGER_SPECIALTY_BY_ID.get(YOUNGER_ID)!.items.length
 const OLDER_NAME = "Comunicações";
 const OLDER_ID = "comunicacoes";
 
-async function insertUser(t: ReturnType<typeof convexTest>, ramo: Ramo) {
+async function insertUser(t: TestConvex, ramo: Ramo) {
   return t.run(async (ctx) =>
     ctx.db.insert("users", { name: "E", role: "escoteiro", ramo }),
   );
 }
 
 async function insertLegacy(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   userId: Id<"users">,
   fields: {
     ramo: Ramo;
@@ -52,7 +40,7 @@ async function insertLegacy(
   );
 }
 
-function drain(t: ReturnType<typeof convexTest>, rowId: Id<"specialtyCompletions">) {
+function drain(t: TestConvex, rowId: Id<"specialtyCompletions">) {
   return t.run(async (ctx) => {
     const row = (await ctx.db.get(rowId))!;
     return drainLegacySpecialtyRow(ctx, row);
@@ -61,7 +49,7 @@ function drain(t: ReturnType<typeof convexTest>, rowId: Id<"specialtyCompletions
 
 describe("drainLegacySpecialtyRow (#47)", () => {
   test("converts an approved younger row into one approved item row per catalog item", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t, "escoteiro");
     const rowId = await insertLegacy(t, userId, {
       ramo: "escoteiro",
@@ -90,7 +78,7 @@ describe("drainLegacySpecialtyRow (#47)", () => {
   });
 
   test("converts an approved older row into all three approved project steps", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t, "senior");
     const rowId = await insertLegacy(t, userId, {
       ramo: "senior",
@@ -116,7 +104,7 @@ describe("drainLegacySpecialtyRow (#47)", () => {
   });
 
   test("is idempotent: an already-converted specialty is not duplicated", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t, "escoteiro");
     await t.run(async (ctx) =>
       ctx.db.insert("specialtyItemCompletions", {
@@ -148,7 +136,7 @@ describe("drainLegacySpecialtyRow (#47)", () => {
   });
 
   test("drops a pending row without converting it", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t, "escoteiro");
     const rowId = await insertLegacy(t, userId, {
       ramo: "escoteiro",
@@ -167,7 +155,7 @@ describe("drainLegacySpecialtyRow (#47)", () => {
   });
 
   test("drops an insígnia row: no catalog entry, nothing to convert into", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t, "escoteiro");
     const rowId = await insertLegacy(t, userId, {
       ramo: "escoteiro",
@@ -187,7 +175,7 @@ describe("drainLegacySpecialtyRow (#47)", () => {
   });
 
   test("a row with no ramo is drained as the default ramo (younger)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t, "escoteiro");
     const rowId = await t.run(async (ctx) =>
       ctx.db.insert("specialtyCompletions", {

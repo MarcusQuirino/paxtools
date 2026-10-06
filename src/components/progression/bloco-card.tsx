@@ -1,4 +1,4 @@
-import type { Bloco, CustomAction, CompletionStatus } from "@/data/types";
+import type { Bloco, CustomAction } from "@/data/types";
 import {
   AccordionItem,
   AccordionTrigger,
@@ -8,26 +8,20 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ActionChecklist } from "./action-checklist";
 import { SpecialtySection } from "./specialty-section";
-import { getBlocoProgress } from "@/lib/completion-logic";
+import type { ProgressionState } from "@/lib/progression-state";
 import { Check, Clock } from "lucide-react";
 import type { Id } from "../../../convex/_generated/dataModel";
 
 type BlocoCardProps = {
   bloco: Bloco;
-  approvedActionIds: Set<string>;
-  pendingActionIds: Set<string>;
-  actionStatusMap: Map<string, CompletionStatus>;
-  customActions: CustomAction[];
+  /** The escoteiro's progression state; this bloco's view comes from it. */
+  progression: ProgressionState<CustomAction>;
   color: string;
   colorLight: string;
   onToggleAction: (actionId: string) => void;
   onAddCustom: (blocoId: string, text: string) => void;
   onToggleCustom: (id: Id<"customActions">) => void;
   onDeleteCustom: (id: Id<"customActions">) => void;
-  /** Bloco satisfied via an earned especialidade (level ≥ 1) — computed on read (#44). */
-  earnedViaSpecialty?: boolean;
-  /** Canonical ids of specialties earned via items (#44), for marking the exact checkbox. */
-  earnedSpecialtyIds?: Set<string>;
   plannedKeys?: Set<string>;
   onTogglePlanned?: (itemKey: string) => void;
   planOnly?: boolean;
@@ -39,65 +33,23 @@ type BlocoCardProps = {
 
 export function BlocoCard({
   bloco,
-  approvedActionIds,
-  pendingActionIds,
-  actionStatusMap,
-  customActions,
+  progression,
   color,
   colorLight,
   onToggleAction,
   onAddCustom,
   onToggleCustom,
   onDeleteCustom,
-  earnedViaSpecialty,
-  earnedSpecialtyIds,
   plannedKeys,
   onTogglePlanned,
   planOnly,
   lockApproved,
   escoteiroId,
 }: BlocoCardProps) {
-  const approvedCustomCompleted = customActions.filter(
-    (c) => c.blocoId === bloco.id && c.completed && c.status !== "pending",
-  ).length;
-  const pendingCustomCompleted = customActions.filter(
-    (c) => c.blocoId === bloco.id && c.completed && c.status === "pending",
-  ).length;
-  const hasApprovedSpecialty = !!earnedViaSpecialty;
-
-  const progress = getBlocoProgress(
-    bloco,
-    approvedActionIds,
-    pendingActionIds,
-    approvedCustomCompleted,
-    pendingCustomCompleted,
-    hasApprovedSpecialty,
-  );
-
-  const totalActions = bloco.fixedActions.length + bloco.variableRequired;
-
-  const approvedVariableCredit = hasApprovedSpecialty
-    ? bloco.variableRequired
-    : Math.min(progress.variableDone, bloco.variableRequired);
-  const approvedDone = Math.min(
-    progress.fixedDone + approvedVariableCredit,
-    totalActions,
-  );
-  const approvedPercent =
-    totalActions > 0 ? (approvedDone / totalActions) * 100 : 0;
-
-  const pendingVariableCredit = hasApprovedSpecialty
-    ? bloco.variableRequired - approvedVariableCredit
-    : Math.min(
-        progress.variablePending,
-        bloco.variableRequired - approvedVariableCredit,
-      );
-  const pendingDone = Math.min(
-    progress.fixedPending + Math.max(0, pendingVariableCredit),
-    totalActions - approvedDone,
-  );
-  const pendingPercent =
-    totalActions > 0 ? (pendingDone / totalActions) * 100 : 0;
+  const progress = progression.blocos.get(bloco.id)!;
+  const { approvedActionIds, pendingActionIds, actionStatusMap, customActions } =
+    progression;
+  const { totalActions, approvedDone, approvedPercent, pendingPercent } = progress;
 
   // For the checklist, combine both sets so checked items show
   const allCompletedActionIds = new Set([
@@ -151,7 +103,7 @@ export function BlocoCard({
           completedActionIds={allCompletedActionIds}
           actionStatusMap={actionStatusMap}
           customActions={customActions}
-          hasSpecialtyAlternative={hasApprovedSpecialty}
+          hasSpecialtyAlternative={progress.earnedViaSpecialty}
           color={color}
           colorLight={colorLight}
           onToggleAction={onToggleAction}
@@ -166,7 +118,7 @@ export function BlocoCard({
         <SpecialtySection
           blocoId={bloco.id}
           alternatives={bloco.alternativeCompletions}
-          earnedSpecialtyIds={earnedSpecialtyIds}
+          earnedSpecialtyIds={progression.earnedSpecialtyIds}
           plannedKeys={plannedKeys}
           onTogglePlanned={onTogglePlanned}
           planOnly={planOnly}

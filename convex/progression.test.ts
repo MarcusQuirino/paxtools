@@ -1,57 +1,11 @@
 /// <reference types="bun" />
 import { describe, test, expect } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
-
-// Bun's test runner has no `import.meta.glob` (Vite-only). Enumerate convex
-// modules explicitly so the in-memory backend can load them. At least one
-// "_generated/" path must be present so convex-test can find the project root.
-const modules = {
-  "./_generated/api.js": () => import("./_generated/api.js"),
-  "./_generated/server.js": () => import("./_generated/server.js"),
-  "./approvals.ts": () => import("./approvals"),
-  "./auth.config.ts": () => import("./auth.config"),
-  "./auth.ts": () => import("./auth"),
-  "./groups.ts": () => import("./groups"),
-  "./http.ts": () => import("./http"),
-  "./onboarding.ts": () => import("./onboarding"),
-  "./plan.ts": () => import("./plan"),
-  "./progression.ts": () => import("./progression"),
-  "./testing.ts": () => import("./testing"),
-  "./users.ts": () => import("./users"),
-};
-
-type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
-
-// `withIdentity({ subject: userId })` makes @convex-dev/auth's getAuthUserId
-// return `userId` (it splits the JWT subject on "|" and takes the first part).
-function as(t: ReturnType<typeof convexTest>, userId: Id<"users">) {
-  return t.withIdentity({ subject: userId });
-}
-
-async function insertUser(
-  t: ReturnType<typeof convexTest>,
-  fields: Partial<{
-    name: string;
-    email: string;
-    role: "escoteiro" | "escotista";
-    ramo: Ramo;
-    escotistaRamos: Ramo[];
-    groupId: Id<"groups">;
-    isAdmin: boolean;
-    membershipStatus: "pending" | "approved";
-    onboardingComplete: boolean;
-    bannedAt: number;
-  }> = {},
-): Promise<Id<"users">> {
-  return await t.run(async (ctx) => ctx.db.insert("users", { name: "U", ...fields }));
-}
+import { as, insertUser, newTest, type TestConvex } from "./fixtures.testkit";
 
 /** Seed a group owned by a fresh admin escotista; returns ids. */
 async function seedGroup(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   opts: { ramoNames?: Record<string, string> } = {},
 ) {
   const adminId = await insertUser(t, {
@@ -88,7 +42,7 @@ const VALID_ACTION_ID = "escoteiro:aprendizagem-continua:fixed:0";
 
 describe("toggleAction", () => {
   test("invalid actionId throws (auth runs first, so caller must be authed)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     await expect(
       as(t, escoteiro).mutation(api.progression.toggleAction, { actionId: "bad-id" }),
@@ -96,7 +50,7 @@ describe("toggleAction", () => {
   });
 
   test("escoteiro (self) toggling an unset action inserts status=pending", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     await as(t, escoteiro).mutation(api.progression.toggleAction, {
       actionId: VALID_ACTION_ID,
@@ -114,7 +68,7 @@ describe("toggleAction", () => {
   });
 
   test("escotista (self) toggling inserts status=approved with no approvedBy", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escotista = await insertUser(t, {
       role: "escotista",
       escotistaRamos: ["escoteiro"],
@@ -137,7 +91,7 @@ describe("toggleAction", () => {
   });
 
   test("escoteiro toggling an existing PENDING row deletes it (untoggle)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     await t.run(async (ctx) =>
       ctx.db.insert("actionCompletions", {
@@ -160,7 +114,7 @@ describe("toggleAction", () => {
   });
 
   test("escoteiro toggling an existing APPROVED row throws (approval lock)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     await t.run(async (ctx) =>
       ctx.db.insert("actionCompletions", {
@@ -178,7 +132,7 @@ describe("toggleAction", () => {
   });
 
   test("escotista toggling an existing APPROVED row deletes it (allowed)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escotista = await insertUser(t, {
       role: "escotista",
       escotistaRamos: ["escoteiro"],
@@ -204,7 +158,7 @@ describe("toggleAction", () => {
   });
 
   test("escotista with targetUserId patches a pending row to approved with approvedBy", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escoteiro = await insertUser(t, {
       role: "escoteiro",
@@ -243,7 +197,7 @@ describe("addCustomAction", () => {
   const BLOCO = "servir";
 
   test("invalid blocoId throws", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     await expect(
       as(t, escoteiro).mutation(api.progression.addCustomAction, {
@@ -254,7 +208,7 @@ describe("addCustomAction", () => {
   });
 
   test("empty text throws", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     await expect(
       as(t, escoteiro).mutation(api.progression.addCustomAction, {
@@ -265,7 +219,7 @@ describe("addCustomAction", () => {
   });
 
   test("text >500 chars throws", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     await expect(
       as(t, escoteiro).mutation(api.progression.addCustomAction, {
@@ -276,7 +230,7 @@ describe("addCustomAction", () => {
   });
 
   test("enforces MAX_CUSTOM_ACTIONS_PER_BLOCO=20 (21st throws)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     await t.run(async (ctx) => {
       for (let i = 0; i < 20; i++) {
@@ -299,7 +253,7 @@ describe("addCustomAction", () => {
   });
 
   test("returns inserted id; row has completed=false and no status", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     const id = await as(t, escoteiro).mutation(api.progression.addCustomAction, {
       blocoId: BLOCO,
@@ -319,7 +273,7 @@ describe("toggleCustomAction", () => {
   const BLOCO = "servir";
 
   test("throws Não encontrado when doc.userId !== effectiveUserId (ownership)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const owner = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     const other = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     const customId = await t.run(async (ctx) =>
@@ -339,7 +293,7 @@ describe("toggleCustomAction", () => {
   });
 
   test("toggling an incomplete one marks completed=true with status", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     const customId = await t.run(async (ctx) =>
       ctx.db.insert("customActions", {
@@ -359,7 +313,7 @@ describe("toggleCustomAction", () => {
   });
 
   test("escotista with targetUserId approves a completed+pending custom action", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escoteiro = await insertUser(t, {
       role: "escoteiro",
@@ -388,7 +342,7 @@ describe("toggleCustomAction", () => {
   });
 
   test("escoteiro unchecking a completed+approved custom action hits approval lock", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     const customId = await t.run(async (ctx) =>
       ctx.db.insert("customActions", {
@@ -414,7 +368,7 @@ describe("deleteCustomAction", () => {
   const BLOCO = "servir";
 
   test("deleting a completed+approved custom action as owner escoteiro hits approval lock", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     const customId = await t.run(async (ctx) =>
       ctx.db.insert("customActions", {
@@ -437,7 +391,7 @@ describe("deleteCustomAction", () => {
   });
 
   test("deleting an incomplete custom action succeeds (row gone)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     const customId = await t.run(async (ctx) =>
       ctx.db.insert("customActions", {
@@ -460,7 +414,7 @@ describe("deleteCustomAction", () => {
 
 describe("toggleIrrItem", () => {
   test("invalid itemId throws", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     await expect(
       as(t, escoteiro).mutation(api.progression.toggleIrrItem, {
@@ -470,7 +424,7 @@ describe("toggleIrrItem", () => {
   });
 
   test("escoteiro (self) inserts status=pending stamped with ramo; escotista approved; toggle deletes", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     await as(t, escoteiro).mutation(api.progression.toggleIrrItem, {
       itemId: "irr_promessa",
@@ -516,7 +470,7 @@ describe("toggleIrrItem", () => {
   });
 
   test("reads are ramo-scoped: only the current ramo's items return; other ramo retained", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const user = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     // Seed the same user with recognition rows under TWO ramos.
     await t.run(async (ctx) => {
@@ -565,7 +519,7 @@ describe("toggleIrrItem", () => {
 
 describe("getMyCompletions", () => {
   test("unauthenticated returns the empty shape", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const res = await t.query(api.progression.getMyCompletions, {});
     expect(res).toEqual({
       ramo: null,
@@ -578,7 +532,7 @@ describe("getMyCompletions", () => {
   });
 
   test("authenticated returns the user's rows and ramo", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro = await insertUser(t, { role: "escoteiro", ramo: "senior" });
     await t.run(async (ctx) =>
       ctx.db.insert("actionCompletions", {
@@ -601,7 +555,7 @@ describe("getMyCompletions", () => {
 
 describe("getCompletionsForUser", () => {
   test("cross-group escotista is rejected", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     const escoteiro = await insertUser(t, {
       role: "escoteiro",
@@ -635,7 +589,7 @@ describe("getCompletionsForUser", () => {
   });
 
   test("same-group escotista gets the target's completions and ramo", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escoteiro = await insertUser(t, {
       role: "escoteiro",
@@ -660,7 +614,7 @@ describe("getCompletionsForUser", () => {
   });
 
   test("unstamped (undefined) membershipStatus caller gets results", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     // Legacy escotista: membershipStatus was never stamped. Queries cannot
     // backfill, so the visibility rule itself must treat undefined as approved.
@@ -682,7 +636,7 @@ describe("getCompletionsForUser", () => {
   });
 
   test("same-grupo escotista target is readable regardless of ramo", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     // Caller accompanies only 'senior'; target is a fellow escotista with no
     // ramo at all — the ramo rule applies to escoteiro targets only.
@@ -705,7 +659,7 @@ describe("getCompletionsForUser", () => {
   });
 
   test("banned escoteiro's completions are not readable", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escoteiro = await insertUser(t, {
       role: "escoteiro",
@@ -729,7 +683,7 @@ describe("getCompletionsForUser", () => {
 
 describe("ramo-scoped completions (#37)", () => {
   test("reads return only the current ramo's ações personalizadas", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     // Same user, same blocoId (blocoIds are shared across ramos) under two ramos.
     await t.run(async (ctx) => {
@@ -748,7 +702,7 @@ describe("ramo-scoped completions (#37)", () => {
   });
 
   test("ações personalizadas are retained across a ramo change and reappear on switch back", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     await t.run(async (ctx) => {
       await ctx.db.insert("customActions", {
@@ -771,7 +725,7 @@ describe("ramo-scoped completions (#37)", () => {
   });
 
   test("a self-write stamps the acting escoteiro's ramo on the new row", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t, { role: "escoteiro", ramo: "lobinho" });
     await as(t, userId).mutation(api.progression.addCustomAction, {
       blocoId: "meio-ambiente",
@@ -785,7 +739,7 @@ describe("ramo-scoped completions (#37)", () => {
   });
 
   test("an escotista marking a target stamps the target's ramo", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     // Admin escotista sees all ramos; target is a lobinho.
     const target = await insertUser(t, {
@@ -804,7 +758,7 @@ describe("ramo-scoped completions (#37)", () => {
   });
 
   test("the per-bloco custom-action cap counts only the current ramo", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     // 20 lobinho rows in the same bloco must not block an escoteiro insert.
     await t.run(async (ctx) => {

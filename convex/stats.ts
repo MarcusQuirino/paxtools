@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { computeRamoCoverage } from "./lib/coverage";
 import { ramoGroupForRamo, snapshotProgression } from "./lib/progression";
 import { resolveStatsCohort } from "./lib/statsCohort";
-import { olderProgress, youngerProgress } from "./lib/specialtyProgress";
+import { readStandings } from "./lib/especialidades";
 import { getEixosForRamo } from "../src/data/progression-data";
 import { getEarnedSpecialtyBlocoIds } from "../src/lib/completion-logic";
 import { decodePlanKey } from "../src/lib/plan-keys";
@@ -70,7 +70,8 @@ export const getRamoScouts = query({
 // Especialidades on Stats. Cohort = the ramo's escoteiros (same as coverage);
 // each one's especialidade record is their whole ramoGroup, since especialidades
 // carry over within it (CONTEXT.md). "Conquistou" / "em andamento" come from
-// lib/specialtyProgress so they match the Especialidades tab exactly.
+// the especialidade standing (src/lib/especialidade-standing), so they match
+// the Especialidades tab and bloco completion exactly.
 // ---------------------------------------------------------------------------
 
 const TOP_EARNED = 5;
@@ -150,54 +151,20 @@ export const getRamoSpecialties = query({
     };
 
     for (const scout of scouts) {
-      // specialtyId → { earned, pendingCount, oldestPendingAt }
-      const progress = new Map<
-        string,
-        { earned: boolean; level2: boolean; pendingCount: number; oldestAt: number }
-      >();
-
-      if (ramoGroup === "younger") {
-        const rows = await ctx.db
-          .query("specialtyItemCompletions")
-          .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
-            q.eq("userId", scout._id).eq("ramoGroup", "younger"),
-          )
-          .take(2000);
-        for (const [specialtyId, specialtyRows] of groupBy(rows, (r) => r.specialtyId)) {
-          const specialty = YOUNGER_SPECIALTY_BY_ID.get(specialtyId);
-          if (!specialty) continue;
-          const p = youngerProgress(specialtyRows, specialty.items.length);
-          if (p.approvedCount === 0 && p.pendingCount === 0) continue;
-          progress.set(specialtyId, {
-            earned: p.level >= 1,
-            level2: p.level === 2,
-            pendingCount: p.pendingCount,
-            oldestAt: oldestPending(
-              specialtyRows.filter((r) => p.pendingIndexes.has(r.itemIndex)),
-            ),
-          });
-        }
-      } else {
-        const rows = await ctx.db
-          .query("specialtyProjectReports")
-          .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
-            q.eq("userId", scout._id).eq("ramoGroup", "older"),
-          )
-          .take(2000);
-        for (const [specialtyId, specialtyRows] of groupBy(rows, (r) => r.specialtyId)) {
-          if (!OLDER_SPECIALTY_BY_ID.has(specialtyId)) continue;
-          const p = olderProgress(specialtyRows);
-          if (p.approvedCount === 0 && p.pendingCount === 0) continue;
-          progress.set(specialtyId, {
-            earned: p.earned,
-            level2: false,
-            pendingCount: p.pendingCount,
-            oldestAt: oldestPending(
-              specialtyRows.filter((r) => r.status !== "approved"),
-            ),
-          });
-        }
-      }
+      // specialtyId → standing, for every especialidade with any activity.
+      const progress = new Map(
+        (await readStandings(ctx, scout._id, ramoGroup))
+          .filter((st) => st.approvedCount > 0 || st.pendingCount > 0)
+          .map((st) => [
+            st.specialtyId,
+            {
+              earned: st.earned,
+              level2: st.kind === "younger" && st.level === 2,
+              pendingCount: st.pendingCount,
+              oldestAt: st.oldestPendingAt ?? 0,
+            },
+          ]),
+      );
 
       if (progress.size === 0) totals.scoutsWithNone += 1;
       const earnedIds = new Set<string>();
@@ -320,21 +287,4 @@ function specialtyExists(ramoGroup: "younger" | "older", specialtyId: string): b
   return ramoGroup === "younger"
     ? YOUNGER_SPECIALTY_BY_ID.has(specialtyId)
     : OLDER_SPECIALTY_BY_ID.has(specialtyId);
-}
-
-function oldestPending(rows: { completedAt: number }[]): number {
-  let oldest = Number.POSITIVE_INFINITY;
-  for (const r of rows) if (r.completedAt < oldest) oldest = r.completedAt;
-  return oldest === Number.POSITIVE_INFINITY ? 0 : oldest;
-}
-
-function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
-  const m = new Map<string, T[]>();
-  for (const r of rows) {
-    const k = key(r);
-    const arr = m.get(k);
-    if (arr) arr.push(r);
-    else m.set(k, [r]);
-  }
-  return m;
 }

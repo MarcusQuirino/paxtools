@@ -5,32 +5,12 @@
  * still works (behavior-preserving for normal users).
  */
 import { describe, test, expect } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-
-const modules = {
-  "./_generated/api.js": () => import("./_generated/api.js"),
-  "./_generated/server.js": () => import("./_generated/server.js"),
-  "./approvals.ts": () => import("./approvals"),
-  "./auth.config.ts": () => import("./auth.config"),
-  "./auth.ts": () => import("./auth"),
-  "./groups.ts": () => import("./groups"),
-  "./http.ts": () => import("./http"),
-  "./onboarding.ts": () => import("./onboarding"),
-  "./plan.ts": () => import("./plan"),
-  "./progression.ts": () => import("./progression"),
-  "./testing.ts": () => import("./testing"),
-  "./users.ts": () => import("./users"),
-};
-
-function as(t: ReturnType<typeof convexTest>, userId: Id<"users">) {
-  return t.withIdentity({ subject: userId });
-}
+import { as, newTest, type TestConvex } from "./fixtures.testkit";
 
 async function insertUser(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   fields: Record<string, unknown> = {},
 ): Promise<Id<"users">> {
   return await t.run(async (ctx) =>
@@ -39,7 +19,7 @@ async function insertUser(
 }
 
 /** A group owned by a fresh admin escotista (escotistaRamos: ["escoteiro"]). */
-async function seedGroup(t: ReturnType<typeof convexTest>) {
+async function seedGroup(t: TestConvex) {
   const adminId = await insertUser(t, {
     name: "Admin",
     role: "escotista",
@@ -67,7 +47,7 @@ async function seedGroup(t: ReturnType<typeof convexTest>) {
 }
 
 async function insertPendingAction(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   userId: Id<"users">,
 ): Promise<Id<"actionCompletions">> {
   return await t.run(async (ctx) =>
@@ -85,7 +65,7 @@ async function insertPendingAction(
 // ===========================================================================
 describe("setRole cannot change role once in a group", () => {
   test("approved escoteiro cannot self-promote to escotista", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     const escoteiro = await insertUser(t, {
       role: "escoteiro",
@@ -101,7 +81,7 @@ describe("setRole cannot change role once in a group", () => {
   });
 
   test("legit: role can still be chosen/changed during onboarding (no group yet)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const user = await insertUser(t, { role: "escoteiro" }); // mid-onboarding, no group
     await as(t, user).mutation(api.onboarding.setRole, { role: "escotista" });
     const after = await t.run(async (ctx) => ctx.db.get(user));
@@ -114,7 +94,7 @@ describe("setRole cannot change role once in a group", () => {
 // ===========================================================================
 describe("ramo setters are blocked once in a group", () => {
   test("in-group escotista cannot widen own ramos", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     const escotista = await insertUser(t, {
       role: "escotista",
@@ -132,7 +112,7 @@ describe("ramo setters are blocked once in a group", () => {
   });
 
   test("in-group escoteiro cannot change own ramo", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     const escoteiro = await insertUser(t, {
       role: "escoteiro",
@@ -148,7 +128,7 @@ describe("ramo setters are blocked once in a group", () => {
   });
 
   test("legit: ramos can be set during onboarding (no group yet)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const user = await insertUser(t, { role: "escotista" });
     await as(t, user).mutation(api.onboarding.setEscotistaRamos, {
       ramos: ["escoteiro", "senior"],
@@ -163,7 +143,7 @@ describe("ramo setters are blocked once in a group", () => {
 // ===========================================================================
 describe("ramo-less escoteiro is not actionable by a non-admin escotista", () => {
   test("non-admin escotista is rejected on a ramo-less escoteiro", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     const escotista = await insertUser(t, {
       role: "escotista",
@@ -184,7 +164,7 @@ describe("ramo-less escoteiro is not actionable by a non-admin escotista", () =>
   });
 
   test("admin escotista can still act on a ramo-less escoteiro", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const victim = await insertUser(t, {
       role: "escoteiro",
@@ -203,7 +183,7 @@ describe("ramo-less escoteiro is not actionable by a non-admin escotista", () =>
 // ===========================================================================
 describe("pending members are not actionable until approved", () => {
   test("admin cannot approve completions for a not-yet-approved member", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const pending = await insertUser(t, {
       role: "escoteiro",
@@ -218,7 +198,7 @@ describe("pending members are not actionable until approved", () => {
   });
 
   test("legit: an approved member's completion can be approved", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const approved = await insertUser(t, {
       role: "escoteiro",
@@ -238,7 +218,7 @@ describe("pending members are not actionable until approved", () => {
 // ===========================================================================
 describe("sole admin cannot abandon their group by join/create", () => {
   test("sole admin cannot join another group", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId } = await seedGroup(t);
     await t.run(async (ctx) =>
       ctx.db.insert("groups", {
@@ -256,7 +236,7 @@ describe("sole admin cannot abandon their group by join/create", () => {
   });
 
   test("sole admin cannot create another group", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId } = await seedGroup(t);
     await expect(
       as(t, adminId).mutation(api.groups.createGroup, { name: "Novo", number: "300" }),
@@ -264,7 +244,7 @@ describe("sole admin cannot abandon their group by join/create", () => {
   });
 
   test("legit: an admin with a co-admin can leave by joining another group", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     // A second admin keeps the group covered.
     await insertUser(t, {
@@ -295,7 +275,7 @@ describe("sole admin cannot abandon their group by join/create", () => {
 // ===========================================================================
 describe("banned users cannot self-read their data", () => {
   test("viewer / getMyCompletions / getMyPlan are empty for a banned user", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const banned = await insertUser(t, {
       role: "escoteiro",
       ramo: "escoteiro",

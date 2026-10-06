@@ -1,30 +1,21 @@
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import {
-  getCompletedBlockIds,
-  getCurrentStage,
-  getEarnedSpecialtyIds,
-  getEarnedSpecialtyBlocoIds,
-  isIrrComplete,
-  toCanonicalSpecialtyId,
-} from "../../src/lib/completion-logic";
-import { getEixosForRamo, type Ramo } from "../../src/data/progression-data";
+import type { Ramo } from "../../src/data/progression-data";
 import { getRamoRules } from "../../src/data/progression-rules";
-import { YOUNGER_SPECIALTY_BY_ID } from "../../src/data/specialty-data/younger";
+import {
+  earnedSpecialtyIds,
+  ramoGroupForRamo,
+} from "../../src/lib/especialidade-standing";
+import {
+  deriveProgression,
+  type ProgressionRows,
+  type ProgressionState,
+} from "../../src/lib/progression-state";
+import { readStandings } from "./especialidades";
 import { logRamoEvent } from "./events";
 
-/**
- * The ramoGroup a ramo belongs to. Lobinho + escoteiro share "younger" (one
- * item-based specialty catalog); sênior + pioneiro share "older" (project-based).
- * An unset ramo (mid-onboarding) defaults to "younger". The single place this
- * mapping lives, so specialties/progression reads can't drift.
- */
-export function ramoGroupForRamo(
-  ramo: string | undefined | null,
-): "younger" | "older" {
-  if (ramo === "senior" || ramo === "pioneiro") return "older";
-  return "younger";
-}
+// The ramo → ramo group rule lives in src/lib/especialidade-standing.
+export { ramoGroupForRamo };
 
 /**
  * The codebase-wide default ramo — and prod's only ramo. A user with no ramo
@@ -40,119 +31,68 @@ export function currentRamo(
   return user?.ramo ?? DEFAULT_RAMO;
 }
 
-/**
- * Read the recognition (IRR) rows for a user's CURRENT ramo. The one place the
- * "(userId, ramo) → irrCompletions" read lives, so the consumers (self read,
- * escotista-view read, progression snapshot) can't drift. Not used by the
- * escotista pending/approve-all path, which reads by (userId, status) on
- * purpose — see the note there.
- */
-export async function readCurrentRamoIrrItems(
-  ctx: QueryCtx | MutationCtx,
-  userId: Id<"users">,
-  ramo: Ramo | null | undefined,
-): Promise<Doc<"irrCompletions">[]> {
-  return ctx.db
-    .query("irrCompletions")
-    .withIndex("by_userId_and_ramo_and_itemId", (q) =>
-      q.eq("userId", userId).eq("ramo", ramo ?? DEFAULT_RAMO),
-    )
-    .take(10);
-}
+/** Upper bound on one escoteiro's ação conclusões (all ramos). */
+const MAX_ACTION_ROWS = 500;
 
-/** Read a user's ações personalizadas for their CURRENT ramo (#37). */
-export async function readCurrentRamoCustomActions(
-  ctx: QueryCtx | MutationCtx,
-  userId: Id<"users">,
-  ramo: Ramo | null | undefined,
-): Promise<Doc<"customActions">[]> {
-  return ctx.db
-    .query("customActions")
-    .withIndex("by_userId_and_ramo_and_blocoId", (q) =>
-      q.eq("userId", userId).eq("ramo", ramo ?? DEFAULT_RAMO),
-    )
-    .take(1000);
-}
+/** The stored rows an escoteiro's progression derives from. */
+export type StoredProgressionRows = ProgressionRows<Doc<"customActions">> & {
+  actions: Doc<"actionCompletions">[];
+  irrItems: Doc<"irrCompletions">[];
+};
 
 /**
- * Compute what a user has earned *via especialidade*: the earned specialty ids
- * and the bloco(s) whose `alternativeCompletions` name them. `blocoIds` drives
- * bloco completion; `specialtyIds` lets the UI mark the exact specialty checkbox
- * (blocos list many alternatives, so the blocoId alone can't pick which).
- * Purely derived — no extra storage.
- *
- * - Younger (#44): a specialty is earned at level ≥ 1 from approved
- *   `specialtyItemCompletions` counts.
- * - Older (ADR 0002): a specialty is earned when all three of its project steps
- *   (`specialtyProjectReports`) are approved — binary, no levels.
+ * Read everything an escoteiro's progression derives from — the one place the
+ * "which rows count for this ramo" reads live:
+ * - ações stay by userId: their ids carry the ramo, so the derivation matches
+ *   only the current ramo's catalog;
+ * - ações personalizadas and IRR conclusões are keyed by shared blocoIds /
+ *   item ids, so they are read for the current ramo only (ADR 0001) — a past
+ *   ramo's rows never bleed in;
+ * - earned especialidades come from the current ramo group's standing.
  */
-export async function readEarnedSpecialtyBlocoIds(
+export async function readProgressionRows(
   ctx: QueryCtx | MutationCtx,
-  userId: Id<"users">,
-  ramo: Ramo | null | undefined,
-): Promise<{ blocoIds: Set<string>; specialtyIds: Set<string> }> {
-  const specialtyIds =
-    ramoGroupForRamo(ramo) === "older"
-      ? await readEarnedOlderSpecialtyIds(ctx, userId)
-      : await readEarnedYoungerSpecialtyIds(ctx, userId);
-
+  user: Doc<"users">,
+): Promise<StoredProgressionRows> {
+  const ramo = currentRamo(user);
+  const [actions, customActions, irrItems, standings] = await Promise.all([
+    ctx.db
+      .query("actionCompletions")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .take(MAX_ACTION_ROWS),
+    ctx.db
+      .query("customActions")
+      .withIndex("by_userId_and_ramo_and_blocoId", (q) =>
+        q.eq("userId", user._id).eq("ramo", ramo),
+      )
+      .take(1000),
+    ctx.db
+      .query("irrCompletions")
+      .withIndex("by_userId_and_ramo_and_itemId", (q) =>
+        q.eq("userId", user._id).eq("ramo", ramo),
+      )
+      .take(10),
+    readStandings(ctx, user._id, ramoGroupForRamo(user.ramo)),
+  ]);
   return {
-    blocoIds: getEarnedSpecialtyBlocoIds(getEixosForRamo(ramo), specialtyIds),
-    specialtyIds,
+    ramo: user.ramo ?? null,
+    actions,
+    customActions,
+    irrItems,
+    earnedSpecialtyIds: earnedSpecialtyIds(standings),
   };
 }
 
-/** Younger: earned specialty ids from approved item-completion counts (#44). */
-async function readEarnedYoungerSpecialtyIds(
+/** Read and derive an escoteiro's progression state. */
+export async function readProgression(
   ctx: QueryCtx | MutationCtx,
-  userId: Id<"users">,
-): Promise<Set<string>> {
-  // Approved = anything not explicitly pending (matches the /especialidades read
-  // and migration, which write status "approved" but treat a missing status as
-  // approved too).
-  const items = await ctx.db
-    .query("specialtyItemCompletions")
-    .withIndex("by_userId", (q) => q.eq("userId", userId))
-    .take(2000);
-  const approvedItems = items.filter(
-    (i) => i.ramoGroup === "younger" && i.status !== "pending",
-  );
-
-  return getEarnedSpecialtyIds(
-    approvedItems,
-    (specialtyId) => YOUNGER_SPECIALTY_BY_ID.get(specialtyId)?.items.length ?? 0,
-  );
-}
-
-/**
- * Older (ADR 0002): a specialty is earned once all three project steps are
- * approved. Compares `status === "approved"` explicitly so a hypothetical
- * non-approved/non-pending row could never be miscounted as earned.
- */
-async function readEarnedOlderSpecialtyIds(
-  ctx: QueryCtx | MutationCtx,
-  userId: Id<"users">,
-): Promise<Set<string>> {
-  const reports = await ctx.db
-    .query("specialtyProjectReports")
-    .withIndex("by_userId", (q) => q.eq("userId", userId))
-    .take(2000);
-
-  const approvedStepsBySpecialty = new Map<string, Set<string>>();
-  for (const r of reports) {
-    if (r.ramoGroup !== "older" || r.status !== "approved") continue;
-    const steps = approvedStepsBySpecialty.get(r.specialtyId) ?? new Set();
-    steps.add(r.step);
-    approvedStepsBySpecialty.set(r.specialtyId, steps);
-  }
-
-  const earned = new Set<string>();
-  for (const [specialtyId, steps] of approvedStepsBySpecialty) {
-    // Exactly three distinct steps exist (conhecer/fazer/compartilhar), and a
-    // row is unique per (user, group, specialty, step), so size 3 ⇒ all approved.
-    if (steps.size === 3) earned.add(toCanonicalSpecialtyId(specialtyId));
-  }
-  return earned;
+  user: Doc<"users">,
+): Promise<{
+  rows: StoredProgressionRows;
+  state: ProgressionState<Doc<"customActions">>;
+}> {
+  const rows = await readProgressionRows(ctx, user);
+  return { rows, state: deriveProgression(rows) };
 }
 
 export type ProgressionSnapshot = {
@@ -164,79 +104,38 @@ export type ProgressionSnapshot = {
   completedBlockCount: number;
 };
 
+/** The level-up-relevant slice of a progression state. */
+export function toSnapshot(state: ProgressionState<unknown>): ProgressionSnapshot {
+  return {
+    ramo: state.ramo,
+    stageIndex: state.stageIndex,
+    stageId: state.stage.id,
+    stageName: state.stage.name,
+    lisDeOuro: state.irrComplete,
+    completedBlockCount: state.completedBlockCount,
+  };
+}
+
+const EMPTY_SNAPSHOT_STATE = deriveProgression({
+  ramo: null,
+  actions: [],
+  customActions: [],
+  irrItems: [],
+  earnedSpecialtyIds: [],
+});
+
 /**
- * Recompute an escoteiro's approved progression from their completion rows.
- * Only *approved* completions count toward blocks/stage (pending never does),
- * which is why a rejection — touching only pending rows — can never move the
- * stage and needs no detection.
+ * An escoteiro's approved progression, for level-up detection. Only
+ * *approved* conclusões count toward blocos/etapa (pending never does), which
+ * is why a rejection — touching only pending rows — can never move the etapa.
  */
 export async function snapshotProgression(
   ctx: QueryCtx | MutationCtx,
   userId: Id<"users">,
 ): Promise<ProgressionSnapshot> {
   const user = await ctx.db.get(userId);
-  const ramo = user?.ramo ?? null;
-
-  // actionCompletions stay by_userId: their ids are ramo-prefixed, so
-  // getCompletedBlockIds (below) matches only the current ramo's catalog. The
-  // other three are keyed by shared blocoIds, so they must be ramo-scoped at the
-  // read or a past ramo's completions bleed into this ramo's block count.
-  const actions = await ctx.db
-    .query("actionCompletions")
-    .withIndex("by_userId", (q) => q.eq("userId", userId))
-    .take(500);
-  const customActions = await readCurrentRamoCustomActions(ctx, userId, ramo);
-  // IRR items are ramo-scoped: only the current ramo's recognition rows feed
-  // the IRR-complete check.
-  const irrItems = await readCurrentRamoIrrItems(ctx, userId, ramo);
-
-  const approvedActionIds = new Set(
-    actions.filter((a) => a.status !== "pending").map((a) => a.actionId),
-  );
-  const pendingActionIds = new Set(
-    actions.filter((a) => a.status === "pending").map((a) => a.actionId),
-  );
-
-  const eixos = getEixosForRamo(ramo);
-  // Blocos satisfied via an earned especialidade (level ≥ 1), computed on read
-  // from approved specialtyItemCompletions counts + the catalog (#44).
-  const { blocoIds: earnedSpecialtyBlocoIds } =
-    await readEarnedSpecialtyBlocoIds(ctx, userId, ramo);
-  const { approved } = getCompletedBlockIds(
-    eixos,
-    approvedActionIds,
-    pendingActionIds,
-    customActions.map((c) => ({
-      blocoId: c.blocoId,
-      completed: c.completed,
-      status: c.status,
-    })),
-    earnedSpecialtyBlocoIds,
-  );
-
-  const completedBlockCount = approved.size;
-  const stage = getCurrentStage(completedBlockCount, ramo);
-  const stageIndex = getRamoRules(ramo).etapas.findIndex(
-    (s) => s.id === stage.id,
-  );
-
-  const approvedIrrItemIds = new Set(
-    irrItems.filter((i) => i.status !== "pending").map((i) => i.itemId),
-  );
-  const lisDeOuro = isIrrComplete(
-    completedBlockCount,
-    approvedIrrItemIds,
-    ramo,
-  );
-
-  return {
-    ramo,
-    stageIndex,
-    stageId: stage.id,
-    stageName: stage.name,
-    lisDeOuro,
-    completedBlockCount,
-  };
+  if (!user) return toSnapshot(EMPTY_SNAPSHOT_STATE);
+  return toSnapshot((await readProgression(ctx, user)).state);
 }
 
 export type LevelUp =

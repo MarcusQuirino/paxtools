@@ -1,53 +1,13 @@
 /// <reference types="bun" />
 import { describe, test, expect } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { getEixosForRamo } from "../src/data/progression-data";
 import { toSpecialtySlug } from "../src/lib/completion-logic";
 import { YOUNGER_SPECIALTY_BY_ID } from "../src/data/specialty-data/younger";
+import { as, insertUser, newTest, type Ramo, type TestConvex } from "./fixtures.testkit";
 
-// Enumerate modules explicitly (Bun has no import.meta.glob).
-const modules = {
-  "./_generated/api.js": () => import("./_generated/api.js"),
-  "./_generated/server.js": () => import("./_generated/server.js"),
-  "./approvals.ts": () => import("./approvals"),
-  "./auth.config.ts": () => import("./auth.config"),
-  "./auth.ts": () => import("./auth"),
-  "./groups.ts": () => import("./groups"),
-  "./http.ts": () => import("./http"),
-  "./onboarding.ts": () => import("./onboarding"),
-  "./plan.ts": () => import("./plan"),
-  "./progression.ts": () => import("./progression"),
-  "./specialties.ts": () => import("./specialties"),
-  "./testing.ts": () => import("./testing"),
-  "./users.ts": () => import("./users"),
-};
-
-type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
-
-function as(t: ReturnType<typeof convexTest>, userId: Id<"users">) {
-  return t.withIdentity({ subject: userId });
-}
-
-async function insertUser(
-  t: ReturnType<typeof convexTest>,
-  fields: Partial<{
-    name: string;
-    role: "escoteiro" | "escotista";
-    ramo: Ramo;
-    escotistaRamos: Ramo[];
-    groupId: Id<"groups">;
-    isAdmin: boolean;
-    membershipStatus: "pending" | "approved";
-    onboardingComplete: boolean;
-  }> = {},
-): Promise<Id<"users">> {
-  return t.run(async (ctx) => ctx.db.insert("users", { name: "U", ...fields }));
-}
-
-async function seedGroup(t: ReturnType<typeof convexTest>) {
+async function seedGroup(t: TestConvex) {
   const escotistaId = await insertUser(t, {
     name: "Escotista",
     role: "escotista",
@@ -83,7 +43,7 @@ async function seedGroup(t: ReturnType<typeof convexTest>) {
 
 describe("toggleSpecialtyItem", () => {
   test("check → creates pending row", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId } = await seedGroup(t);
 
     await as(t, escoteiroId).mutation(api.specialties.toggleSpecialtyItem, {
@@ -105,7 +65,7 @@ describe("toggleSpecialtyItem", () => {
   });
 
   test("uncheck pending → deletes row", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId } = await seedGroup(t);
 
     // Check
@@ -129,7 +89,7 @@ describe("toggleSpecialtyItem", () => {
   });
 
   test("uncheck approved item as escoteiro → throws", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId, escotistaId } = await seedGroup(t);
 
     // Escoteiro checks
@@ -145,9 +105,11 @@ describe("toggleSpecialtyItem", () => {
         .withIndex("by_userId", (q) => q.eq("userId", escoteiroId))
         .collect(),
     );
-    const rowId = rows[0]!._id;
-    await as(t, escotistaId).mutation(api.specialties.approveSpecialtyItem, {
-      completionId: rowId,
+    await as(t, escotistaId).mutation(api.specialties.approveSpecialtyItems, {
+      escoteiroId,
+      specialtyId: "administracao",
+      ramoGroup: "younger",
+      itemIds: [rows[0]!._id],
     });
 
     // Escoteiro tries to uncheck approved — should throw
@@ -160,7 +122,7 @@ describe("toggleSpecialtyItem", () => {
   });
 
   test("lobinho gets ramoGroup=younger", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escotistaId = await insertUser(t, {
       role: "escotista",
       escotistaRamos: ["lobinho"],
@@ -204,60 +166,66 @@ describe("toggleSpecialtyItem", () => {
   });
 });
 
-describe("approveSpecialtyItem", () => {
-  test("approve pending → status=approved", async () => {
-    const t = convexTest(schema, modules);
-    const { escoteiroId, escotistaId } = await seedGroup(t);
-
-    await as(t, escoteiroId).mutation(api.specialties.toggleSpecialtyItem, {
-      specialtyId: "administracao",
-      itemIndex: 1,
-    });
-
-    const rows = await t.run(async (ctx) =>
-      ctx.db
-        .query("specialtyItemCompletions")
-        .withIndex("by_userId", (q) => q.eq("userId", escoteiroId))
-        .collect(),
-    );
-    const rowId = rows[0]!._id;
-
-    await as(t, escotistaId).mutation(api.specialties.approveSpecialtyItem, {
-      completionId: rowId,
-    });
-
-    const updated = await t.run(async (ctx) => ctx.db.get(rowId));
-    expect(updated!.status).toBe("approved");
-    expect(updated!.approvedBy).toBe(escotistaId);
+describe("toggleSpecialtyItem validation", () => {
+  test("rejects an unknown especialidade or an item outside its list", async () => {
+    const t = newTest();
+    const { escoteiroId } = await seedGroup(t);
+    await expect(
+      as(t, escoteiroId).mutation(api.specialties.toggleSpecialtyItem, {
+        specialtyId: "nao-existe",
+        itemIndex: 0,
+      }),
+    ).rejects.toThrow("Especialidade não encontrada");
+    await expect(
+      as(t, escoteiroId).mutation(api.specialties.toggleSpecialtyItem, {
+        specialtyId: "administracao",
+        itemIndex: 99,
+      }),
+    ).rejects.toThrow("Item inválido");
+    const rows = await t.run((ctx) => ctx.db.query("specialtyItemCompletions").collect());
+    expect(rows).toHaveLength(0);
   });
 
-  test("approve non-pending → throws", async () => {
-    const t = convexTest(schema, modules);
-    const { escoteiroId, escotistaId } = await seedGroup(t);
-
-    // Insert already-approved row directly
-    const rowId = await t.run(async (ctx) =>
-      ctx.db.insert("specialtyItemCompletions", {
-        userId: escoteiroId,
-        ramoGroup: "younger",
+  test("a sênior or an escotista cannot write item rows", async () => {
+    const t = newTest();
+    const { escotistaId, groupId } = await seedGroup(t);
+    const seniorId = await insertUser(t, {
+      role: "escoteiro",
+      ramo: "senior",
+      groupId,
+      membershipStatus: "approved",
+      onboardingComplete: true,
+    });
+    await expect(
+      as(t, seniorId).mutation(api.specialties.toggleSpecialtyItem, {
         specialtyId: "administracao",
         itemIndex: 0,
-        completedAt: Date.now(),
-        status: "approved",
       }),
-    );
-
+    ).rejects.toThrow("registradas por etapas");
     await expect(
-      as(t, escotistaId).mutation(api.specialties.approveSpecialtyItem, {
-        completionId: rowId,
+      as(t, escotistaId).mutation(api.specialties.toggleSpecialtyItem, {
+        specialtyId: "administracao",
+        itemIndex: 0,
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow("Apenas escoteiros");
+  });
+
+  test("a lobinho or escoteiro cannot write etapa relatos", async () => {
+    const t = newTest();
+    const { escoteiroId } = await seedGroup(t);
+    await expect(
+      as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+        specialtyId: "comunicacoes",
+        step: "conhecer",
+        text: "Relato",
+      }),
+    ).rejects.toThrow("registradas por itens");
   });
 });
 
 describe("rejectSpecialtyItem", () => {
   test("reject pending → row deleted", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId, escotistaId } = await seedGroup(t);
 
     await as(t, escoteiroId).mutation(api.specialties.toggleSpecialtyItem, {
@@ -284,7 +252,7 @@ describe("rejectSpecialtyItem", () => {
 
 describe("approveSpecialtyItems (bulk)", () => {
   test("approve multiple pending items → all approved", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId, escotistaId } = await seedGroup(t);
 
     // Check 3 items
@@ -322,7 +290,7 @@ describe("approveSpecialtyItems (bulk)", () => {
 
 describe("rejectSpecialtyItems (bulk)", () => {
   test("reject multiple pending items → all deleted", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId, escotistaId } = await seedGroup(t);
 
     for (const i of [0, 1]) {
@@ -356,9 +324,9 @@ describe("rejectSpecialtyItems (bulk)", () => {
   });
 });
 
-describe("getMySpecialtyItems", () => {
-  test("returns all items for current user", async () => {
-    const t = convexTest(schema, modules);
+describe("getMyEspecialidades", () => {
+  test("returns one standing per touched especialidade, counted by distinct item", async () => {
+    const t = newTest();
     const { escoteiroId } = await seedGroup(t);
 
     await as(t, escoteiroId).mutation(api.specialties.toggleSpecialtyItem, {
@@ -370,29 +338,29 @@ describe("getMySpecialtyItems", () => {
       itemIndex: 2,
     });
 
-    const items = await as(t, escoteiroId).query(
-      api.specialties.getMySpecialtyItems,
+    const record = await as(t, escoteiroId).query(
+      api.specialties.getMyEspecialidades,
       {},
     );
-    expect(items).toHaveLength(2);
-    expect(items.every((i) => i.specialtyId === "yoga")).toBe(true);
+    expect(record.ramoGroup).toBe("younger");
+    expect(record.standings).toHaveLength(1);
+    const yoga = record.standings[0]!;
+    expect(yoga.specialtyId).toBe("yoga");
+    expect(yoga.pendingCount).toBe(2);
+    expect(yoga.approvedCount).toBe(0);
+    expect(yoga.kind === "younger" && yoga.items[2]?.status).toBe("pending");
   });
 
-  test("returns [] for unauthenticated user", async () => {
-    const t = convexTest(schema, modules);
-    const items = await t.query(api.specialties.getMySpecialtyItems, {});
-    expect(items).toHaveLength(0);
+  test("unauthenticated caller → empty younger record", async () => {
+    const t = newTest();
+    const record = await t.query(api.specialties.getMyEspecialidades, {});
+    expect(record).toEqual({ ramoGroup: "younger", standings: [] });
   });
 });
 
-// ---------------------------------------------------------------------------
-// #53: escotista viewing a scout's especialidade detail — access rules for the
-// visibility-checked per-escoteiro queries wired into /especialidades.
-// ---------------------------------------------------------------------------
-
-describe("getSpecialtyItemsForEscoteiro (#53 access rules)", () => {
-  test("escotista with ramo visibility → returns the scout's items", async () => {
-    const t = convexTest(schema, modules);
+describe("getEscoteiroEspecialidades — younger (#53 access rules)", () => {
+  test("escotista with ramo visibility → returns the scout's standings", async () => {
+    const t = newTest();
     // seedGroup's escotista is the grupo creator → admin → sees all ramos.
     const { escoteiroId, escotistaId } = await seedGroup(t);
 
@@ -401,16 +369,16 @@ describe("getSpecialtyItemsForEscoteiro (#53 access rules)", () => {
       itemIndex: 0,
     });
 
-    const items = await as(t, escotistaId).query(
-      api.specialties.getSpecialtyItemsForEscoteiro,
+    const record = await as(t, escotistaId).query(
+      api.specialties.getEscoteiroEspecialidades,
       { escoteiroId },
     );
-    expect(items).toHaveLength(1);
-    expect(items[0]!.specialtyId).toBe("administracao");
+    expect(record?.standings).toHaveLength(1);
+    expect(record?.standings[0]!.specialtyId).toBe("administracao");
   });
 
-  test("escotista without ramo visibility → returns []", async () => {
-    const t = convexTest(schema, modules);
+  test("escotista without ramo visibility → null", async () => {
+    const t = newTest();
     const { escoteiroId, groupId } = await seedGroup(t);
 
     await as(t, escoteiroId).mutation(api.specialties.toggleSpecialtyItem, {
@@ -430,15 +398,15 @@ describe("getSpecialtyItemsForEscoteiro (#53 access rules)", () => {
       onboardingComplete: true,
     });
 
-    const items = await as(t, outsideEscotistaId).query(
-      api.specialties.getSpecialtyItemsForEscoteiro,
+    const record = await as(t, outsideEscotistaId).query(
+      api.specialties.getEscoteiroEspecialidades,
       { escoteiroId },
     );
-    expect(items).toHaveLength(0);
+    expect(record).toBeNull();
   });
 
-  test("escoteiro passing another scout's id → returns []", async () => {
-    const t = convexTest(schema, modules);
+  test("escoteiro passing another scout's id → null", async () => {
+    const t = newTest();
     const { escoteiroId, groupId } = await seedGroup(t);
 
     await as(t, escoteiroId).mutation(api.specialties.toggleSpecialtyItem, {
@@ -457,11 +425,11 @@ describe("getSpecialtyItemsForEscoteiro (#53 access rules)", () => {
       onboardingComplete: true,
     });
 
-    const items = await as(t, otherEscoteiroId).query(
-      api.specialties.getSpecialtyItemsForEscoteiro,
+    const record = await as(t, otherEscoteiroId).query(
+      api.specialties.getEscoteiroEspecialidades,
       { escoteiroId },
     );
-    expect(items).toHaveLength(0);
+    expect(record).toBeNull();
   });
 });
 
@@ -469,7 +437,7 @@ describe("getSpecialtyItemsForEscoteiro (#53 access rules)", () => {
 // Older ramoGroup — project-report steps (#43)
 // ---------------------------------------------------------------------------
 
-async function seedOlderGroup(t: ReturnType<typeof convexTest>) {
+async function seedOlderGroup(t: TestConvex) {
   const escotistaId = await insertUser(t, {
     name: "Escotista",
     role: "escotista",
@@ -504,7 +472,7 @@ async function seedOlderGroup(t: ReturnType<typeof convexTest>) {
 }
 
 async function reportsFor(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   userId: Id<"users">,
 ) {
   const all = await t.run(async (ctx) =>
@@ -515,7 +483,7 @@ async function reportsFor(
 
 describe("submitSpecialtyStep", () => {
   test("submit conhecer → pending row with ramoGroup=older", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId } = await seedOlderGroup(t);
 
     await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
@@ -533,7 +501,7 @@ describe("submitSpecialtyStep", () => {
   });
 
   test("steps are independent — submit in any order (compartilhar first)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId } = await seedOlderGroup(t);
 
     // No sequential lock (ADR 0002): submit the last step first, with no
@@ -559,7 +527,7 @@ describe("submitSpecialtyStep", () => {
   });
 
   test("empty text → throws", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId } = await seedOlderGroup(t);
     await expect(
       as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
@@ -571,7 +539,7 @@ describe("submitSpecialtyStep", () => {
   });
 
   test("resubmit pending conhecer → replaces text, stays pending (one row)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId } = await seedOlderGroup(t);
 
     await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
@@ -592,7 +560,7 @@ describe("submitSpecialtyStep", () => {
   });
 
   test("submit fazer while conhecer is only pending → allowed (no lock)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId } = await seedOlderGroup(t);
 
     await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
@@ -613,7 +581,7 @@ describe("submitSpecialtyStep", () => {
   });
 
   test("escoteiro cannot overwrite an approved step", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId, escotistaId } = await seedOlderGroup(t);
 
     await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
@@ -638,7 +606,7 @@ describe("submitSpecialtyStep", () => {
 
 describe("approveSpecialtyStep + rejectSpecialtyStep", () => {
   test("full cascade: approve all three steps → specialty earned", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId, escotistaId } = await seedOlderGroup(t);
 
     const submitAndApprove = async (step: "conhecer" | "fazer" | "compartilhar") => {
@@ -666,7 +634,7 @@ describe("approveSpecialtyStep + rejectSpecialtyStep", () => {
   });
 
   test("earned only when all three approved — two approved is not enough", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId, escotistaId } = await seedOlderGroup(t);
     // "comunicacoes" is named in the senior bloco "criatividade-inovacao".
     const linkedBlocoId = "criatividade-inovacao";
@@ -701,7 +669,7 @@ describe("approveSpecialtyStep + rejectSpecialtyStep", () => {
   });
 
   test("grant is order-independent — approving conhecer last still earns", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId, escotistaId } = await seedOlderGroup(t);
 
     // Submit all three up front, then approve in reverse order.
@@ -733,7 +701,7 @@ describe("approveSpecialtyStep + rejectSpecialtyStep", () => {
   });
 
   test("reject a step → row deleted, escoteiro can resubmit", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId, escotistaId } = await seedOlderGroup(t);
 
     await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
@@ -760,9 +728,9 @@ describe("approveSpecialtyStep + rejectSpecialtyStep", () => {
     expect(rows[0]!.text).toBe("Nova tentativa.");
   });
 
-  describe("getSpecialtyReportsForEscoteiro (#53 access rules)", () => {
+  describe("getEscoteiroEspecialidades — older (#53 access rules)", () => {
     test("escotista with ramo visibility → returns the scout's reports", async () => {
-      const t = convexTest(schema, modules);
+      const t = newTest();
       const { escoteiroId, escotistaId } = await seedOlderGroup(t);
 
       await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
@@ -772,15 +740,16 @@ describe("approveSpecialtyStep + rejectSpecialtyStep", () => {
       });
 
       const reports = await as(t, escotistaId).query(
-        api.specialties.getSpecialtyReportsForEscoteiro,
+        api.specialties.getEscoteiroEspecialidades,
         { escoteiroId },
       );
-      expect(reports).toHaveLength(1);
-      expect(reports[0]!.specialtyId).toBe("comunicacoes");
+      expect(reports?.ramoGroup).toBe("older");
+      expect(reports?.standings).toHaveLength(1);
+      expect(reports?.standings[0]!.specialtyId).toBe("comunicacoes");
     });
 
-    test("escotista without ramo visibility → returns []", async () => {
-      const t = convexTest(schema, modules);
+    test("escotista without ramo visibility → null", async () => {
+      const t = newTest();
       const { escoteiroId, groupId } = await seedOlderGroup(t);
 
       await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
@@ -802,14 +771,14 @@ describe("approveSpecialtyStep + rejectSpecialtyStep", () => {
       });
 
       const reports = await as(t, outsideEscotistaId).query(
-        api.specialties.getSpecialtyReportsForEscoteiro,
+        api.specialties.getEscoteiroEspecialidades,
         { escoteiroId },
       );
-      expect(reports).toHaveLength(0);
+      expect(reports).toBeNull();
     });
 
-    test("escoteiro passing another scout's id → returns []", async () => {
-      const t = convexTest(schema, modules);
+    test("escoteiro passing another scout's id → null", async () => {
+      const t = newTest();
       const { escoteiroId, groupId } = await seedOlderGroup(t);
 
       await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
@@ -828,15 +797,15 @@ describe("approveSpecialtyStep + rejectSpecialtyStep", () => {
       });
 
       const reports = await as(t, otherEscoteiroId).query(
-        api.specialties.getSpecialtyReportsForEscoteiro,
+        api.specialties.getEscoteiroEspecialidades,
         { escoteiroId },
       );
-      expect(reports).toHaveLength(0);
+      expect(reports).toBeNull();
     });
   });
 
-  test("getMySpecialtyReports returns only own older reports", async () => {
-    const t = convexTest(schema, modules);
+  test("getMyEspecialidades returns the older standing with the relato", async () => {
+    const t = newTest();
     const { escoteiroId } = await seedOlderGroup(t);
 
     await as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
@@ -845,12 +814,16 @@ describe("approveSpecialtyStep + rejectSpecialtyStep", () => {
       text: "Relato.",
     });
 
-    const reports = await as(t, escoteiroId).query(
-      api.specialties.getMySpecialtyReports,
+    const record = await as(t, escoteiroId).query(
+      api.specialties.getMyEspecialidades,
       {},
     );
-    expect(reports).toHaveLength(1);
-    expect(reports[0]!.specialtyId).toBe("comunicacoes");
+    expect(record.ramoGroup).toBe("older");
+    expect(record.standings).toHaveLength(1);
+    const st = record.standings[0]!;
+    expect(st.specialtyId).toBe("comunicacoes");
+    expect(st.kind === "older" && st.etapas.conhecer?.text).toBe("Relato.");
+    expect(st.earned).toBe(false);
   });
 });
 
@@ -878,7 +851,7 @@ describe("especialidade → bloco auto-completion (#44)", () => {
   }
 
   async function seedApprovedActions(
-    t: ReturnType<typeof convexTest>,
+    t: TestConvex,
     userId: Id<"users">,
     actionIds: string[],
   ) {
@@ -895,7 +868,7 @@ describe("especialidade → bloco auto-completion (#44)", () => {
   }
 
   test("linked bloco is satisfied once the specialty reaches level 1", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escoteiroId } = await seedGroup(t);
     expect(targetBloco).toBeDefined();
     expect(targetBloco!.variableRequired).toBeGreaterThan(0);
@@ -934,8 +907,46 @@ describe("especialidade → bloco auto-completion (#44)", () => {
     expect(comp.earnedSpecialtyBlocoIds).toContain(targetBloco!.id);
   });
 
+  test("duplicate or out-of-range item rows never earn the especialidade", async () => {
+    const t = newTest();
+    const { escotistaId, escoteiroId } = await seedGroup(t);
+    await seedApprovedActions(
+      t,
+      escoteiroId,
+      targetBloco!.fixedActions.map((a) => a.id),
+    );
+
+    // Level 1 needs 3 distinct items of administracao (6 items). Three copies of
+    // item 0 plus a row past the end used to count as 4 and complete the bloco
+    // while the escotista roster said "em andamento".
+    await t.run(async (ctx) => {
+      for (const itemIndex of [0, 0, 0, 99]) {
+        await ctx.db.insert("specialtyItemCompletions", {
+          userId: escoteiroId,
+          ramoGroup: "younger",
+          specialtyId: "administracao",
+          itemIndex,
+          completedAt: 1,
+          status: "approved",
+        });
+      }
+    });
+
+    const comp = await as(t, escoteiroId).query(api.progression.getMyCompletions, {});
+    expect(comp.earnedSpecialtyIds).not.toContain("administracao");
+    expect(comp.earnedSpecialtyBlocoIds).not.toContain(targetBloco!.id);
+
+    // The roster agrees: one distinct approved item, not earned.
+    const roster = await as(t, escotistaId).query(api.specialties.getSpecialtyRoster, {
+      specialtyId: "administracao",
+      ramoGroup: "younger",
+    });
+    expect(roster?.earnedCount).toBe(0);
+    expect(roster?.kind === "younger" && roster.people[0]?.approvedCount).toBe(1);
+  });
+
   test("approving the item that reaches level 1 fires an etapa level-up", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escotistaId, escoteiroId } = await seedGroup(t);
     expect(targetBloco).toBeDefined();
 
@@ -975,8 +986,13 @@ describe("especialidade → bloco auto-completion (#44)", () => {
     let toasts: { kind: string }[] = [];
     for (const row of pending) {
       toasts = await as(t, escotistaId).mutation(
-        api.specialties.approveSpecialtyItem,
-        { completionId: row._id },
+        api.specialties.approveSpecialtyItems,
+        {
+          escoteiroId,
+          specialtyId: "administracao",
+          ramoGroup: "younger",
+          itemIds: [row._id],
+        },
       );
     }
 
@@ -990,7 +1006,7 @@ describe("especialidade → bloco auto-completion (#44)", () => {
   });
 
   test("setSpecialtyItemApproved crossing level 1 fires an etapa level-up", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escotistaId, escoteiroId } = await seedGroup(t);
     const fillers = allBlocos
       .filter((b) => b.id !== targetBloco!.id)
@@ -1027,7 +1043,7 @@ describe("especialidade → bloco auto-completion (#44)", () => {
 
 /** A non-admin escotista in `groupId` accompanying `ramos`. */
 async function insertEscotista(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   groupId: Id<"groups">,
   ramos: Ramo[],
   name = "Chefe",
@@ -1044,7 +1060,7 @@ async function insertEscotista(
 }
 
 async function insertScout(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   groupId: Id<"groups">,
   ramo: Ramo,
   name: string,
@@ -1060,7 +1076,7 @@ async function insertScout(
 }
 
 async function insertItems(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   userId: Id<"users">,
   specialtyId: string,
   items: { index: number; status: "approved" | "pending" }[],
@@ -1080,7 +1096,7 @@ async function insertItems(
 }
 
 async function insertReports(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   userId: Id<"users">,
   specialtyId: string,
   steps: {
@@ -1103,14 +1119,14 @@ async function insertReports(
   });
 }
 
-async function itemRows(t: ReturnType<typeof convexTest>, userId: Id<"users">) {
+async function itemRows(t: TestConvex, userId: Id<"users">) {
   const all = await t.run((ctx) =>
     ctx.db.query("specialtyItemCompletions").collect(),
   );
   return all.filter((r) => r.userId === userId);
 }
 
-async function approvalEvents(t: ReturnType<typeof convexTest>) {
+async function approvalEvents(t: TestConvex) {
   const all = await t.run((ctx) => ctx.db.query("events").collect());
   return all.filter((e) => e.type === "approval");
 }
@@ -1121,7 +1137,7 @@ async function approvalEvents(t: ReturnType<typeof convexTest>) {
  * approved + 1 pending), a lobinho L (1 approved) and a sênior S
  * (comunicacoes: conhecer approved, fazer pending).
  */
-async function seedTroop(t: ReturnType<typeof convexTest>) {
+async function seedTroop(t: TestConvex) {
   const { escotistaId: adminId, groupId } = await seedGroup(t);
   const chefeEscoteiro = await insertEscotista(t, groupId, ["escoteiro"], "Chefe E");
   const chefeLobinho = await insertEscotista(t, groupId, ["lobinho"], "Chefe L");
@@ -1150,7 +1166,7 @@ async function seedTroop(t: ReturnType<typeof convexTest>) {
 
 describe("getGroupSpecialtySummary", () => {
   test("counts only the viewer's visible escoteiros (visibilidade de ramo)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await seedTroop(t);
 
     const mine = await as(t, f.chefeEscoteiro).query(
@@ -1182,7 +1198,7 @@ describe("getGroupSpecialtySummary", () => {
   });
 
   test("older ramoGroup: earned only with all three etapas; other ramos empty", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await seedTroop(t);
 
     const senior = await as(t, f.chefeSenior).query(
@@ -1211,7 +1227,7 @@ describe("getGroupSpecialtySummary", () => {
   });
 
   test("seção observada narrows the counts; unplaced escoteiros stay", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await seedTroop(t);
     const s1 = await t.run((ctx) =>
       ctx.db.insert("sections", {
@@ -1254,7 +1270,7 @@ describe("getGroupSpecialtySummary", () => {
   });
 
   test("non-escotista or unauthenticated caller → null", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await seedTroop(t);
     expect(
       await as(t, f.a).query(api.specialties.getGroupSpecialtySummary, {
@@ -1271,7 +1287,7 @@ describe("getGroupSpecialtySummary", () => {
 
 describe("getSpecialtyRoster", () => {
   test("younger: per-item 'N têm' and Quem tem from the visible set", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await seedTroop(t);
 
     const r = await as(t, f.chefeEscoteiro).query(
@@ -1295,7 +1311,7 @@ describe("getSpecialtyRoster", () => {
   });
 
   test("older: etapa counts, statuses and pending relatos", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await seedTroop(t);
 
     const r = await as(t, f.chefeSenior).query(
@@ -1326,7 +1342,7 @@ describe("getSpecialtyRoster", () => {
   });
 
   test("outside the viewer's ramo → empty; unknown id or non-viewer → null", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await seedTroop(t);
 
     const lob = await as(t, f.chefeLobinho).query(
@@ -1359,7 +1375,7 @@ describe("getSpecialtyRoster", () => {
 
 describe("setSpecialtyItemApproved", () => {
   test("mark an open item → approved row with approver + time, audit event", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await seedTroop(t);
 
     await as(t, f.chefeEscoteiro).mutation(
@@ -1381,7 +1397,7 @@ describe("setSpecialtyItemApproved", () => {
   });
 
   test("pending → approved promotes the escoteiro's submission (never deletes it)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await seedTroop(t);
     const before = (await itemRows(t, f.b)).find((r) => r.itemIndex === 3)!;
     expect(before.status).toBe("pending");
@@ -1399,7 +1415,7 @@ describe("setSpecialtyItemApproved", () => {
   });
 
   test("approved:true on an approved item is a no-op (no second event)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await seedTroop(t);
     await as(t, f.chefeEscoteiro).mutation(
       api.specialties.setSpecialtyItemApproved,
@@ -1412,7 +1428,7 @@ describe("setSpecialtyItemApproved", () => {
   });
 
   test("unmark an approved item → row deleted, level drops without complaint", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await seedTroop(t);
     await as(t, f.chefeEscoteiro).mutation(
       api.specialties.setSpecialtyItemApproved,
@@ -1433,7 +1449,7 @@ describe("setSpecialtyItemApproved", () => {
   });
 
   test("unmark on a pending item throws and keeps the submission; on no row is a no-op", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await seedTroop(t);
     await expect(
       as(t, f.chefeEscoteiro).mutation(api.specialties.setSpecialtyItemApproved, {
@@ -1456,7 +1472,7 @@ describe("setSpecialtyItemApproved", () => {
   });
 
   test("cross-ramo escotista is rejected and nothing is written", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await seedTroop(t);
     await expect(
       as(t, f.chefeLobinho).mutation(api.specialties.setSpecialtyItemApproved, {
@@ -1478,7 +1494,7 @@ describe("setSpecialtyItemApproved", () => {
   });
 
   test("escoteiro caller, older target, unknown specialty, bad index → throw", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await seedTroop(t);
     await expect(
       as(t, f.b).mutation(api.specialties.setSpecialtyItemApproved, {
@@ -1519,7 +1535,7 @@ describe("setSpecialtyItemApproved", () => {
 
 describe("submitSpecialtyStep on behalf (escotista registers an etapa)", () => {
   test("writes approved + logs; the third etapa earns the especialidade", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await seedTroop(t);
     const fazer = (await reportsFor(t, f.s)).find((r) => r.step === "fazer")!;
     await as(t, f.chefeSenior).mutation(api.specialties.approveSpecialtyStep, {
@@ -1539,7 +1555,7 @@ describe("submitSpecialtyStep on behalf (escotista registers an etapa)", () => {
     expect(compartilhar.approvedBy).toBe(f.chefeSenior);
     expect(
       (await approvalEvents(t)).some((e) =>
-        e.summary?.startsWith('Registrou etapa "compartilhar"'),
+        e.summary === "Registrou: Comunicações — etapa Compartilhar",
       ),
     ).toBe(true);
 
@@ -1551,7 +1567,7 @@ describe("submitSpecialtyStep on behalf (escotista registers an etapa)", () => {
   });
 
   test("refuses to overwrite the escoteiro's pending relato; cross-ramo rejected", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const f = await seedTroop(t);
     await expect(
       as(t, f.chefeSenior).mutation(api.specialties.submitSpecialtyStep, {

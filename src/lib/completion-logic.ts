@@ -136,37 +136,6 @@ export function getSpecialtyLevel(
 }
 
 /**
- * Given a user's *approved* specialty item completions, return the set of
- * specialtyId slugs the user has earned at level ≥ 1.
- *
- * Pure and catalog-agnostic: `getTotalItems` resolves a specialtyId to its
- * catalog item count (0 for unknown ids). Callers wire this to the younger
- * catalog. An item whose specialtyId is unknown (0 total) can never reach a
- * level and is silently ignored.
- */
-export function getEarnedSpecialtyIds(
-  approvedItems: { specialtyId: string }[],
-  getTotalItems: (specialtyId: string) => number,
-): Set<string> {
-  const approvedCountBySpecialty = new Map<string, number>();
-  for (const item of approvedItems) {
-    approvedCountBySpecialty.set(
-      item.specialtyId,
-      (approvedCountBySpecialty.get(item.specialtyId) ?? 0) + 1,
-    );
-  }
-
-  const earned = new Set<string>();
-  for (const [specialtyId, approvedCount] of approvedCountBySpecialty) {
-    const total = getTotalItems(specialtyId);
-    if (getSpecialtyLevel(approvedCount, total) >= 1) {
-      earned.add(specialtyId);
-    }
-  }
-  return earned;
-}
-
-/**
  * Map a set of earned specialtyId slugs to the set of blocoIds whose
  * `alternativeCompletions` (of type "especialidade") name one of those
  * specialties. A bloco's variable section is satisfied when any of its linked
@@ -213,58 +182,6 @@ export function isSpecialtyEarned(
   earnedSpecialtyIds: Set<string>,
 ): boolean {
   return earnedSpecialtyIds.has(toCanonicalSpecialtyId(specialtyName));
-}
-
-export function getCompletedBlockIds(
-  eixos: Eixo[],
-  approvedActionIds: Set<string>,
-  pendingActionIds: Set<string>,
-  customActions: { blocoId: string; completed: boolean; status?: string }[],
-  // Pre-computed set of blocoIds whose linked specialty is earned at level ≥ 1.
-  // Callers compute this from specialtyItemCompletions counts + the catalog's
-  // alternativeCompletions map.
-  earnedSpecialtyBlocoIds: Set<string>,
-): { approved: Set<string>; pending: Set<string> } {
-  const approved = new Set<string>();
-  const pending = new Set<string>();
-
-  const approvedCustomByBloco = new Map<string, number>();
-  const pendingCustomByBloco = new Map<string, number>();
-  for (const c of customActions) {
-    if (c.completed) {
-      if (c.status === "pending") {
-        pendingCustomByBloco.set(
-          c.blocoId,
-          (pendingCustomByBloco.get(c.blocoId) ?? 0) + 1,
-        );
-      } else {
-        approvedCustomByBloco.set(
-          c.blocoId,
-          (approvedCustomByBloco.get(c.blocoId) ?? 0) + 1,
-        );
-      }
-    }
-  }
-
-  for (const eixo of eixos) {
-    for (const bloco of eixo.blocos) {
-      const hasEarnedSpecialty = earnedSpecialtyBlocoIds.has(bloco.id);
-      const progress = getBlocoProgress(
-        bloco,
-        approvedActionIds,
-        pendingActionIds,
-        approvedCustomByBloco.get(bloco.id) ?? 0,
-        pendingCustomByBloco.get(bloco.id) ?? 0,
-        hasEarnedSpecialty,
-      );
-      if (progress.isComplete) {
-        approved.add(bloco.id);
-      } else if (progress.isPendingComplete) {
-        pending.add(bloco.id);
-      }
-    }
-  }
-  return { approved, pending };
 }
 
 export function getCurrentStage(

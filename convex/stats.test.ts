@@ -1,37 +1,16 @@
 /// <reference types="bun" />
 import { describe, test, expect } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { YOUNGER_SPECIALTY_BY_ID } from "../src/data/specialty-data/younger";
 import { OLDER_SPECIALTIES } from "../src/data/specialty-data/older";
 import { getEixosForRamo } from "../src/data/progression-data";
 import { getEarnedSpecialtyBlocoIds } from "../src/lib/completion-logic";
-
-const modules = {
-  "./_generated/api.js": () => import("./_generated/api.js"),
-  "./_generated/server.js": () => import("./_generated/server.js"),
-  "./approvals.ts": () => import("./approvals"),
-  "./auth.config.ts": () => import("./auth.config"),
-  "./auth.ts": () => import("./auth"),
-  "./groups.ts": () => import("./groups"),
-  "./http.ts": () => import("./http"),
-  "./onboarding.ts": () => import("./onboarding"),
-  "./plan.ts": () => import("./plan"),
-  "./progression.ts": () => import("./progression"),
-  "./stats.ts": () => import("./stats"),
-  "./testing.ts": () => import("./testing"),
-  "./users.ts": () => import("./users"),
-};
-
-function as(t: ReturnType<typeof convexTest>, userId: Id<"users">) {
-  return t.withIdentity({ subject: userId });
-}
+import { as, newTest, type TestConvex } from "./fixtures.testkit";
 
 const A_FIX0 = "escoteiro:aprendizagem-continua:fixed:0";
 
-async function seed(t: ReturnType<typeof convexTest>) {
+async function seed(t: TestConvex) {
   const adminId: Id<"users"> = await t.run((ctx) =>
     ctx.db.insert("users", {
       name: "Admin", role: "escotista", escotistaRamos: ["senior"],
@@ -70,7 +49,7 @@ async function seed(t: ReturnType<typeof convexTest>) {
 
 describe("getRamoCoverage authz (Task 3)", () => {
   test("non-admin escotista reads their own ramo", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escotistaId } = await seed(t);
     const cov = await as(t, escotistaId).query(api.stats.getRamoCoverage, {
       ramo: "escoteiro",
@@ -80,7 +59,7 @@ describe("getRamoCoverage authz (Task 3)", () => {
   });
 
   test("non-admin escotista is rejected for a ramo not in escotistaRamos", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escotistaId } = await seed(t);
     await expect(
       as(t, escotistaId).query(api.stats.getRamoCoverage, { ramo: "senior" }),
@@ -88,7 +67,7 @@ describe("getRamoCoverage authz (Task 3)", () => {
   });
 
   test("admin may read any ramo", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId } = await seed(t);
     const cov = await as(t, adminId).query(api.stats.getRamoCoverage, {
       ramo: "escoteiro",
@@ -98,14 +77,14 @@ describe("getRamoCoverage authz (Task 3)", () => {
   });
 
   test("omitted ramo defaults to the caller's first escotistaRamos", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escotistaId } = await seed(t);
     const cov = await as(t, escotistaId).query(api.stats.getRamoCoverage, {});
     expect(cov.ramo).toBe("escoteiro");
   });
 
   test("a non-escotista is rejected with the module's generic message", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { scout } = await seed(t);
     await expect(
       as(t, scout).query(api.stats.getRamoCoverage, { ramo: "escoteiro" }),
@@ -113,7 +92,7 @@ describe("getRamoCoverage authz (Task 3)", () => {
   });
 
   test("escotista only sees their own group's scouts (group isolation)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     // group1 has 1 escoteiro in "escoteiro" (seeded by seed())
     const { escotistaId } = await seed(t);
 
@@ -168,7 +147,7 @@ describe("legacy grupo-creator admin scope", () => {
   // A creator that predates the isAdmin flag: createdBy points at them but the
   // flag was never set. The module resolves them as admin on every surface, so
   // stats must accept a ramo they do not accompany (previously timeline-only).
-  async function seedLegacyCreator(t: ReturnType<typeof convexTest>) {
+  async function seedLegacyCreator(t: TestConvex) {
     const creatorId: Id<"users"> = await t.run((ctx) =>
       ctx.db.insert("users", {
         name: "Legacy", role: "escotista", escotistaRamos: ["senior"],
@@ -193,7 +172,7 @@ describe("legacy grupo-creator admin scope", () => {
   }
 
   test("creator (isAdmin unset) may read coverage for a ramo they do not accompany", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { creatorId } = await seedLegacyCreator(t);
     const cov = await as(t, creatorId).query(api.stats.getRamoCoverage, {
       ramo: "escoteiro",
@@ -203,7 +182,7 @@ describe("legacy grupo-creator admin scope", () => {
   });
 
   test("creator (isAdmin unset) may read the scout roster for a ramo they do not accompany", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { creatorId, scout } = await seedLegacyCreator(t);
     const rows = await as(t, creatorId).query(api.stats.getRamoScouts, {
       ramo: "escoteiro",
@@ -215,7 +194,7 @@ describe("legacy grupo-creator admin scope", () => {
 
 describe("getRamoScouts (Task 4)", () => {
   test("returns the ramo's scouts with stage + block count + name + joinedAt", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escotistaId, scout } = await seed(t);
     const rows = await as(t, escotistaId).query(api.stats.getRamoScouts, {
       ramo: "escoteiro",
@@ -229,7 +208,7 @@ describe("getRamoScouts (Task 4)", () => {
   });
 
   test("is rejected for a non-admin's out-of-scope ramo", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escotistaId } = await seed(t);
     await expect(
       as(t, escotistaId).query(api.stats.getRamoScouts, { ramo: "senior" }),
@@ -237,7 +216,7 @@ describe("getRamoScouts (Task 4)", () => {
   });
 
   test("excludes banned and pending scouts from the roster", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId, scout } = await seed(t);
     await t.run((ctx) =>
       ctx.db.insert("users", {
@@ -259,7 +238,7 @@ describe("getRamoScouts (Task 4)", () => {
   });
 
   test("sorts ascending by completedBlockCount (who is behind first)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seed(t);
     // Add a second scout with NO completions (also 0 blocks).
     await t.run((ctx) =>
@@ -276,7 +255,7 @@ describe("getRamoScouts (Task 4)", () => {
   });
 
   test("tie-break: among tied block counts, older accounts come first (newest last)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seed(t);
     // Insert "older" then "newer" scout sequentially; _creationTime increases.
     const olderId: Id<"users"> = await t.run((ctx) =>
@@ -307,7 +286,7 @@ describe("getRamoScouts (Task 4)", () => {
 });
 
 describe("seção observada scopes the stats cohort", () => {
-  async function seedSections(t: ReturnType<typeof convexTest>) {
+  async function seedSections(t: TestConvex) {
     const base = await seed(t);
     const [norte, sul] = await t.run(async (ctx) => [
       await ctx.db.insert("sections", { groupId: base.groupId, name: "Norte", ramo: "escoteiro" }),
@@ -326,7 +305,7 @@ describe("seção observada scopes the stats cohort", () => {
   }
 
   test("no observed seção → whole ramo", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escotistaId } = await seedSections(t);
     const cov = await as(t, escotistaId).query(api.stats.getRamoCoverage, { ramo: "escoteiro" });
     expect(cov.scoutCount).toBe(3);
@@ -334,7 +313,7 @@ describe("seção observada scopes the stats cohort", () => {
   });
 
   test("observed seção narrows coverage, roster and especialidades (unplaced kept)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escotistaId, norte } = await seedSections(t);
     await t.run((ctx) => ctx.db.patch(escotistaId, { observedSectionId: norte }));
     const cov = await as(t, escotistaId).query(api.stats.getRamoCoverage, { ramo: "escoteiro" });
@@ -353,7 +332,7 @@ describe("getRamoSpecialties", () => {
   const OLDER_ID = OLDER_SPECIALTIES[0]!.id;
 
   async function addScout(
-    t: ReturnType<typeof convexTest>,
+    t: TestConvex,
     groupId: Id<"groups">,
     name: string,
     ramo: "escoteiro" | "lobinho" | "senior",
@@ -364,7 +343,7 @@ describe("getRamoSpecialties", () => {
   }
 
   async function items(
-    t: ReturnType<typeof convexTest>,
+    t: TestConvex,
     userId: Id<"users">,
     specialtyId: string,
     approved: number,
@@ -382,7 +361,7 @@ describe("getRamoSpecialties", () => {
   }
 
   test("younger: earned / level2 / in progress / pending / scoutsWithNone", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escotistaId, groupId, scout } = await seed(t);
     const half = YOUNGER_ITEMS / 2;
     const l1 = await addScout(t, groupId, "L1", "escoteiro");
@@ -411,7 +390,7 @@ describe("getRamoSpecialties", () => {
   });
 
   test("younger: earned especialidade lists the bloco it completes", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escotistaId, groupId } = await seed(t);
     const s = await addScout(t, groupId, "B", "escoteiro");
     await items(t, s, YOUNGER_ID, YOUNGER_ITEMS / 2, 0);
@@ -423,7 +402,7 @@ describe("getRamoSpecialties", () => {
   });
 
   test("older: binary — 2/3 approved is in progress, 3/3 is earned", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seed(t);
     const done = await addScout(t, groupId, "Done", "senior");
     const half = await addScout(t, groupId, "Half", "senior");
@@ -454,7 +433,7 @@ describe("getRamoSpecialties", () => {
   });
 
   test("demand counts only especialidade: keys of the current ramo", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escotistaId, groupId, scout } = await seed(t);
     const other = await addScout(t, groupId, "O", "escoteiro");
     await items(t, other, YOUNGER_ID, 1, 0);
@@ -476,7 +455,7 @@ describe("getRamoSpecialties", () => {
   });
 
   test("non-admin is rejected outside their ramos", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { escotistaId } = await seed(t);
     await expect(
       as(t, escotistaId).query(api.stats.getRamoSpecialties, { ramo: "senior" }),

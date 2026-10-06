@@ -1,36 +1,13 @@
 /// <reference types="bun" />
 import { describe, test, expect } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { diffProgression } from "./lib/progression";
 import { getEixosForRamo } from "../src/data/progression-data";
-import { getCompletedBlockIds } from "../src/lib/completion-logic";
+import { deriveProgression } from "../src/lib/progression-state";
+import { as, newTest, type Ramo, type TestConvex } from "./fixtures.testkit";
 
-const modules = {
-  "./_generated/api.js": () => import("./_generated/api.js"),
-  "./_generated/server.js": () => import("./_generated/server.js"),
-  "./approvals.ts": () => import("./approvals"),
-  "./auth.config.ts": () => import("./auth.config"),
-  "./auth.ts": () => import("./auth"),
-  "./events.ts": () => import("./events"),
-  "./groups.ts": () => import("./groups"),
-  "./http.ts": () => import("./http"),
-  "./onboarding.ts": () => import("./onboarding"),
-  "./plan.ts": () => import("./plan"),
-  "./progression.ts": () => import("./progression"),
-  "./testing.ts": () => import("./testing"),
-  "./users.ts": () => import("./users"),
-};
-
-type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
-
-function as(t: ReturnType<typeof convexTest>, userId: Id<"users">) {
-  return t.withIdentity({ subject: userId });
-}
-
-async function seedGroup(t: ReturnType<typeof convexTest>) {
+async function seedGroup(t: TestConvex) {
   const adminId = await t.run(async (ctx) =>
     ctx.db.insert("users", {
       name: "Admin",
@@ -59,7 +36,7 @@ async function seedGroup(t: ReturnType<typeof convexTest>) {
 }
 
 async function seedEscoteiro(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   groupId: Id<"groups">,
   ramo: Ramo,
   name = "Esc",
@@ -76,7 +53,7 @@ async function seedEscoteiro(
   );
 }
 
-async function listEvents(t: ReturnType<typeof convexTest>) {
+async function listEvents(t: TestConvex) {
   return await t.run(async (ctx) => ctx.db.query("events").collect());
 }
 
@@ -128,7 +105,7 @@ describe("diffProgression", () => {
 // ---------------------------------------------------------------------------
 describe("approval & rejection events", () => {
   test("approving an action logs a ramo-scoped approval event", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escId = await seedEscoteiro(t, groupId, "escoteiro", "João");
 
@@ -156,7 +133,7 @@ describe("approval & rejection events", () => {
   });
 
   test("rejecting logs a rejection event before deleting the row", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escId = await seedEscoteiro(t, groupId, "escoteiro");
 
@@ -183,7 +160,7 @@ describe("approval & rejection events", () => {
 // ---------------------------------------------------------------------------
 describe("level-up detection", () => {
   test("approving the action that completes the 4th block crosses to Trilha", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escId = await seedEscoteiro(t, groupId, "escoteiro");
 
@@ -192,7 +169,13 @@ describe("level-up detection", () => {
 
     const approved = new Set<string>();
     const countWith = (ids: Set<string>) =>
-      getCompletedBlockIds(eixos, ids, new Set(), [], new Set<string>()).approved.size;
+      deriveProgression({
+        ramo: "escoteiro",
+        actions: [...ids].map((actionId) => ({ actionId })),
+        customActions: [],
+        irrItems: [],
+        earnedSpecialtyIds: [],
+      }).completedBlockCount;
 
     // Greedily complete whole blocks (all their actions approved) until exactly
     // 3 blocks count as complete — one short of Trilha (4). Robust to any
@@ -278,7 +261,7 @@ describe("level-up detection", () => {
   });
 
   test("approving a single unrelated action fires no level-up", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escId = await seedEscoteiro(t, groupId, "escoteiro");
     const completionId = await t.run(async (ctx) =>
@@ -303,7 +286,7 @@ describe("level-up detection", () => {
 // ---------------------------------------------------------------------------
 describe("group-level events", () => {
   test("banMember logs a group-scoped memberBan event", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escId = await seedEscoteiro(t, groupId, "escoteiro");
 
@@ -316,7 +299,7 @@ describe("group-level events", () => {
   });
 
   test("approveMembership logs a memberJoin event", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const pendingId = await t.run(async (ctx) =>
       ctx.db.insert("users", {
@@ -335,7 +318,7 @@ describe("group-level events", () => {
   });
 
   test("setMemberRamo no-op does not log a phantom ramoChange", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escId = await seedEscoteiro(t, groupId, "escoteiro");
     // Same ramo it already has → should be a no-op, no event.
@@ -361,7 +344,7 @@ describe("listTimeline visibility", () => {
   const PAGE = { numItems: 50, cursor: null };
 
   async function seedEvents(
-    t: ReturnType<typeof convexTest>,
+    t: TestConvex,
     groupId: Id<"groups">,
     actorId: Id<"users">,
     subjectId: Id<"users">,
@@ -397,7 +380,7 @@ describe("listTimeline visibility", () => {
   }
 
   test("admin sees every event in the group", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escId = await seedEscoteiro(t, groupId, "escoteiro");
     await seedEvents(t, groupId, adminId, escId);
@@ -409,7 +392,7 @@ describe("listTimeline visibility", () => {
   });
 
   test("non-admin sees only their-ramo events, not other ramos or group events", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escId = await seedEscoteiro(t, groupId, "escoteiro");
     await seedEvents(t, groupId, adminId, escId);
@@ -434,7 +417,7 @@ describe("listTimeline visibility", () => {
   });
 
   test("legacy creator (isAdmin unset) still sees group events via createdBy", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     // A group creator that predates the isAdmin flag: created the group but has
     // no isAdmin and no escotistaRamos, and hasn't run a backfilling mutation.
     const creatorId = await t.run(async (ctx) =>
@@ -465,7 +448,7 @@ describe("listTimeline visibility", () => {
   });
 
   test("escoteiros get nothing", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escId = await seedEscoteiro(t, groupId, "escoteiro");
     await seedEvents(t, groupId, adminId, escId);
@@ -477,7 +460,7 @@ describe("listTimeline visibility", () => {
   });
 
   test("unauthenticated, banned, and pending callers get a terminal empty page", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escId = await seedEscoteiro(t, groupId, "escoteiro");
     await seedEvents(t, groupId, adminId, escId);
@@ -524,7 +507,7 @@ describe("listTimeline visibility", () => {
   // mid-stream — the UI auto-advances through empty pages; convex-test reads
   // ahead and fills, so that path is covered by reasoning + the e2e, not here.)
   test("non-admin scoping holds amid a mix of other-ramo and group events", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escId = await seedEscoteiro(t, groupId, "escoteiro");
     const leadId = await t.run(async (ctx) =>
@@ -585,7 +568,7 @@ describe("listTimeline visibility", () => {
   });
 
   test("paginates", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escId = await seedEscoteiro(t, groupId, "escoteiro");
     await t.run(async (ctx) => {

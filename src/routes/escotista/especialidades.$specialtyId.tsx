@@ -3,6 +3,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../convex/_generated/api";
+import { levelThresholds } from "@/lib/especialidade-standing";
 import {
   PROJECT_STEPS,
   PROJECT_STEP_LABELS,
@@ -108,7 +109,7 @@ function SpecialtyDetail() {
           <div className="mt-3 grid grid-cols-2 gap-2">
             <div className="rounded-md border-2 border-[#141414] bg-[#E3E8F8] px-2.5 py-2 text-[12px] font-bold text-[#4A4A44]">
               <b className="block text-[14px] text-[#141414]">Nível 1</b>
-              {entry.itemCount / 2} de {entry.itemCount} itens
+              {levelThresholds(entry.itemCount).level1} de {entry.itemCount} itens
             </div>
             <div className="rounded-md border-2 border-[#141414] bg-[#F4C430] px-2.5 py-2 text-[12px] font-bold text-[#4A4A44]">
               <b className="block text-[14px] text-[#141414]">Nível 2</b>
@@ -193,12 +194,7 @@ function SpecialtyDetail() {
             )}
             {roster.people.map((p) => {
               const total = entry.itemCount ?? 1;
-              const toNext =
-                p.level === 0
-                  ? total / 2 - p.approvedCount
-                  : p.level === 1
-                    ? total - p.approvedCount
-                    : 0;
+              const toNext = p.missingForNextLevel ?? 0;
               const status =
                 p.pendingCount > 0
                   ? `${p.approvedCount} de ${total} · ${p.pendingCount} aguardando${

@@ -18,14 +18,23 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { Check, Clock, Search } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
-import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import {
   OLDER_SPECIALTY_BY_ID,
   PROJECT_STEPS,
   PROJECT_STEP_LABELS,
   type ProjectStep,
 } from "@/data/specialty-data/older";
-import { getSpecialtyLevel } from "@/lib/completion-logic";
+import {
+  emptyStanding,
+  levelThresholds,
+  standingsById,
+  type EtapaState,
+  type ItemState,
+  type OlderStanding,
+  type Standing,
+  type YoungerStanding,
+} from "@/lib/especialidade-standing";
 import {
   AMBER_INK,
   BACK_CLASS,
@@ -96,6 +105,14 @@ export function EscotistaFicha({
   const escoteiro = members.find(
     (m) => m._id === escoteiroId && m.role === "escoteiro",
   );
+  // Null when the escoteiro is outside the viewer's visibilidade de ramo.
+  const { data: record } = useSuspenseQuery(
+    convexQuery(api.specialties.getEscoteiroEspecialidades, { escoteiroId }),
+  );
+  const standings = useMemo(
+    () => standingsById<Standing>(record?.standings ?? []),
+    [record],
+  );
   const approverNames = useMemo(() => {
     const m = new Map<string, string>();
     for (const x of members) if (x.name) m.set(x._id, x.name);
@@ -104,7 +121,7 @@ export function EscotistaFicha({
 
   const router = useRouter();
   const navigate = useNavigate();
-  const group = ramoGroupOf(escoteiro?.ramo);
+  const group = record?.ramoGroup ?? ramoGroupOf(escoteiro?.ramo);
   const entry = specialtyId ? findCatalogEntry(group, specialtyId) : undefined;
 
   const goBack = () => {
@@ -153,6 +170,7 @@ export function EscotistaFicha({
     group === "younger" ? (
       <YoungerFicha
         escoteiro={escoteiro}
+        standings={standings as Map<string, YoungerStanding>}
         entry={entry}
         back={back}
         crumb={crumb}
@@ -161,6 +179,7 @@ export function EscotistaFicha({
     ) : (
       <OlderFicha
         escoteiro={escoteiro}
+        standings={standings as Map<string, OlderStanding>}
         entry={entry}
         back={back}
         crumb={crumb}
@@ -178,46 +197,32 @@ type Member = { _id: Id<"users">; name?: string | null; ramo?: string | null };
 
 function YoungerFicha({
   escoteiro,
+  standings,
   entry,
   back,
   crumb,
   approverNames,
 }: {
   escoteiro: Member;
+  standings: Map<string, YoungerStanding>;
   entry: CatalogEntry | undefined;
   back: React.ReactNode;
   crumb: string;
   approverNames: Map<string, string>;
 }) {
-  const { data: rows } = useSuspenseQuery(
-    convexQuery(api.specialties.getSpecialtyItemsForEscoteiro, {
-      escoteiroId: escoteiro._id,
-    }),
-  );
-  const bySpecialty = useMemo(() => {
-    const m = new Map<string, Doc<"specialtyItemCompletions">[]>();
-    for (const r of rows) {
-      if (r.ramoGroup !== "younger") continue;
-      const arr = m.get(r.specialtyId) ?? [];
-      arr.push(r);
-      m.set(r.specialtyId, arr);
-    }
-    return m;
-  }, [rows]);
-
-  const progressOf = (e: CatalogEntry) => {
-    const own = bySpecialty.get(e.id) ?? [];
-    const approved = own.filter((r) => r.status !== "pending").length;
-    const pending = own.filter((r) => r.status === "pending").length;
+  const statusOf = (e: CatalogEntry) => {
+    const st = standings.get(e.id);
+    const approved = st?.approvedCount ?? 0;
+    const pending = st?.pendingCount ?? 0;
     return {
-      approved,
-      pending,
-      level: getSpecialtyLevel(approved, e.itemCount ?? 0) as 0 | 1 | 2,
+      text: `${approved} de ${e.itemCount} itens${pending ? ` · ${pending} aguardando` : ""}`,
+      level: st?.level ?? 0,
+      pending: pending > 0,
     };
   };
 
   const others = catalogFor("younger").filter(
-    (e) => e.id !== entry?.id && bySpecialty.has(e.id),
+    (e) => e.id !== entry?.id && standings.has(e.id),
   );
 
   if (!entry) {
@@ -228,24 +233,17 @@ function YoungerFicha({
         back={back}
         crumb={crumb}
         active={others}
-        statusOf={(e) => {
-          const p = progressOf(e);
-          return {
-            text: `${p.approved} de ${e.itemCount} itens${p.pending ? ` · ${p.pending} aguardando` : ""}`,
-            level: p.level,
-            pending: p.pending > 0,
-          };
-        }}
+        statusOf={statusOf}
       />
     );
   }
 
   const eixo = eixoMeta(entry.eixoId);
-  const total = entry.itemCount ?? entry.texts.length;
-  const own = bySpecialty.get(entry.id) ?? [];
-  const byIndex = new Map(own.map((r) => [r.itemIndex, r]));
-  const { approved, pending, level } = progressOf(entry);
-  const half = total / 2;
+  const standing =
+    standings.get(entry.id) ??
+    (emptyStanding("younger", entry.id) as YoungerStanding);
+  const { total, approvedCount: approved, pendingCount: pending, level } = standing;
+  const thresholds = levelThresholds(total);
   const name = firstName(escoteiro.name);
 
   return (
@@ -287,13 +285,13 @@ function YoungerFicha({
           <LevelBox
             label="Nível 1"
             reached={level >= 1}
-            missing={half - approved}
+            missing={thresholds.level1 - approved}
             bg="#E3E8F8"
           />
           <LevelBox
             label="Nível 2"
             reached={level >= 2}
-            missing={total - approved}
+            missing={thresholds.level2 - approved}
             bg="#F4C430"
           />
         </div>
@@ -312,7 +310,7 @@ function YoungerFicha({
             key={i}
             index={i}
             text={text}
-            row={byIndex.get(i)}
+            state={standing.items[i] ?? null}
             escoteiroId={escoteiro._id}
             specialtyId={entry.id}
             escoteiroName={name}
@@ -321,18 +319,7 @@ function YoungerFicha({
         ))}
       </ListBox>
 
-      <OthersList
-        escoteiro={escoteiro}
-        entries={others}
-        statusOf={(e) => {
-          const p = progressOf(e);
-          return {
-            text: `${p.approved} de ${e.itemCount} itens${p.pending ? ` · ${p.pending} aguardando` : ""}`,
-            level: p.level,
-            pending: p.pending > 0,
-          };
-        }}
-      />
+      <OthersList escoteiro={escoteiro} entries={others} statusOf={statusOf} />
     </>
   );
 }
@@ -366,7 +353,7 @@ function LevelBox({
 function ItemRow({
   index,
   text,
-  row,
+  state: item,
   escoteiroId,
   specialtyId,
   escoteiroName,
@@ -374,18 +361,14 @@ function ItemRow({
 }: {
   index: number;
   text: string;
-  row: Doc<"specialtyItemCompletions"> | undefined;
+  state: ItemState | null;
   escoteiroId: Id<"users">;
   specialtyId: string;
   escoteiroName: string;
   approverNames: Map<string, string>;
 }) {
   const review = useItemReview();
-  const state: "open" | "approved" | "pending" = !row
-    ? "open"
-    : row.status === "pending"
-      ? "pending"
-      : "approved";
+  const state: "open" | "approved" | "pending" = item?.status ?? "open";
   const busy = review.pendingItemIndex === index || review.rejecting;
 
   const toggle = () => {
@@ -398,14 +381,14 @@ function ItemRow({
     });
   };
 
-  const approver = row?.approvedBy ? approverNames.get(row.approvedBy) : undefined;
+  const approver = item?.approvedBy ? approverNames.get(item.approvedBy) : undefined;
   const status =
     state === "approved"
-      ? ["Aprovado", approver, shortDate(row?.approvedAt ?? row?.completedAt)]
+      ? ["Aprovado", approver, shortDate(item?.approvedAt ?? item?.completedAt)]
           .filter(Boolean)
           .join(" · ")
       : state === "pending"
-        ? `Enviado por ${escoteiroName} · ${shortDate(row?.completedAt)}`
+        ? `Enviado por ${escoteiroName} · ${shortDate(item?.completedAt)}`
         : null;
 
   return (
@@ -461,7 +444,7 @@ function ItemRow({
             {status}
           </span>
         )}
-        {state === "pending" && row && (
+        {state === "pending" && item && (
           <span className="mt-2 flex gap-1.5">
             <SmallButton
               kind="primary"
@@ -480,7 +463,7 @@ function ItemRow({
             <SmallButton
               kind="ghost"
               disabled={busy}
-              onClick={() => review.reject(row._id)}
+              onClick={() => review.reject(item.rowId)}
             >
               Rejeitar
             </SmallButton>
@@ -497,54 +480,37 @@ function ItemRow({
 
 function OlderFicha({
   escoteiro,
+  standings,
   entry,
   back,
   crumb,
   approverNames,
 }: {
   escoteiro: Member;
+  standings: Map<string, OlderStanding>;
   entry: CatalogEntry | undefined;
   back: React.ReactNode;
   crumb: string;
   approverNames: Map<string, string>;
 }) {
-  const { data: rows } = useSuspenseQuery(
-    convexQuery(api.specialties.getSpecialtyReportsForEscoteiro, {
-      escoteiroId: escoteiro._id,
-    }),
-  );
-  const bySpecialty = useMemo(() => {
-    const m = new Map<string, Map<ProjectStep, Doc<"specialtyProjectReports">>>();
-    for (const r of rows) {
-      if (r.ramoGroup !== "older") continue;
-      const inner = m.get(r.specialtyId) ?? new Map();
-      inner.set(r.step, r);
-      m.set(r.specialtyId, inner);
-    }
-    return m;
-  }, [rows]);
   const review = useStepReview();
 
   const statusOf = (e: CatalogEntry) => {
-    const steps = bySpecialty.get(e.id);
-    const approved = PROJECT_STEPS.filter(
-      (s) => steps?.get(s)?.status === "approved",
-    ).length;
-    const pending = PROJECT_STEPS.filter(
-      (s) => steps?.get(s)?.status === "pending",
-    ).length;
+    const st = standings.get(e.id);
+    const approved = st?.approvedCount ?? 0;
+    const pending = st?.pendingCount ?? 0;
+    const total = PROJECT_STEPS.length;
     return {
-      text:
-        approved === 3
-          ? "Conquistada · 3 etapas aprovadas"
-          : `${approved} de 3 etapas${pending ? ` · ${pending} aguardando` : ""}`,
+      text: st?.earned
+        ? `Conquistada · ${total} etapas aprovadas`
+        : `${approved} de ${total} etapas${pending ? ` · ${pending} aguardando` : ""}`,
       level: 0 as const,
       pending: pending > 0,
-      earned: approved === 3,
+      earned: !!st?.earned,
     };
   };
   const others = catalogFor("older").filter(
-    (e) => e.id !== entry?.id && bySpecialty.has(e.id),
+    (e) => e.id !== entry?.id && standings.has(e.id),
   );
 
   if (!entry) {
@@ -562,7 +528,7 @@ function OlderFicha({
 
   const specialty = OLDER_SPECIALTY_BY_ID.get(entry.id)!;
   const eixo = eixoMeta(entry.eixoId);
-  const steps = bySpecialty.get(entry.id) ?? new Map();
+  const etapas = standings.get(entry.id)?.etapas;
   const status = statusOf(entry);
   const suggestions: Record<ProjectStep, string[]> = {
     conhecer: specialty.conhecerSuggestions,
@@ -602,7 +568,7 @@ function OlderFicha({
           step={step}
           tint={eixo.tint}
           suggestions={suggestions[step]}
-          row={steps.get(step)}
+          etapa={etapas?.[step] ?? null}
           escoteiroId={escoteiro._id}
           specialtyId={entry.id}
           approverNames={approverNames}
@@ -620,7 +586,7 @@ function StepCard({
   step,
   tint,
   suggestions,
-  row,
+  etapa,
   escoteiroId,
   specialtyId,
   approverNames,
@@ -630,7 +596,7 @@ function StepCard({
   step: ProjectStep;
   tint: string;
   suggestions: string[];
-  row: Doc<"specialtyProjectReports"> | undefined;
+  etapa: EtapaState | null;
   escoteiroId: Id<"users">;
   specialtyId: string;
   approverNames: Map<string, string>;
@@ -641,7 +607,7 @@ function StepCard({
   const [text, setText] = useState("");
   const [expanded, setExpanded] = useState(false);
   const register = useRegisterStep();
-  const state = !row ? "open" : row.status === "approved" ? "approved" : "pending";
+  const state = etapa?.status ?? "open";
 
   return (
     <section
@@ -674,30 +640,30 @@ function StepCard({
       </div>
       <Suggestions items={suggestions} />
 
-      {state === "pending" && row && (
+      {state === "pending" && etapa && (
         <PendingRelato
-          reportId={row._id}
+          reportId={etapa.rowId}
           stepLabel={label}
-          text={row.text}
+          text={etapa.text}
           review={review}
         />
       )}
 
-      {state === "approved" && row && (
+      {state === "approved" && etapa && (
         <div className="border-t-2 border-[#D9D5C9] px-3 py-2.5">
           <p
             className={`whitespace-pre-line border-l-[3px] border-[#D9D5C9] pl-2.5 text-[13px] leading-snug text-[#4A4A44] ${
               expanded ? "" : "line-clamp-3"
             }`}
           >
-            {row.text}
+            {etapa.text}
           </p>
           <div className="mt-1.5 flex items-center justify-between gap-2">
             <span className="text-[12px] font-extrabold" style={{ color: EMERALD }}>
               {[
                 "Aprovado",
-                row.approvedBy ? approverNames.get(row.approvedBy) : undefined,
-                shortDate(row.approvedAt ?? row.completedAt),
+                etapa.approvedBy ? approverNames.get(etapa.approvedBy) : undefined,
+                shortDate(etapa.approvedAt ?? etapa.completedAt),
               ]
                 .filter(Boolean)
                 .join(" · ")}

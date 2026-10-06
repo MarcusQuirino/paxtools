@@ -8,10 +8,15 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
-import { YOUNGER_SPECIALTIES } from "@/data/specialty-data/younger";
-import { OLDER_SPECIALTIES } from "@/data/specialty-data/older";
+import {
+  catalogFor,
+  findCatalogEntry,
+  type CatalogEntry,
+  type RamoGroup,
+} from "@/data/specialty-data/catalog";
+import { ramoGroupForRamo } from "@/lib/especialidade-standing";
 
-export type RamoGroup = "younger" | "older";
+export { catalogFor, findCatalogEntry, type CatalogEntry, type RamoGroup };
 
 export const RAMO_GROUP_LABEL: Record<RamoGroup, string> = {
   younger: "Lobinhos e Escoteiros",
@@ -22,16 +27,13 @@ export const RAMO_GROUP_LABEL: Record<RamoGroup, string> = {
 export function defaultRamoGroup(
   user: { isAdmin?: boolean; escotistaRamos?: string[] } | null,
 ): RamoGroup {
-  const ramos = user?.escotistaRamos ?? [];
-  if (user?.isAdmin) return "younger";
-  if (ramos.some((r) => r === "lobinho" || r === "escoteiro")) return "younger";
-  if (ramos.some((r) => r === "senior" || r === "pioneiro")) return "older";
-  return "younger";
+  const groups = (user?.escotistaRamos ?? []).map(ramoGroupForRamo);
+  if (user?.isAdmin || groups.includes("younger")) return "younger";
+  return groups.includes("older") ? "older" : "younger";
 }
 
-export function ramoGroupOf(ramo: string | null | undefined): RamoGroup {
-  return ramo === "senior" || ramo === "pioneiro" ? "older" : "younger";
-}
+/** The ramo group of a ramo — the single rule, from especialidade-standing. */
+export const ramoGroupOf = ramoGroupForRamo;
 
 // Design A tokens (a-native/index.html).
 export const INK = "#141414";
@@ -74,55 +76,6 @@ export function eixoMeta(eixoId: string) {
       tint: "#F4F1E8",
     }
   );
-}
-
-/** One catalog entry, uniform across both ramoGroups. */
-export type CatalogEntry = {
-  id: string;
-  name: string;
-  eixoId: string;
-  description: string;
-  /** Younger: the checklist items. Older: every etapa suggestion. */
-  texts: string[];
-  /** Younger only: item count (level 1 = half, level 2 = all). */
-  itemCount: number | null;
-};
-
-function byName(a: CatalogEntry, b: CatalogEntry) {
-  return a.name.localeCompare(b.name, "pt-BR");
-}
-
-const YOUNGER_CATALOG: CatalogEntry[] = YOUNGER_SPECIALTIES.map((s) => ({
-  id: s.id,
-  name: s.name,
-  eixoId: s.eixoId,
-  description: s.description,
-  texts: s.items,
-  itemCount: s.items.length,
-})).sort(byName);
-
-const OLDER_CATALOG: CatalogEntry[] = OLDER_SPECIALTIES.map((s) => ({
-  id: s.id,
-  name: s.name,
-  eixoId: s.eixoId,
-  description: s.description,
-  texts: [
-    ...s.conhecerSuggestions,
-    ...s.fazerSuggestions,
-    ...s.compartilharSuggestions,
-  ],
-  itemCount: null,
-})).sort(byName);
-
-export function catalogFor(group: RamoGroup): CatalogEntry[] {
-  return group === "younger" ? YOUNGER_CATALOG : OLDER_CATALOG;
-}
-
-export function findCatalogEntry(
-  group: RamoGroup,
-  id: string,
-): CatalogEntry | undefined {
-  return catalogFor(group).find((e) => e.id === id);
 }
 
 /** Lowercase + strip accents, so "nos" finds "nós". */
