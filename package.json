@@ -2,7 +2,7 @@
   "name": "paxtools",
   "version": "1.7.0",
   "description": "Rastreador de Progressao Pessoal para escoteiros brasileiros do Ramo Escoteiro",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "types": ".design-sync/.cache/dts/.design-sync/entry.d.ts",
   "repository": {
