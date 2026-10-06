@@ -66,7 +66,7 @@ function CredentialsCard({ credentials }: { credentials: Credentials }) {
 }
 
 /**
- * "Criar acesso sem Google": an escotista creates a conta gerenciada for a
+ * "Criar novo escoteiro": an escotista creates a conta gerenciada for a
  * member who signs in with their registro escoteiro. Escoteiros are limited to
  * the ramos the caller accompanies (admins: any); only admins create
  * escotistas — the server enforces both.
@@ -141,13 +141,13 @@ export function CreateManagedMemberButton({
         data-testid={`create-managed-${role}`}
       >
         <UserPlus className="size-4" />
-        Criar {label} sem Google
+        Criar novo {label}
       </Button>
       <Dialog open={open} onOpenChange={(o) => !busy && setOpen(o)}>
         <DialogContent className="border-2 border-black shadow-[4px_4px_0px_0px_#000] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-black uppercase">
-              {created ? "Acesso criado" : `Novo ${label} sem Google`}
+              {created ? "Acesso criado" : `Novo ${label}`}
             </DialogTitle>
             <DialogDescription>
               {created
