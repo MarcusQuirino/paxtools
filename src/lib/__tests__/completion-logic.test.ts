@@ -2,7 +2,6 @@ import { describe, it, expect } from "bun:test";
 import type { Action, Bloco, Eixo } from "@/data/types";
 import {
   getBlocoProgress,
-  getCompletedBlockIds,
   getEarnedSpecialtyBlocoIds,
   getSpecialtyLevel,
   isSpecialtyEarned,
@@ -266,140 +265,8 @@ describe("getSpecialtyLevel", () => {
   });
 });
 
-// ── getCompletedBlockIds ───────────────────────────────────────
 
 const emptyEarnedSpecialties = new Set<string>();
-
-describe("getCompletedBlockIds", () => {
-  it("returns empty sets when nothing completed", () => {
-    const eixos = [makeEixo([makeBloco()])];
-    const result = getCompletedBlockIds(eixos, new Set(), emptyPending, [], emptyEarnedSpecialties);
-
-    expect(result.approved.size).toBe(0);
-    expect(result.pending.size).toBe(0);
-  });
-
-  it("identifies completed blocks across multiple eixos", () => {
-    const bloco1 = makeBloco({ id: "bloco-1" });
-    const bloco2 = makeBloco({ id: "bloco-2", eixoId: "eixo-2" });
-    const eixos = [
-      makeEixo([bloco1]),
-      { ...makeEixo([bloco2]), id: "eixo-2" },
-    ];
-
-    const completed = new Set([
-      "bloco-1:fixed:0",
-      "bloco-1:fixed:1",
-      "bloco-1:variable:0",
-      "bloco-1:variable:1",
-      "bloco-2:fixed:0",
-      "bloco-2:fixed:1",
-      "bloco-2:variable:0",
-      "bloco-2:variable:1",
-    ]);
-
-    const result = getCompletedBlockIds(eixos, completed, emptyPending, [], emptyEarnedSpecialties);
-    expect(result.approved.has("bloco-1")).toBe(true);
-    expect(result.approved.has("bloco-2")).toBe(true);
-    expect(result.approved.size).toBe(2);
-  });
-
-  it("custom actions contribute only to their bloco", () => {
-    const bloco = makeBloco();
-    const eixos = [makeEixo([bloco])];
-
-    // All fixed done, 1 variable done via action + 1 via custom = 2 (meets threshold)
-    const completed = new Set([
-      "test-bloco:fixed:0",
-      "test-bloco:fixed:1",
-      "test-bloco:variable:0",
-    ]);
-    const customActions = [
-      { blocoId: "test-bloco", completed: true },
-    ];
-
-    const result = getCompletedBlockIds(eixos, completed, emptyPending, customActions, emptyEarnedSpecialties);
-    expect(result.approved.has("test-bloco")).toBe(true);
-  });
-
-  it("ignores custom actions where completed is false", () => {
-    const bloco = makeBloco();
-    const eixos = [makeEixo([bloco])];
-
-    const completed = new Set([
-      "test-bloco:fixed:0",
-      "test-bloco:fixed:1",
-      "test-bloco:variable:0",
-    ]);
-    // Custom action exists but not completed -- should NOT count
-    const customActions = [
-      { blocoId: "test-bloco", completed: false },
-    ];
-
-    const result = getCompletedBlockIds(eixos, completed, emptyPending, customActions, emptyEarnedSpecialties);
-    // Only 1 variable done, needs 2 -- not complete
-    expect(result.approved.has("test-bloco")).toBe(false);
-  });
-
-  it("earned specialty (level ≥ 1) bypasses variable for matching bloco", () => {
-    const bloco = makeBloco();
-    const eixos = [makeEixo([bloco])];
-
-    // All fixed done, 0 variable -- but specialty at level ≥ 1 covers it
-    const completed = new Set([
-      "test-bloco:fixed:0",
-      "test-bloco:fixed:1",
-    ]);
-
-    const result = getCompletedBlockIds(
-      eixos,
-      completed,
-      emptyPending,
-      [],
-      new Set(["test-bloco"]),
-    );
-    expect(result.approved.has("test-bloco")).toBe(true);
-  });
-
-  it("specialty NOT in earnedSpecialtyBlocoIds does not satisfy variable", () => {
-    const bloco = makeBloco();
-    const eixos = [makeEixo([bloco])];
-
-    const completed = new Set([
-      "test-bloco:fixed:0",
-      "test-bloco:fixed:1",
-    ]);
-
-    // earnedSpecialtyBlocoIds is empty — variable requirement unsatisfied
-    const result = getCompletedBlockIds(
-      eixos,
-      completed,
-      emptyPending,
-      [],
-      emptyEarnedSpecialties,
-    );
-    expect(result.approved.has("test-bloco")).toBe(false);
-  });
-
-  it("does not mark incomplete blocks", () => {
-    const complete = makeBloco({ id: "complete-bloco" });
-    const incomplete = makeBloco({ id: "incomplete-bloco" });
-    const eixos = [makeEixo([complete, incomplete])];
-
-    const completed = new Set([
-      "complete-bloco:fixed:0",
-      "complete-bloco:fixed:1",
-      "complete-bloco:variable:0",
-      "complete-bloco:variable:1",
-      // incomplete-bloco has nothing
-    ]);
-
-    const result = getCompletedBlockIds(eixos, completed, emptyPending, [], emptyEarnedSpecialties);
-    expect(result.approved.has("complete-bloco")).toBe(true);
-    expect(result.approved.has("incomplete-bloco")).toBe(false);
-    expect(result.approved.size).toBe(1);
-  });
-});
 
 // ── getEarnedSpecialtyBlocoIds ─────────────────────────────────
 

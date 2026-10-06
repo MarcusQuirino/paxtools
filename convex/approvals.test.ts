@@ -4,6 +4,7 @@ import { convexTest } from "convex-test";
 import schema from "./schema";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { getEixosForRamo } from "../src/data/progression-data";
 
 // Bun's test runner has no `import.meta.glob` (Vite-only). Enumerate convex
 // modules explicitly so the in-memory backend can load them. At least one
@@ -106,15 +107,23 @@ async function seedEscoteiro(
   });
 }
 
+// Real escoteiro catalog ações, handed out in turn so each insert is a
+// distinct ação (counts only include the current ramo's catalog).
+const CATALOG_ACTION_IDS = getEixosForRamo("escoteiro").flatMap((e) =>
+  e.blocos.flatMap((b) => [...b.fixedActions, ...b.variableActions].map((a) => a.id)),
+);
+let nextAction = 0;
+
 async function insertAction(
   t: ReturnType<typeof convexTest>,
   userId: Id<"users">,
   status: "pending" | "approved" | undefined = "pending",
+  actionId = CATALOG_ACTION_IDS[nextAction++ % CATALOG_ACTION_IDS.length]!,
 ) {
   return t.run(async (ctx) =>
     ctx.db.insert("actionCompletions", {
       userId,
-      actionId: "escoteiro:bloco1:type:0",
+      actionId,
       completedAt: 1,
       status,
     }),
@@ -884,6 +893,23 @@ describe("getGroupStats", () => {
     // getPendingForGroup.totalPending which sums all three categories.
     // Pinning current (actions-only) behavior: 1 pending action -> 1.
     expect(res?.totalPending).toBe(1);
+  });
+
+  test("counts only the escoteiro's current-ramo ações (a past ramo never inflates them)", async () => {
+    const t = convexTest(schema, modules);
+    const { adminId, groupId } = await seedGroup(t);
+    const esc = await seedEscoteiro(t, groupId);
+    await insertAction(t, esc, "approved");
+    // Left over from when this escoteiro was a lobinho, plus an id the
+    // catalog does not know: neither is one of their escoteiro ações.
+    await insertAction(t, esc, "approved", "lobinho:aprendizagem-continua:fixed:0");
+    await insertAction(t, esc, "pending", "escoteiro:nao-existe:fixed:0");
+
+    const res = await as(t, adminId).query(api.approvals.getGroupStats, {});
+    const row = res?.escoteiroStats.find((s) => s._id === esc);
+    expect(row?.approvedActions).toBe(1);
+    expect(row?.pendingActions).toBe(0);
+    expect(res?.totalPending).toBe(0);
   });
 
   test("non-admin escotista's escoteiroStats is ramo-filtered", async () => {

@@ -1,161 +1,27 @@
 import { useMemo } from "react";
 import { convexQuery } from "@convex-dev/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
+import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { getEixosForRamo, type Ramo } from "@/data/progression-data";
-import { getRamoRules } from "@/data/progression-rules";
-import {
-  getCompletedBlockIds,
-  getCurrentStage,
-  getNextStage,
-  allBlocksCompleted,
-  isIrrComplete,
-} from "@/lib/completion-logic";
+import { deriveProgression } from "@/lib/progression-state";
 
+type Completions = FunctionReturnType<typeof api.progression.getMyCompletions>;
+
+/**
+ * An escoteiro's progression state — the caller's own, or `targetUserId`'s for
+ * an escotista. Derived by the same module as the server's level-up snapshot
+ * (src/lib/progression-state), so client and server never disagree on blocos
+ * or etapa.
+ */
 export function useProgression(targetUserId?: Id<"users">) {
-  // Both queries return the same shape; use type assertion to unify
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const queryOptions = (targetUserId
+  // Both queries return the same shape; one hook call either way.
+  const options = targetUserId
     ? convexQuery(api.progression.getCompletionsForUser, { targetUserId })
-    : convexQuery(api.progression.getMyCompletions, {})) as any;
-  const { data } = useSuspenseQuery<{
-    ramo: Ramo | null;
-    actions: { actionId: string; status?: string }[];
-    customActions: {
-      _id: Id<"customActions">;
-      blocoId: string;
-      text: string;
-      completed: boolean;
-      status?: string;
-    }[];
-    irrItems: { itemId: string; status?: string }[];
-    earnedSpecialtyBlocoIds?: string[];
-    earnedSpecialtyIds?: string[];
-  }>(queryOptions);
-
-  const eixos = useMemo(() => getEixosForRamo(data.ramo), [data.ramo]);
-  const ramoRules = useMemo(() => getRamoRules(data.ramo), [data.ramo]);
-
-  const approvedActionIds = useMemo(
-    () =>
-      new Set(
-        data.actions
-          .filter((a) => a.status !== "pending")
-          .map((a) => a.actionId),
-      ),
-    [data.actions],
-  );
-
-  const pendingActionIds = useMemo(
-    () =>
-      new Set(
-        data.actions
-          .filter((a) => a.status === "pending")
-          .map((a) => a.actionId),
-      ),
-    [data.actions],
-  );
-
-  const actionStatusMap = useMemo(() => {
-    const map = new Map<string, "pending" | "approved">();
-    for (const a of data.actions) {
-      map.set(a.actionId, a.status === "pending" ? "pending" : "approved");
-    }
-    return map;
-  }, [data.actions]);
-
-  const customActionsWithStatus = useMemo(
-    () =>
-      data.customActions.map((c) => ({
-        ...c,
-        status: c.status as "pending" | "approved" | undefined,
-      })),
-    [data.customActions],
-  );
-
-  // Blocos satisfied via an earned especialidade (level ≥ 1). Computed server-side
-  // from approved specialtyItemCompletions counts + the catalog (#44) and returned
-  // as an id list, so the client and snapshotProgression stay in agreement.
-  const earnedSpecialtyBlocoIds = useMemo(
-    () => new Set(data.earnedSpecialtyBlocoIds ?? []),
-    [data.earnedSpecialtyBlocoIds],
-  );
-
-  // Canonical ids of the specialties earned via items (#44), so the bloco view
-  // can mark the exact specialty checkbox — not just know the bloco is satisfied.
-  const earnedSpecialtyIds = useMemo(
-    () => new Set(data.earnedSpecialtyIds ?? []),
-    [data.earnedSpecialtyIds],
-  );
-
-  const { approved: completedBlockIds, pending: pendingBlockIds } = useMemo(
-    () =>
-      getCompletedBlockIds(
-        eixos,
-        approvedActionIds,
-        pendingActionIds,
-        customActionsWithStatus,
-        earnedSpecialtyBlocoIds,
-      ),
-    [
-      eixos,
-      approvedActionIds,
-      pendingActionIds,
-      customActionsWithStatus,
-      earnedSpecialtyBlocoIds,
-    ],
-  );
-
-  const approvedIrrItemIds = useMemo(
-    () =>
-      new Set(
-        data.irrItems
-          .filter((i) => i.status !== "pending")
-          .map((i) => i.itemId),
-      ),
-    [data.irrItems],
-  );
-
-  const pendingIrrItemIds = useMemo(
-    () =>
-      new Set(
-        data.irrItems
-          .filter((i) => i.status === "pending")
-          .map((i) => i.itemId),
-      ),
-    [data.irrItems],
-  );
-
-  const completedBlockCount = completedBlockIds.size;
-  const stage = getCurrentStage(completedBlockCount, data.ramo);
-  const nextStage = getNextStage(completedBlockCount, data.ramo);
-  const blocksComplete = allBlocksCompleted(completedBlockCount, data.ramo);
-  const irrComplete = isIrrComplete(
-    completedBlockCount,
-    approvedIrrItemIds,
-    data.ramo,
-  );
-
-  return {
-    ramo: data.ramo,
-    ramoRules,
-    eixos,
-    approvedActionIds,
-    pendingActionIds,
-    actionStatusMap,
-    customActions: customActionsWithStatus,
-    completedBlockIds,
-    pendingBlockIds,
-    earnedSpecialtyBlocoIds,
-    earnedSpecialtyIds,
-    completedBlockCount,
-    pendingBlockCount: pendingBlockIds.size,
-    approvedIrrItemIds,
-    pendingIrrItemIds,
-    stage,
-    nextStage,
-    blocksComplete,
-    irrComplete,
-  };
+    : convexQuery(api.progression.getMyCompletions, {});
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = useSuspenseQuery<Completions>(options as any);
+  return useMemo(() => deriveProgression(data), [data]);
 }
+
+export type Progression = ReturnType<typeof useProgression>;

@@ -6,7 +6,7 @@ import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { diffProgression } from "./lib/progression";
 import { getEixosForRamo } from "../src/data/progression-data";
-import { getCompletedBlockIds } from "../src/lib/completion-logic";
+import { deriveProgression } from "../src/lib/progression-state";
 
 const modules = {
   "./_generated/api.js": () => import("./_generated/api.js"),
@@ -192,7 +192,13 @@ describe("level-up detection", () => {
 
     const approved = new Set<string>();
     const countWith = (ids: Set<string>) =>
-      getCompletedBlockIds(eixos, ids, new Set(), [], new Set<string>()).approved.size;
+      deriveProgression({
+        ramo: "escoteiro",
+        actions: [...ids].map((actionId) => ({ actionId })),
+        customActions: [],
+        irrItems: [],
+        earnedSpecialtyIds: [],
+      }).completedBlockCount;
 
     // Greedily complete whole blocks (all their actions approved) until exactly
     // 3 blocks count as complete — one short of Trilha (4). Robust to any

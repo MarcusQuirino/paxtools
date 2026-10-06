@@ -55,17 +55,12 @@ function Home() {
 }
 
 export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
+  const progression = useProgression(targetUserId);
   const {
     ramoRules,
     eixos,
-    approvedActionIds,
-    pendingActionIds,
-    actionStatusMap,
-    customActions,
     completedBlockIds,
     pendingBlockIds,
-    earnedSpecialtyBlocoIds,
-    earnedSpecialtyIds,
     completedBlockCount,
     pendingBlockCount,
     approvedIrrItemIds,
@@ -74,7 +69,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
     nextStage,
     blocksComplete,
     irrComplete,
-  } = useProgression(targetUserId);
+  } = progression;
 
   // Plan favorites only apply to the escoteiro viewing their own dashboard.
   const showPlanStars = !targetUserId;
@@ -147,14 +142,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
       {showPlanStars ? (
         <DashboardEixosWithPlan
           eixos={eixos}
-          approvedActionIds={approvedActionIds}
-          pendingActionIds={pendingActionIds}
-          actionStatusMap={actionStatusMap}
-          completedBlockIds={completedBlockIds}
-          pendingBlockIds={pendingBlockIds}
-          earnedSpecialtyBlocoIds={earnedSpecialtyBlocoIds}
-          earnedSpecialtyIds={earnedSpecialtyIds}
-          customActions={customActions}
+          progression={progression}
           onToggleAction={handleToggleAction}
           onAddCustom={handleAddCustom}
           onToggleCustom={handleToggleCustom}
@@ -166,14 +154,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
           <EixoSection
             key={eixo.id}
             eixo={eixo}
-            approvedActionIds={approvedActionIds}
-            pendingActionIds={pendingActionIds}
-            actionStatusMap={actionStatusMap}
-            completedBlockIds={completedBlockIds}
-            pendingBlockIds={pendingBlockIds}
-            earnedSpecialtyBlocoIds={earnedSpecialtyBlocoIds}
-            earnedSpecialtyIds={earnedSpecialtyIds}
-            customActions={customActions}
+            progression={progression}
             onToggleAction={handleToggleAction}
             onAddCustom={handleAddCustom}
             onToggleCustom={handleToggleCustom}
@@ -199,14 +180,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
 
 type DashboardEixosWithPlanProps = {
   eixos: Eixo[];
-  approvedActionIds: Set<string>;
-  pendingActionIds: Set<string>;
-  actionStatusMap: Map<string, "pending" | "approved">;
-  completedBlockIds: Set<string>;
-  pendingBlockIds: Set<string>;
-  earnedSpecialtyBlocoIds?: Set<string>;
-  earnedSpecialtyIds?: Set<string>;
-  customActions: React.ComponentProps<typeof EixoSection>["customActions"];
+  progression: React.ComponentProps<typeof EixoSection>["progression"];
   onToggleAction: (actionId: string) => void;
   onAddCustom: (blocoId: string, text: string) => void;
   onToggleCustom: (id: Id<"customActions">) => void;

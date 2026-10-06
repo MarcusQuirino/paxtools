@@ -4,7 +4,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { getEixosForRamo } from "../../src/data/progression-data";
 import { buildCatalogIndex } from "../../src/lib/plan-view";
 import { getRamoRules } from "../../src/data/progression-rules";
-import { snapshotProgression } from "./progression";
+import { readProgression } from "./progression";
 import { filterActiveGrupoMembers } from "./ramoVisibility";
 
 export type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
@@ -74,31 +74,20 @@ export async function computeRamoCoverage(
   }
   const scoutCount = scouts.length;
 
-  // Per-actionId approved scout count (restricted to the ramo catalog).
-  // N+1 by_userId .collect() over <=28 scouts/ramo is acceptable at this scale.
+  // Per-actionId approved scout count (restricted to the ramo catalog), from
+  // the same progression state the escoteiro's own view derives. One read per
+  // scout; <=28 scouts/ramo in practice.
   const approvedByAction = new Map<string, number>();
   const stageDistribution: Record<string, number> = {};
   for (const s of getRamoRules(ramo).etapas) stageDistribution[s.id] = 0;
 
   for (const scout of scouts) {
-    const rows = await ctx.db
-      .query("actionCompletions")
-      .withIndex("by_userId", (q) => q.eq("userId", scout._id))
-      .collect();
-    const seen = new Set<string>();
-    for (const r of rows) {
-      if (r.status === "pending") continue; // approved or undefined count
-      if (!catalog.actionsById.has(r.actionId)) continue; // drop stale/foreign
-      if (seen.has(r.actionId)) continue; // de-dup per scout
-      seen.add(r.actionId);
-      approvedByAction.set(
-        r.actionId,
-        (approvedByAction.get(r.actionId) ?? 0) + 1,
-      );
+    const { state } = await readProgression(ctx, scout);
+    for (const actionId of state.approvedActionIds) {
+      if (!catalog.actionsById.has(actionId)) continue; // drop stale/foreign
+      approvedByAction.set(actionId, (approvedByAction.get(actionId) ?? 0) + 1);
     }
-    const snap = await snapshotProgression(ctx, scout._id);
-    stageDistribution[snap.stageId] =
-      (stageDistribution[snap.stageId] ?? 0) + 1;
+    stageDistribution[state.stage.id] = (stageDistribution[state.stage.id] ?? 0) + 1;
   }
 
   // One ActivityCoverage per catalog action.

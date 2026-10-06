@@ -6,9 +6,7 @@ import { assertCanActOnEscoteiro } from "./lib/ramoVisibility";
 import {
   snapshotProgression,
   detectLevelUps,
-  readCurrentRamoIrrItems,
-  readCurrentRamoCustomActions,
-  readEarnedSpecialtyBlocoIds,
+  readProgression,
   currentRamo,
   type LevelUpToast,
   type ProgressionSnapshot,
@@ -19,7 +17,7 @@ import {
   type CompletionKind,
 } from "./lib/events";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 const ACTION_ID_PATTERN = /^(lobinho|escoteiro|senior|pioneiro):[a-z0-9-]+:(fixed|variable):\d+$/;
 const BLOCO_ID_PATTERN = /^[a-z0-9-]+$/;
@@ -115,93 +113,49 @@ function assertCanRemoveApproved(
   }
 }
 
+const EMPTY_COMPLETIONS = {
+  ramo: null,
+  actions: [],
+  customActions: [],
+  irrItems: [],
+  earnedSpecialtyBlocoIds: [] as string[],
+  earnedSpecialtyIds: [] as string[],
+};
+
+/**
+ * An escoteiro's progression rows for the client, which derives the same
+ * progression state from them (src/lib/progression-state) that the server's
+ * snapshot does — one read, one derivation, both sides.
+ */
+async function completionsOf(ctx: QueryCtx, user: Doc<"users">) {
+  const { rows, state } = await readProgression(ctx, user);
+  return {
+    ramo: rows.ramo,
+    actions: rows.actions,
+    customActions: rows.customActions,
+    irrItems: rows.irrItems,
+    earnedSpecialtyBlocoIds: [...state.earnedSpecialtyBlocoIds],
+    earnedSpecialtyIds: [...state.earnedSpecialtyIds],
+  };
+}
+
 export const getMyCompletions = query({
   args: {},
   handler: async (ctx) => {
-    const empty = {
-      ramo: null,
-      actions: [],
-      customActions: [],
-      irrItems: [],
-      earnedSpecialtyBlocoIds: [] as string[],
-      earnedSpecialtyIds: [] as string[],
-    };
-
     const userId = await getAuthUserId(ctx);
-    if (!userId) return empty;
-
+    if (!userId) return EMPTY_COMPLETIONS;
     const user = await ctx.db.get(userId);
     // Banned users are locked out of self-reads too (mutations already throw).
-    if (!user || user.bannedAt) return empty;
-
-    const actions = await ctx.db
-      .query("actionCompletions")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(500);
-
-    // Ações personalizadas and IRR items are ramo-scoped: only the current
-    // ramo's rows (blocoIds are shared, so isolation is at the read). Actions
-    // self-isolate via their ramo-prefixed ids.
-    const customActions = await readCurrentRamoCustomActions(
-      ctx,
-      userId,
-      user.ramo,
-    );
-    const irrItems = await readCurrentRamoIrrItems(ctx, userId, user.ramo);
-    const { blocoIds, specialtyIds } = await readEarnedSpecialtyBlocoIds(
-      ctx,
-      userId,
-      user.ramo,
-    );
-
-    return {
-      ramo: user?.ramo ?? null,
-      actions,
-      customActions,
-      irrItems,
-      earnedSpecialtyBlocoIds: [...blocoIds],
-      earnedSpecialtyIds: [...specialtyIds],
-    };
+    if (!user || user.bannedAt) return EMPTY_COMPLETIONS;
+    return completionsOf(ctx, user);
   },
 });
 
 export const getCompletionsForUser = query({
   args: { targetUserId: v.id("users") },
   handler: async (ctx, args) => {
-    await assertCanActOnEscoteiro(ctx, args.targetUserId);
-
-    const target = await ctx.db.get(args.targetUserId);
-
-    const actions = await ctx.db
-      .query("actionCompletions")
-      .withIndex("by_userId", (q) => q.eq("userId", args.targetUserId))
-      .take(500);
-
-    // Ramo-scoped to the target's current ramo (see getMyCompletions).
-    const customActions = await readCurrentRamoCustomActions(
-      ctx,
-      args.targetUserId,
-      target?.ramo,
-    );
-    const irrItems = await readCurrentRamoIrrItems(
-      ctx,
-      args.targetUserId,
-      target?.ramo,
-    );
-    const { blocoIds, specialtyIds } = await readEarnedSpecialtyBlocoIds(
-      ctx,
-      args.targetUserId,
-      target?.ramo,
-    );
-
-    return {
-      ramo: target?.ramo ?? null,
-      actions,
-      customActions,
-      irrItems,
-      earnedSpecialtyBlocoIds: [...blocoIds],
-      earnedSpecialtyIds: [...specialtyIds],
-    };
+    const { target } = await assertCanActOnEscoteiro(ctx, args.targetUserId);
+    return completionsOf(ctx, target);
   },
 });
 

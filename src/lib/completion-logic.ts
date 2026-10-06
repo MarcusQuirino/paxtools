@@ -184,58 +184,6 @@ export function isSpecialtyEarned(
   return earnedSpecialtyIds.has(toCanonicalSpecialtyId(specialtyName));
 }
 
-export function getCompletedBlockIds(
-  eixos: Eixo[],
-  approvedActionIds: Set<string>,
-  pendingActionIds: Set<string>,
-  customActions: { blocoId: string; completed: boolean; status?: string }[],
-  // Pre-computed set of blocoIds whose linked specialty is earned at level ≥ 1.
-  // Callers compute this from specialtyItemCompletions counts + the catalog's
-  // alternativeCompletions map.
-  earnedSpecialtyBlocoIds: Set<string>,
-): { approved: Set<string>; pending: Set<string> } {
-  const approved = new Set<string>();
-  const pending = new Set<string>();
-
-  const approvedCustomByBloco = new Map<string, number>();
-  const pendingCustomByBloco = new Map<string, number>();
-  for (const c of customActions) {
-    if (c.completed) {
-      if (c.status === "pending") {
-        pendingCustomByBloco.set(
-          c.blocoId,
-          (pendingCustomByBloco.get(c.blocoId) ?? 0) + 1,
-        );
-      } else {
-        approvedCustomByBloco.set(
-          c.blocoId,
-          (approvedCustomByBloco.get(c.blocoId) ?? 0) + 1,
-        );
-      }
-    }
-  }
-
-  for (const eixo of eixos) {
-    for (const bloco of eixo.blocos) {
-      const hasEarnedSpecialty = earnedSpecialtyBlocoIds.has(bloco.id);
-      const progress = getBlocoProgress(
-        bloco,
-        approvedActionIds,
-        pendingActionIds,
-        approvedCustomByBloco.get(bloco.id) ?? 0,
-        pendingCustomByBloco.get(bloco.id) ?? 0,
-        hasEarnedSpecialty,
-      );
-      if (progress.isComplete) {
-        approved.add(bloco.id);
-      } else if (progress.isPendingComplete) {
-        pending.add(bloco.id);
-      }
-    }
-  }
-  return { approved, pending };
-}
-
 export function getCurrentStage(
   completedBlocks: number,
   ramo: Ramo | null | undefined,

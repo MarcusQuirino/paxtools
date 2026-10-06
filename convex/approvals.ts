@@ -12,9 +12,11 @@ import {
 import {
   snapshotProgression,
   detectLevelUps,
+  readProgression,
   type LevelUpToast,
   type ProgressionSnapshot,
 } from "./lib/progression";
+import { catalogActionCounts } from "../src/lib/progression-state";
 import {
   filterObservableSections,
   filterToObservedSection,
@@ -248,27 +250,20 @@ export const getGroupStats = query({
     const escoteiroStats = [];
 
     for (const esc of escoteiros) {
-      const actions = await ctx.db
-        .query("actionCompletions")
-        .withIndex("by_userId", (q) => q.eq("userId", esc._id))
-        .take(500);
-
-      const approvedActions = actions.filter(
-        (a) => a.status === "approved" || !a.status,
-      ).length;
-      const pendingActions = actions.filter(
-        (a) => a.status === "pending",
-      ).length;
-      totalPending += pendingActions;
+      // Ações of the escoteiro's current ramo only — a past ramo's ações no
+      // longer inflate "aprovadas" after a ramo change.
+      const { state } = await readProgression(ctx, esc);
+      const { approved, pending } = catalogActionCounts(state);
+      totalPending += pending;
 
       escoteiroStats.push({
         _id: esc._id,
         name: esc.name,
         image: esc.image,
         sectionId: esc.sectionId ?? null,
-        approvedActions,
-        pendingActions,
-        totalActions: actions.length,
+        approvedActions: approved,
+        pendingActions: pending,
+        totalActions: approved + pending,
       });
     }
 

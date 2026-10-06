@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import type { Eixo, CustomAction, CompletionStatus } from "@/data/types";
+import type { Eixo, CustomAction } from "@/data/types";
 import { Accordion } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
+import type { ProgressionState } from "@/lib/progression-state";
 import { BlocoCard } from "./bloco-card";
 import type { Id } from "../../../convex/_generated/dataModel";
 
@@ -9,16 +10,8 @@ type EixoSectionProps = {
   eixo: Eixo;
   /** Extra content below the blocos (the plano's starred especialidades). */
   footer?: ReactNode;
-  approvedActionIds: Set<string>;
-  pendingActionIds: Set<string>;
-  actionStatusMap: Map<string, CompletionStatus>;
-  completedBlockIds: Set<string>;
-  pendingBlockIds: Set<string>;
-  /** Blocos satisfied via an earned especialidade (level ≥ 1), computed on read (#44). */
-  earnedSpecialtyBlocoIds?: Set<string>;
-  /** Canonical ids of specialties earned via items (#44), for marking the exact checkbox. */
-  earnedSpecialtyIds?: Set<string>;
-  customActions: CustomAction[];
+  /** The escoteiro's progression state (src/lib/progression-state). */
+  progression: ProgressionState<CustomAction>;
   onToggleAction: (actionId: string) => void;
   onAddCustom: (blocoId: string, text: string) => void;
   onToggleCustom: (id: Id<"customActions">) => void;
@@ -35,14 +28,7 @@ type EixoSectionProps = {
 
 export function EixoSection({
   eixo,
-  approvedActionIds,
-  pendingActionIds,
-  actionStatusMap,
-  completedBlockIds,
-  pendingBlockIds,
-  earnedSpecialtyBlocoIds,
-  earnedSpecialtyIds,
-  customActions,
+  progression,
   onToggleAction,
   onAddCustom,
   onToggleCustom,
@@ -60,10 +46,10 @@ export function EixoSection({
     : eixo.blocos;
   if (visibleBlocos.length === 0 && !footer) return null;
   const approvedInEixo = eixo.blocos.filter((b) =>
-    completedBlockIds.has(b.id),
+    progression.completedBlockIds.has(b.id),
   ).length;
   const pendingInEixo = eixo.blocos.filter((b) =>
-    pendingBlockIds.has(b.id),
+    progression.pendingBlockIds.has(b.id),
   ).length;
   const total = eixo.blocos.length;
 
@@ -95,12 +81,7 @@ export function EixoSection({
           <BlocoCard
             key={bloco.id}
             bloco={bloco}
-            approvedActionIds={approvedActionIds}
-            pendingActionIds={pendingActionIds}
-            actionStatusMap={actionStatusMap}
-            customActions={customActions}
-            earnedViaSpecialty={earnedSpecialtyBlocoIds?.has(bloco.id)}
-            earnedSpecialtyIds={earnedSpecialtyIds}
+            progression={progression}
             color={eixo.color}
             colorLight={eixo.colorLight}
             onToggleAction={onToggleAction}

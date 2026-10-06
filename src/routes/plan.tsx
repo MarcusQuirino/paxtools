@@ -82,17 +82,15 @@ type ViewMode = "byArea" | "ordered";
 
 function PlanDashboard() {
   const [viewMode, setViewMode] = useState<ViewMode>("byArea");
+  const progression = useProgression();
   const {
     eixos,
     approvedActionIds,
     pendingActionIds,
     actionStatusMap,
     customActions,
-    completedBlockIds,
-    pendingBlockIds,
-    earnedSpecialtyBlocoIds,
     earnedSpecialtyIds,
-  } = useProgression();
+  } = progression;
   const { items, plannedKeys, togglePlanned, reorderPlan } = usePlan();
 
   const catalog = useMemo(() => buildCatalogIndex(eixos), [eixos]);
@@ -181,14 +179,7 @@ function PlanDashboard() {
                 />
               )
             }
-            approvedActionIds={approvedActionIds}
-            pendingActionIds={pendingActionIds}
-            actionStatusMap={actionStatusMap}
-            completedBlockIds={completedBlockIds}
-            pendingBlockIds={pendingBlockIds}
-            earnedSpecialtyBlocoIds={earnedSpecialtyBlocoIds}
-            earnedSpecialtyIds={earnedSpecialtyIds}
-            customActions={customActions}
+            progression={progression}
             onToggleAction={(actionId) => toggleAction({ actionId })}
             onAddCustom={(blocoId, text) => addCustom({ blocoId, text })}
             onToggleCustom={(id) => toggleCustom({ customActionId: id })}
