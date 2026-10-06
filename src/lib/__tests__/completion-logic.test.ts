@@ -266,7 +266,6 @@ describe("getSpecialtyLevel", () => {
 });
 
 
-const emptyEarnedSpecialties = new Set<string>();
 
 // ── getEarnedSpecialtyBlocoIds ─────────────────────────────────
 
