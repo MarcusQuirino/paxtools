@@ -66,7 +66,7 @@ function CredentialsCard({ credentials }: { credentials: Credentials }) {
 }
 
 /**
- * "Criar novo escoteiro": an escotista creates a conta gerenciada for a
+ * "Criar novo usuário": an escotista creates a conta gerenciada for a
  * member who signs in with their registro escoteiro. Escoteiros are limited to
  * the ramos the caller accompanies (admins: any); only admins create
  * escotistas — the server enforces both.
@@ -126,7 +126,8 @@ export function CreateManagedMemberButton({
     }
   };
 
-  const label = role === "escotista" ? "escotista" : "escoteiro";
+  // "Escoteiro" is also a ramo name, so youth members are just "usuário".
+  const label = role === "escotista" ? "escotista" : "usuário";
 
   return (
     <>
