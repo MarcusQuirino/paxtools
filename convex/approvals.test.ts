@@ -613,59 +613,6 @@ describe("bulkAction", () => {
 });
 
 // ===========================================================================
-// 7. approveAllForEscoteiro
-// ===========================================================================
-
-describe("approveAllForEscoteiro", () => {
-  test("approves all pending actions/lis/custom(completed) at once", async () => {
-    const t = convexTest(schema, modules);
-    const { adminId, groupId } = await seedGroup(t);
-    const esc = await seedEscoteiro(t, groupId);
-    const a = await insertAction(t, esc);
-    const l = await insertIrr(t, esc);
-    const c = await insertCustom(t, esc, { completed: true, status: "pending" });
-    // A not-completed custom: should NOT be approved (filtered out).
-    const cIncomplete = await insertCustom(t, esc, { completed: false, status: "pending" });
-
-    await as(t, adminId).mutation(api.approvals.approveAllForEscoteiro, {
-      escoteiroId: esc,
-    });
-
-    const rows = await t.run(async (ctx) => ({
-      a: await ctx.db.get(a),
-      l: await ctx.db.get(l),
-      c: await ctx.db.get(c),
-      ci: await ctx.db.get(cIncomplete),
-    }));
-    expect(rows.a?.status).toBe("approved");
-    expect(rows.l?.status).toBe("approved");
-    expect(rows.c?.status).toBe("approved");
-    expect(rows.c?.approvedBy).toBe(adminId);
-    // incomplete custom stays pending (was filtered out of the approval loop).
-    expect(rows.ci?.status).toBe("pending");
-  });
-
-  test("cross-group escoteiro is rejected", async () => {
-    const t = convexTest(schema, modules);
-    const { adminId: adminA } = await seedGroup(t);
-    const groupB = await t.run(async (ctx) =>
-      ctx.db.insert("groups", {
-        name: "Grupo B",
-        number: "200",
-        password: "BBBBBB",
-        createdBy: adminA,
-        createdAt: 1,
-        ramoNames: {},
-      }),
-    );
-    const escB = await seedEscoteiro(t, groupB);
-    await expect(
-      as(t, adminA).mutation(api.approvals.approveAllForEscoteiro, { escoteiroId: escB }),
-    ).rejects.toThrow("não pertence ao seu grupo");
-  });
-});
-
-// ===========================================================================
 // 8. getPendingForGroup
 // ===========================================================================
 

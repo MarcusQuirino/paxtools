@@ -18,13 +18,15 @@ import {
   tryResolveRamoViewer,
   type RamoViewer,
 } from "./lib/ramoVisibility";
+import { ramoGroupForRamo, type LevelUpToast } from "./lib/progression";
 import {
-  snapshotProgression,
-  detectLevelUps,
-  ramoGroupForRamo,
-  type LevelUpToast,
-} from "./lib/progression";
-import { logRamoEvent } from "./lib/events";
+  approveConclusao,
+  approveConclusoes,
+  recordDirectApproval,
+  rejectConclusao,
+  rejectConclusoes,
+  type ConclusaoDoc,
+} from "./lib/review";
 import {
   filterToObservedSection,
   resolveObservedSection,
@@ -94,261 +96,158 @@ export const getEscoteiroEspecialidades = query({
 });
 
 // ---------------------------------------------------------------------------
-// Mutations
+// Mutations — the escoteiro's own submissions, and the escotista's reviews.
+// Every review goes through lib/review (access, snapshot → write → audit →
+// level-up cascade); these mutations only validate their arguments.
 // ---------------------------------------------------------------------------
 
 /**
- * Toggle a specialty item for the current user.
+ * The especialidade an escoteiro may mark in their current ramo group:
+ * throws for a non-escoteiro, the wrong group, or an id the catalog lacks.
+ */
+function assertEspecialidadeOf(
+  escoteiro: Doc<"users">,
+  group: RamoGroup,
+  specialtyId: string,
+): void {
+  if (escoteiro.role !== "escoteiro") {
+    throw new Error("Apenas escoteiros têm especialidades");
+  }
+  if (ramoGroupForRamo(escoteiro.ramo) !== group) {
+    throw new Error(
+      group === "younger"
+        ? "Especialidades de sênior e pioneiro são registradas por etapas"
+        : "Especialidades de lobinho e escoteiro são registradas por itens",
+    );
+  }
+  if (!emptyStanding(group, specialtyId)) {
+    throw new Error("Especialidade não encontrada");
+  }
+}
+
+function assertItemIndex(specialtyId: string, itemIndex: number): void {
+  const total = YOUNGER_SPECIALTY_BY_ID.get(specialtyId)?.items.length ?? 0;
+  if (!Number.isInteger(itemIndex) || itemIndex < 0 || itemIndex >= total) {
+    throw new Error("Item inválido");
+  }
+}
+
+async function findItem(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  specialtyId: string,
+  itemIndex: number,
+): Promise<Doc<"specialtyItemCompletions"> | null> {
+  const rows = await ctx.db
+    .query("specialtyItemCompletions")
+    .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
+      q.eq("userId", userId).eq("ramoGroup", "younger").eq("specialtyId", specialtyId),
+    )
+    .take(200);
+  // Approved first, so a stray duplicate never hides an approval.
+  const matches = rows.filter((r) => r.itemIndex === itemIndex);
+  return matches.find((r) => r.status !== "pending") ?? matches[0] ?? null;
+}
+
+/**
+ * The escoteiro checks or unchecks one item of a younger especialidade.
  *
- * - If no row exists → insert with status "pending" (or "approved" if caller is escotista)
- * - If row exists with status "pending" → delete (uncheck)
- * - If row exists with status "approved" → throw (only escotista can undo approvals)
- *
- * The ramoGroup is derived from the caller's ramo; an escotista toggling on
- * behalf of a target uses the target's ramo.
+ * - No row → insert it pending (an escotista approves it).
+ * - Pending row → delete it (uncheck).
+ * - Approved row → throws: only an escotista can undo an approval.
  */
 export const toggleSpecialtyItem = mutation({
-  args: {
-    specialtyId: v.string(),
-    itemIndex: v.number(),
-    /** Optional: escotista marking an item for a specific escoteiro. */
-    targetUserId: v.optional(v.id("users")),
-  },
-  handler: async (ctx, args): Promise<LevelUpToast[]> => {
+  args: { specialtyId: v.string(), itemIndex: v.number() },
+  handler: async (ctx, args): Promise<null> => {
     const caller = await getAuthenticatedUser(ctx);
-    let effectiveUserId: Id<"users"> = caller._id;
-    let status: "pending" | "approved" = "pending";
-    let approvedBy: Id<"users"> | undefined = undefined;
+    assertEspecialidadeOf(caller, "younger", args.specialtyId);
+    assertItemIndex(args.specialtyId, args.itemIndex);
 
-    if (args.targetUserId) {
-      await assertCanActOnEscoteiro(ctx, args.targetUserId);
-      effectiveUserId = args.targetUserId;
-      status = "approved";
-      approvedBy = caller._id;
-    } else if (caller.role === "escotista") {
-      // Escotista marking their own item — treat as approved
-      status = "approved";
-      approvedBy = caller._id;
-    }
-
-    const effectiveUser = args.targetUserId
-      ? await ctx.db.get(args.targetUserId)
-      : caller;
-    const ramoGroup = ramoGroupForRamo(effectiveUser?.ramo);
-
-    // Look for existing row
-    const existing = await ctx.db
-      .query("specialtyItemCompletions")
-      .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
-        q
-          .eq("userId", effectiveUserId)
-          .eq("ramoGroup", ramoGroup)
-          .eq("specialtyId", args.specialtyId),
-      )
-      .filter((q) => q.eq(q.field("itemIndex"), args.itemIndex))
-      .first();
-
+    const existing = await findItem(ctx, caller._id, args.specialtyId, args.itemIndex);
     if (existing) {
-      if (existing.status === "approved" && caller.role !== "escotista") {
+      if (existing.status !== "pending") {
         throw new Error(
           "Item já aprovado pelo escotista. Apenas um escotista pode desfazer.",
         );
       }
-      // Uncheck: delete the row
-      const before = args.targetUserId
-        ? await snapshotProgression(ctx, effectiveUserId)
-        : null;
       await ctx.db.delete(existing._id);
-      // Undoing an approval via escotista — may affect progression
-      if (args.targetUserId && before && effectiveUser) {
-        return detectLevelUps(
-          ctx,
-          caller,
-          effectiveUser as Doc<"users">,
-          before,
-        );
-      }
-      return [];
+      return null;
     }
-
-    // Check: insert new row
-    const before =
-      status === "approved" && args.targetUserId
-        ? await snapshotProgression(ctx, effectiveUserId)
-        : null;
-
     await ctx.db.insert("specialtyItemCompletions", {
-      userId: effectiveUserId,
-      ramoGroup,
+      userId: caller._id,
+      ramoGroup: "younger",
       specialtyId: args.specialtyId,
       itemIndex: args.itemIndex,
       completedAt: Date.now(),
-      status,
-      ...(approvedBy ? { approvedBy, approvedAt: Date.now() } : {}),
+      status: "pending",
     });
-
-    if (status === "approved" && args.targetUserId && before && effectiveUser) {
-      const target = effectiveUser as Doc<"users">;
-      await logRamoEvent(ctx, {
-        type: "approval",
-        actor: caller,
-        subject: target,
-        summary: `Aprovou item de especialidade: ${args.specialtyId}[${args.itemIndex}]`,
-      });
-      return detectLevelUps(ctx, caller, target, before);
-    }
-
-    return [];
+    return null;
   },
 });
 
-/**
- * Approve a pending specialtyItemCompletion.
- * Only an escotista who can act on the target escoteiro may call this.
- */
-export const approveSpecialtyItem = mutation({
-  args: { completionId: v.id("specialtyItemCompletions") },
-  handler: async (ctx, args): Promise<LevelUpToast[]> => {
-    const user = await getAuthenticatedUser(ctx);
-    const doc = await ctx.db.get(args.completionId);
-    if (!doc) throw new Error("Não encontrado");
-    if (doc.status !== "pending") throw new Error("Item não está pendente");
-
-    const { target } = await assertCanActOnEscoteiro(ctx, doc.userId);
-
-    const before = await snapshotProgression(ctx, doc.userId);
-    await ctx.db.patch(args.completionId, {
-      status: "approved",
-      approvedBy: user._id,
-      approvedAt: Date.now(),
-    });
-    await logRamoEvent(ctx, {
-      type: "approval",
-      actor: user,
-      subject: target,
-      summary: `Aprovou item de especialidade: ${doc.specialtyId}[${doc.itemIndex}]`,
-    });
-    return detectLevelUps(ctx, user, target, before);
-  },
-});
-
-/**
- * Reject (delete) a pending specialtyItemCompletion.
- * Only an escotista who can act on the target escoteiro may call this.
- */
+/** Reject (delete) one pending especialidade item. */
 export const rejectSpecialtyItem = mutation({
   args: { completionId: v.id("specialtyItemCompletions") },
-  handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.completionId);
-    if (!doc) throw new Error("Não encontrado");
-    if (doc.status !== "pending") throw new Error("Item não está pendente");
-
-    const { caller, target } = await assertCanActOnEscoteiro(ctx, doc.userId);
-    await logRamoEvent(ctx, {
-      type: "rejection",
-      actor: caller,
-      subject: target,
-      summary: `Rejeitou item de especialidade: ${doc.specialtyId}[${doc.itemIndex}]`,
-    });
-    await ctx.db.delete(args.completionId);
-  },
+  handler: async (ctx, args) =>
+    rejectConclusao(ctx, { kind: "specialtyItem", id: args.completionId }),
 });
 
-/**
- * Bulk approve all pending specialty items for a given (escoteiroId, specialtyId) group.
- * Escotistas use this to approve an entire specialty's pending items at once.
- */
+const itemBatchArgs = {
+  escoteiroId: v.id("users"),
+  specialtyId: v.string(),
+  ramoGroup: v.union(v.literal("younger"), v.literal("older")),
+  itemIds: v.array(v.id("specialtyItemCompletions")),
+};
+
+/** Only the passed items that belong to this (escoteiro, especialidade). */
+function itemBatch(args: {
+  escoteiroId: Id<"users">;
+  specialtyId: string;
+  ramoGroup: RamoGroup;
+  itemIds: Id<"specialtyItemCompletions">[];
+}) {
+  return {
+    refs: args.itemIds.map((id) => ({ kind: "specialtyItem" as const, id })),
+    only: (doc: ConclusaoDoc) => {
+      const item = doc as Doc<"specialtyItemCompletions">;
+      return (
+        item.userId === args.escoteiroId &&
+        item.specialtyId === args.specialtyId &&
+        item.ramoGroup === args.ramoGroup
+      );
+    },
+  };
+}
+
+/** Approve an escoteiro's pending items of one especialidade at once. */
 export const approveSpecialtyItems = mutation({
-  args: {
-    escoteiroId: v.id("users"),
-    specialtyId: v.string(),
-    ramoGroup: v.union(v.literal("younger"), v.literal("older")),
-    itemIds: v.array(v.id("specialtyItemCompletions")),
-  },
+  args: itemBatchArgs,
   handler: async (ctx, args): Promise<LevelUpToast[]> => {
-    const user = await getAuthenticatedUser(ctx);
-    const { target } = await assertCanActOnEscoteiro(ctx, args.escoteiroId);
-
-    const now = Date.now();
-    const before = await snapshotProgression(ctx, args.escoteiroId);
-
-    for (const id of args.itemIds) {
-      const doc = await ctx.db.get(id);
-      if (!doc || doc.status !== "pending") continue;
-      if (
-        doc.userId !== args.escoteiroId ||
-        doc.specialtyId !== args.specialtyId ||
-        doc.ramoGroup !== args.ramoGroup
-      ) {
-        continue; // safety: only act on the items explicitly passed
-      }
-      await ctx.db.patch(id, {
-        status: "approved",
-        approvedBy: user._id,
-        approvedAt: now,
-      });
-    }
-
-    await logRamoEvent(ctx, {
-      type: "approval",
-      actor: user,
-      subject: target,
-      summary: `Aprovou itens pendentes de especialidade: ${args.specialtyId}`,
-    });
-
-    return detectLevelUps(ctx, user, target, before);
+    await assertCanActOnEscoteiro(ctx, args.escoteiroId);
+    const { refs, only } = itemBatch(args);
+    return approveConclusoes(ctx, refs, only);
   },
 });
 
-/**
- * Reject all pending specialty items for a given (escoteiroId, specialtyId) group.
- */
+/** Reject (delete) an escoteiro's pending items of one especialidade at once. */
 export const rejectSpecialtyItems = mutation({
-  args: {
-    escoteiroId: v.id("users"),
-    specialtyId: v.string(),
-    ramoGroup: v.union(v.literal("younger"), v.literal("older")),
-    itemIds: v.array(v.id("specialtyItemCompletions")),
-  },
-  handler: async (ctx, args) => {
-    const { caller, target } = await assertCanActOnEscoteiro(
-      ctx,
-      args.escoteiroId,
-    );
-
-    for (const id of args.itemIds) {
-      const doc = await ctx.db.get(id);
-      if (!doc || doc.status !== "pending") continue;
-      if (
-        doc.userId !== args.escoteiroId ||
-        doc.specialtyId !== args.specialtyId ||
-        doc.ramoGroup !== args.ramoGroup
-      ) {
-        continue;
-      }
-      await ctx.db.delete(id);
-    }
-
-    await logRamoEvent(ctx, {
-      type: "rejection",
-      actor: caller,
-      subject: target,
-      summary: `Rejeitou itens pendentes de especialidade: ${args.specialtyId}`,
-    });
+  args: itemBatchArgs,
+  handler: async (ctx, args): Promise<null> => {
+    await assertCanActOnEscoteiro(ctx, args.escoteiroId);
+    const { refs, only } = itemBatch(args);
+    await rejectConclusoes(ctx, refs, only);
+    return null;
   },
 });
 
 // ---------------------------------------------------------------------------
-// Older ramoGroup (sênior + pioneiro) — project-report steps (#43)
+// Older ramoGroup (sênior + pioneiro) — project-report etapas (#43)
 //
-// Each especialidade is a three-step project: conhecer → fazer → compartilhar.
-// The steps are independent — an escoteiro may write and submit them in any
-// order, and an escotista approves each on its own. The specialty is earned
-// (binarily — no levels) once all three steps are approved (ADR 0002).
+// Each especialidade is a three-etapa project: conhecer → fazer → compartilhar.
+// The etapas are independent — an escoteiro may write and submit them in any
+// order, and an escotista approves each on its own. The especialidade is
+// earned (binarily — no levels) once all three are approved (ADR 0002).
 // ---------------------------------------------------------------------------
-
-const STEP_ORDER = ["conhecer", "fazer", "compartilhar"] as const;
-type ProjectStep = (typeof STEP_ORDER)[number];
 
 const projectStep = v.union(
   v.literal("conhecer"),
@@ -356,60 +255,30 @@ const projectStep = v.union(
   v.literal("compartilhar"),
 );
 
-/** Find a user's report row for a given (ramoGroup, specialtyId, step). */
+/** A user's relato for one (especialidade, etapa), if any. */
 async function findReport(
   ctx: QueryCtx,
   userId: Id<"users">,
-  ramoGroup: "younger" | "older",
   specialtyId: string,
-  step: ProjectStep,
+  step: RosterStep,
 ): Promise<Doc<"specialtyProjectReports"> | null> {
-  return ctx.db
+  const rows = await ctx.db
     .query("specialtyProjectReports")
     .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
-      q
-        .eq("userId", userId)
-        .eq("ramoGroup", ramoGroup)
-        .eq("specialtyId", specialtyId),
+      q.eq("userId", userId).eq("ramoGroup", "older").eq("specialtyId", specialtyId),
     )
-    .filter((q) => q.eq(q.field("step"), step))
-    .first();
+    .take(10);
+  return rows.find((r) => r.step === step) ?? null;
 }
 
 /**
- * True when every step *other than* `doc.step` is already approved — i.e.
- * approving `doc` would leave all three steps approved and earn the specialty.
- */
-async function otherStepsAllApproved(
-  ctx: QueryCtx,
-  doc: Doc<"specialtyProjectReports">,
-): Promise<boolean> {
-  const reports = await ctx.db
-    .query("specialtyProjectReports")
-    .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
-      q
-        .eq("userId", doc.userId)
-        .eq("ramoGroup", doc.ramoGroup)
-        .eq("specialtyId", doc.specialtyId),
-    )
-    .collect();
-  const statusByStep = new Map(reports.map((r) => [r.step, r.status]));
-  return STEP_ORDER.filter((s) => s !== doc.step).every(
-    (s) => statusByStep.get(s) === "approved",
-  );
-}
-
-/**
- * Submit (create or replace) a project-step report for the current user.
+ * Submit (create or replace) the relato of one etapa.
  *
- * - Steps are independent: any step may be submitted in any order (ADR 0002).
- * - If a pending row already exists for this step → its text is replaced and it
- *   stays pending (re-submit).
- * - If the row is already approved → throws (escoteiro cannot overwrite an
- *   approved step).
- * - An escotista submitting on behalf of a target (targetUserId) writes the row
- *   as approved (logged + level-up cascade), but never over the target's own
- *   pending relato — that throws; it is resolved with approve/reject.
+ * - The escoteiro's own relato is pending; resubmitting a pending one replaces
+ *   its text. An approved etapa is locked to the escoteiro.
+ * - An escotista registering on a scout's behalf (`targetUserId`) writes it
+ *   approved — audited and cascaded like any approval — but never over the
+ *   scout's own pending relato: that is resolved with Aprovar / Rejeitar.
  */
 export const submitSpecialtyStep = mutation({
   args: {
@@ -421,151 +290,80 @@ export const submitSpecialtyStep = mutation({
   },
   handler: async (ctx, args): Promise<LevelUpToast[]> => {
     const caller = await getAuthenticatedUser(ctx);
-
-    let effectiveUserId: Id<"users"> = caller._id;
-    let status: "pending" | "approved" = "pending";
-    let approvedBy: Id<"users"> | undefined = undefined;
-
-    if (args.targetUserId) {
-      await assertCanActOnEscoteiro(ctx, args.targetUserId);
-      effectiveUserId = args.targetUserId;
-      status = "approved";
-      approvedBy = caller._id;
-    }
-
-    const effectiveUser = args.targetUserId
-      ? await ctx.db.get(args.targetUserId)
-      : caller;
-    const ramoGroup = ramoGroupForRamo(effectiveUser?.ramo);
+    const onBehalf = args.targetUserId
+      ? (await assertCanActOnEscoteiro(ctx, args.targetUserId)).target
+      : null;
+    const escoteiro = onBehalf ?? caller;
+    assertEspecialidadeOf(escoteiro, "older", args.specialtyId);
 
     const text = args.text.trim();
     if (!text) throw new Error("O relato não pode estar vazio.");
 
-    const now = Date.now();
-    const existing = await findReport(
-      ctx,
-      effectiveUserId,
-      ramoGroup,
-      args.specialtyId,
-      args.step,
-    );
+    const existing = await findReport(ctx, escoteiro._id, args.specialtyId, args.step);
+    const write = async (status: "pending" | "approved") => {
+      const now = Date.now();
+      const approval =
+        status === "approved"
+          ? { approvedBy: caller._id, approvedAt: now }
+          : { approvedBy: undefined, approvedAt: undefined };
+      if (existing) {
+        await ctx.db.patch(existing._id, { text, completedAt: now, status, ...approval });
+      } else {
+        await ctx.db.insert("specialtyProjectReports", {
+          userId: escoteiro._id,
+          ramoGroup: "older",
+          specialtyId: args.specialtyId,
+          step: args.step,
+          text,
+          completedAt: now,
+          status,
+          ...(status === "approved" ? approval : {}),
+        });
+      }
+    };
 
-    // An escotista registering on a scout's behalf never overwrites the
-    // scout's own pending relato — that is resolved with approve/reject.
-    if (args.targetUserId && existing && existing.status === "pending") {
-      throw new Error("Etapa enviada pelo escoteiro — use Aprovar ou Rejeitar");
-    }
-    const before =
-      args.targetUserId && effectiveUser
-        ? await snapshotProgression(ctx, effectiveUserId)
-        : null;
-
-    if (existing) {
-      // An approved step is locked to the escoteiro; only escotista-on-behalf overwrites.
-      if (existing.status === "approved" && !args.targetUserId) {
+    if (!onBehalf) {
+      if (existing?.status === "approved") {
         throw new Error("Esta etapa já foi aprovada e não pode ser reenviada.");
       }
-      await ctx.db.patch(existing._id, {
-        text,
-        completedAt: now,
-        status,
-        ...(approvedBy
-          ? { approvedBy, approvedAt: now }
-          : { approvedBy: undefined, approvedAt: undefined }),
-      });
-    } else {
-      await ctx.db.insert("specialtyProjectReports", {
-        userId: effectiveUserId,
-        ramoGroup,
-        specialtyId: args.specialtyId,
-        step: args.step,
-        text,
-        completedAt: now,
-        status,
-        ...(approvedBy ? { approvedBy, approvedAt: now } : {}),
-      });
+      await write("pending");
+      return [];
     }
 
-    // An escotista-on-behalf write is an approval: audit it and run the earned
-    // cascade (a third approved etapa earns the specialty → level-up toasts),
-    // like approveSpecialtyStep. An escoteiro's own submission stays pending,
-    // so it can never earn anything here.
-    if (before && effectiveUser) {
-      await logRamoEvent(ctx, {
-        type: "approval",
-        actor: caller,
-        subject: effectiveUser,
-        summary: `Registrou etapa "${args.step}" da especialidade: ${args.specialtyId}`,
-      });
-      return detectLevelUps(ctx, caller, effectiveUser, before);
+    if (existing?.status === "pending") {
+      throw new Error("Etapa enviada pelo escoteiro — use Aprovar ou Rejeitar");
     }
-    return [];
+    return recordDirectApproval(
+      ctx,
+      {
+        actor: caller,
+        subject: onBehalf,
+        verb: "Registrou",
+        label: { kind: "specialtyStep", specialtyId: args.specialtyId, step: args.step },
+      },
+      async () => {
+        await write("approved");
+        return true;
+      },
+    );
   },
 });
 
 /**
- * Approve a pending project-step report.
- * When this approval makes all three steps approved, the specialty is earned and
- * the level-up cascade runs (same mechanism as bloco/action approvals). Which
- * step is approved last does not matter — steps are unordered (ADR 0002).
+ * Approve one pending etapa. The approval that leaves all three approved
+ * earns the especialidade, in whatever order they came (ADR 0002).
  */
 export const approveSpecialtyStep = mutation({
   args: { reportId: v.id("specialtyProjectReports") },
-  handler: async (ctx, args): Promise<LevelUpToast[]> => {
-    const user = await getAuthenticatedUser(ctx);
-    const doc = await ctx.db.get(args.reportId);
-    if (!doc) throw new Error("Não encontrado");
-    if (doc.status !== "pending") throw new Error("Etapa não está pendente");
-
-    const { target } = await assertCanActOnEscoteiro(ctx, doc.userId);
-
-    // This approval earns the specialty iff the other two steps are already
-    // approved. Snapshot before the write so the cascade can diff against it.
-    const completesSpecialty = await otherStepsAllApproved(ctx, doc);
-    const before = completesSpecialty
-      ? await snapshotProgression(ctx, doc.userId)
-      : null;
-
-    await ctx.db.patch(args.reportId, {
-      status: "approved",
-      approvedBy: user._id,
-      approvedAt: Date.now(),
-    });
-
-    await logRamoEvent(ctx, {
-      type: "approval",
-      actor: user,
-      subject: target,
-      summary: `Aprovou etapa "${doc.step}" da especialidade: ${doc.specialtyId}`,
-    });
-
-    if (before) {
-      return detectLevelUps(ctx, user, target, before);
-    }
-    return [];
-  },
+  handler: async (ctx, args): Promise<LevelUpToast[]> =>
+    approveConclusao(ctx, { kind: "specialtyStep", id: args.reportId }),
 });
 
-/**
- * Reject (delete) a pending project-step report.
- * The escoteiro's text is cleared; they rewrite and resubmit.
- */
+/** Reject (delete) one pending etapa; the escoteiro rewrites and resubmits. */
 export const rejectSpecialtyStep = mutation({
   args: { reportId: v.id("specialtyProjectReports") },
-  handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.reportId);
-    if (!doc) throw new Error("Não encontrado");
-    if (doc.status !== "pending") throw new Error("Etapa não está pendente");
-
-    const { caller, target } = await assertCanActOnEscoteiro(ctx, doc.userId);
-    await logRamoEvent(ctx, {
-      type: "rejection",
-      actor: caller,
-      subject: target,
-      summary: `Rejeitou etapa "${doc.step}" da especialidade: ${doc.specialtyId}`,
-    });
-    await ctx.db.delete(args.reportId);
-  },
+  handler: async (ctx, args) =>
+    rejectConclusao(ctx, { kind: "specialtyStep", id: args.reportId }),
 });
 
 // ---------------------------------------------------------------------------
@@ -870,19 +668,17 @@ export const getSpecialtyRoster = query({
 
 /**
  * Explicit escotista mark on one younger especialidade item of one escoteiro
- * (the actionable ficha). Unlike toggleSpecialtyItem — which, called on a
- * PENDING row, deletes the escoteiro's submission — this states the outcome:
+ * (the actionable ficha). Unlike the escoteiro's toggle, it states the
+ * outcome:
  *
  * - approved: true  → no row: insert approved; pending row: promote it to
  *   approved (keeps the escoteiro's completedAt); approved row: no-op.
  * - approved: false → approved row: delete it (unmark — may drop a level or
  *   un-complete a bloco, same as unmarking an ação); no row: no-op; pending
- *   row: throws — a submission is resolved with Aprovar / Rejeitar
- *   (rejectSpecialtyItem), never silently deleted by an unmark.
+ *   row: throws — a submission is resolved with Aprovar / Rejeitar, never
+ *   silently deleted by an unmark.
  *
- * Approver + time are recorded; approvals log a ramo event and run the
- * level-up cascade like approveSpecialtyItem. Access = assertCanActOnEscoteiro
- * (visibilidade de ramo) — the same guard every approval mutation uses.
+ * An approval is audited and cascaded through lib/review.
  */
 export const setSpecialtyItemApproved = mutation({
   args: {
@@ -896,34 +692,10 @@ export const setSpecialtyItemApproved = mutation({
       ctx,
       args.escoteiroId,
     );
-    if (target.role !== "escoteiro") {
-      throw new Error("Apenas escoteiros têm especialidades");
-    }
-    if (ramoGroupForRamo(target.ramo) !== "younger") {
-      throw new Error(
-        "Especialidades de sênior e pioneiro são registradas por etapas",
-      );
-    }
-    const specialty = YOUNGER_SPECIALTY_BY_ID.get(args.specialtyId);
-    if (!specialty) throw new Error("Especialidade não encontrada");
-    if (
-      !Number.isInteger(args.itemIndex) ||
-      args.itemIndex < 0 ||
-      args.itemIndex >= specialty.items.length
-    ) {
-      throw new Error("Item inválido");
-    }
+    assertEspecialidadeOf(target, "younger", args.specialtyId);
+    assertItemIndex(args.specialtyId, args.itemIndex);
 
-    const rows = await ctx.db
-      .query("specialtyItemCompletions")
-      .withIndex("by_userId_and_ramoGroup_and_specialtyId", (q) =>
-        q
-          .eq("userId", target._id)
-          .eq("ramoGroup", "younger")
-          .eq("specialtyId", args.specialtyId),
-      )
-      .take(200);
-    const existing = rows.find((r) => r.itemIndex === args.itemIndex) ?? null;
+    const existing = await findItem(ctx, target._id, args.specialtyId, args.itemIndex);
     const existingApproved = !!existing && existing.status !== "pending";
 
     if (!args.approved) {
@@ -936,35 +708,41 @@ export const setSpecialtyItemApproved = mutation({
       await ctx.db.delete(existing._id);
       return [];
     }
-
     if (existingApproved) return [];
 
-    const now = Date.now();
-    const before = await snapshotProgression(ctx, target._id);
-    if (existing) {
-      await ctx.db.patch(existing._id, {
-        status: "approved",
-        approvedBy: caller._id,
-        approvedAt: now,
-      });
-    } else {
-      await ctx.db.insert("specialtyItemCompletions", {
-        userId: target._id,
-        ramoGroup: "younger",
-        specialtyId: args.specialtyId,
-        itemIndex: args.itemIndex,
-        completedAt: now,
-        status: "approved",
-        approvedBy: caller._id,
-        approvedAt: now,
-      });
-    }
-    await logRamoEvent(ctx, {
-      type: "approval",
-      actor: caller,
-      subject: target,
-      summary: `Aprovou item de especialidade: ${args.specialtyId}[${args.itemIndex}]`,
-    });
-    return detectLevelUps(ctx, caller, target, before);
+    return recordDirectApproval(
+      ctx,
+      {
+        actor: caller,
+        subject: target,
+        label: {
+          kind: "specialtyItem",
+          specialtyId: args.specialtyId,
+          itemIndex: args.itemIndex,
+        },
+      },
+      async () => {
+        const now = Date.now();
+        if (existing) {
+          await ctx.db.patch(existing._id, {
+            status: "approved",
+            approvedBy: caller._id,
+            approvedAt: now,
+          });
+        } else {
+          await ctx.db.insert("specialtyItemCompletions", {
+            userId: target._id,
+            ramoGroup: "younger",
+            specialtyId: args.specialtyId,
+            itemIndex: args.itemIndex,
+            completedAt: now,
+            status: "approved",
+            approvedBy: caller._id,
+            approvedAt: now,
+          });
+        }
+        return true;
+      },
+    );
   },
 });

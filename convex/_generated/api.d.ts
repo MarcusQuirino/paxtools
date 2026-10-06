@@ -24,6 +24,7 @@ import type * as lib_events from "../lib/events.js";
 import type * as lib_legacySpecialty from "../lib/legacySpecialty.js";
 import type * as lib_progression from "../lib/progression.js";
 import type * as lib_ramoVisibility from "../lib/ramoVisibility.js";
+import type * as lib_review from "../lib/review.js";
 import type * as lib_sections from "../lib/sections.js";
 import type * as lib_statsCohort from "../lib/statsCohort.js";
 import type * as migrations from "../migrations.js";
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   "lib/legacySpecialty": typeof lib_legacySpecialty;
   "lib/progression": typeof lib_progression;
   "lib/ramoVisibility": typeof lib_ramoVisibility;
+  "lib/review": typeof lib_review;
   "lib/sections": typeof lib_sections;
   "lib/statsCohort": typeof lib_statsCohort;
   migrations: typeof migrations;

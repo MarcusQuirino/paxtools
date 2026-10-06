@@ -3,19 +3,9 @@ import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { getAuthenticatedUser } from "./lib/authHelpers";
 import { assertCanActOnEscoteiro } from "./lib/ramoVisibility";
-import {
-  snapshotProgression,
-  detectLevelUps,
-  readProgression,
-  currentRamo,
-  type LevelUpToast,
-  type ProgressionSnapshot,
-} from "./lib/progression";
-import {
-  logRamoEvent,
-  describeCompletion,
-  type CompletionKind,
-} from "./lib/events";
+import { readProgression, currentRamo, type LevelUpToast } from "./lib/progression";
+import type { ConclusaoLabel } from "./lib/events";
+import { recordDirectApproval } from "./lib/review";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
@@ -73,33 +63,26 @@ async function resolveTargetAndStatus(
 }
 
 /**
- * Finish an escotista-driven mark that resulted in a new approval: log the
- * approval event and detect level-ups. Only fires when an escotista acted on an
- * escoteiro's items (`targetUserId` set) AND an approval actually landed —
- * self-marks and un-marks return no toasts. `before` is the pre-write snapshot.
+ * Run a mark's write. When an escotista marks for an escoteiro
+ * (`targetUserId`) and an approval lands, it is audited and the level-up
+ * cascade runs (lib/review); self-marks and un-marks return no toasts.
+ * `write` returns whether an approval landed.
  */
-async function finishApproval(
+async function applyMark(
   ctx: MutationCtx,
   opts: {
     targetUserId: Id<"users"> | undefined;
     caller: Doc<"users">;
-    subjectId: Id<"users">;
-    before: ProgressionSnapshot | null;
-    approved: boolean;
-    kind: CompletionKind;
-    ref: { actionId?: string; itemId?: string; text?: string };
+    label: ConclusaoLabel;
   },
+  write: () => Promise<boolean>,
 ): Promise<LevelUpToast[]> {
-  if (!opts.targetUserId || !opts.approved || !opts.before) return [];
-  const subject = await ctx.db.get(opts.subjectId);
-  if (!subject) return [];
-  await logRamoEvent(ctx, {
-    type: "approval",
-    actor: opts.caller,
-    subject,
-    summary: `Aprovou: ${describeCompletion(subject.ramo, opts.kind, opts.ref)}`,
-  });
-  return detectLevelUps(ctx, opts.caller, subject, opts.before);
+  const subject = opts.targetUserId ? await ctx.db.get(opts.targetUserId) : null;
+  if (!subject) {
+    await write();
+    return [];
+  }
+  return recordDirectApproval(ctx, { actor: opts.caller, subject, label: opts.label }, write);
 }
 
 function assertCanRemoveApproved(
@@ -178,45 +161,39 @@ export const toggleAction = mutation({
       )
       .unique();
 
-    const before = args.targetUserId
-      ? await snapshotProgression(ctx, effectiveUserId)
-      : null;
-    let approved = false;
-
-    if (existing) {
-      if (existing.status === "pending" && status === "approved") {
-        // Escotista clicking a pending item → approve it
-        await ctx.db.patch(existing._id, {
-          status: "approved",
+    return applyMark(
+      ctx,
+      {
+        targetUserId: args.targetUserId,
+        caller,
+        label: { kind: "action", actionId: args.actionId },
+      },
+      async () => {
+        if (existing) {
+          if (existing.status === "pending" && status === "approved") {
+            // Escotista clicking a pending item → approve it
+            await ctx.db.patch(existing._id, {
+              status: "approved",
+              approvedBy,
+              approvedAt: Date.now(),
+            });
+            return true;
+          }
+          assertCanRemoveApproved(existing.status, callerIsEscotista);
+          await ctx.db.delete(existing._id);
+          return false;
+        }
+        await ctx.db.insert("actionCompletions", {
+          userId: effectiveUserId,
+          actionId: args.actionId,
+          completedAt: Date.now(),
+          status,
           approvedBy,
-          approvedAt: Date.now(),
+          approvedAt: approvedBy ? Date.now() : undefined,
         });
-        approved = true;
-      } else {
-        assertCanRemoveApproved(existing.status, callerIsEscotista);
-        await ctx.db.delete(existing._id);
-      }
-    } else {
-      await ctx.db.insert("actionCompletions", {
-        userId: effectiveUserId,
-        actionId: args.actionId,
-        completedAt: Date.now(),
-        status,
-        approvedBy,
-        approvedAt: approvedBy ? Date.now() : undefined,
-      });
-      if (status === "approved") approved = true;
-    }
-
-    return finishApproval(ctx, {
-      targetUserId: args.targetUserId,
-      caller,
-      subjectId: effectiveUserId,
-      before,
-      approved,
-      kind: "action",
-      ref: { actionId: args.actionId },
-    });
+        return status === "approved";
+      },
+    );
   },
 });
 
@@ -276,42 +253,36 @@ export const toggleCustomAction = mutation({
     if (!doc || doc.userId !== effectiveUserId)
       throw new Error("Não encontrado");
 
-    const before = args.targetUserId
-      ? await snapshotProgression(ctx, effectiveUserId)
-      : null;
-    let approved = false;
-
-    if (doc.completed && doc.status === "pending" && status === "approved") {
-      // Escotista clicking a pending custom action → approve it
-      await ctx.db.patch(args.customActionId, {
-        status: "approved",
-        approvedBy,
-        approvedAt: Date.now(),
-      });
-      approved = true;
-    } else {
-      // Unchecking a completed custom action requires approval lock check.
-      if (doc.completed) {
-        assertCanRemoveApproved(doc.status, callerIsEscotista);
-      }
-      await ctx.db.patch(args.customActionId, {
-        completed: !doc.completed,
-        status: !doc.completed ? status : undefined,
-        approvedBy: !doc.completed ? approvedBy : undefined,
-        approvedAt: !doc.completed && approvedBy ? Date.now() : undefined,
-      });
-      if (!doc.completed && status === "approved") approved = true;
-    }
-
-    return finishApproval(ctx, {
-      targetUserId: args.targetUserId,
-      caller,
-      subjectId: effectiveUserId,
-      before,
-      approved,
-      kind: "custom",
-      ref: { text: doc.text },
-    });
+    return applyMark(
+      ctx,
+      {
+        targetUserId: args.targetUserId,
+        caller,
+        label: { kind: "custom", text: doc.text },
+      },
+      async () => {
+        if (doc.completed && doc.status === "pending" && status === "approved") {
+          // Escotista clicking a pending custom action → approve it
+          await ctx.db.patch(args.customActionId, {
+            status: "approved",
+            approvedBy,
+            approvedAt: Date.now(),
+          });
+          return true;
+        }
+        // Unchecking a completed custom action requires approval lock check.
+        if (doc.completed) {
+          assertCanRemoveApproved(doc.status, callerIsEscotista);
+        }
+        await ctx.db.patch(args.customActionId, {
+          completed: !doc.completed,
+          status: !doc.completed ? status : undefined,
+          approvedBy: !doc.completed ? approvedBy : undefined,
+          approvedAt: !doc.completed && approvedBy ? Date.now() : undefined,
+        });
+        return !doc.completed && status === "approved";
+      },
+    );
   },
 });
 
@@ -349,9 +320,8 @@ export const toggleIrrItem = mutation({
       throw new Error("ID de item inválido");
 
     // Stamp the acting escoteiro's current ramo so the row lands in the right
-    // ramo's record. null ramo → "escoteiro" (codebase-wide default).
-    const subject = await ctx.db.get(effectiveUserId);
-    const ramo = subject?.ramo ?? "escoteiro";
+    // ramo's record. null ramo → the codebase-wide default.
+    const ramo = currentRamo(await ctx.db.get(effectiveUserId));
 
     const existing = await ctx.db
       .query("irrCompletions")
@@ -360,44 +330,38 @@ export const toggleIrrItem = mutation({
       )
       .unique();
 
-    const before = args.targetUserId
-      ? await snapshotProgression(ctx, effectiveUserId)
-      : null;
-    let approved = false;
-
-    if (existing) {
-      if (existing.status === "pending" && status === "approved") {
-        await ctx.db.patch(existing._id, {
-          status: "approved",
+    return applyMark(
+      ctx,
+      {
+        targetUserId: args.targetUserId,
+        caller,
+        label: { kind: "irr", itemId: args.itemId },
+      },
+      async () => {
+        if (existing) {
+          if (existing.status === "pending" && status === "approved") {
+            await ctx.db.patch(existing._id, {
+              status: "approved",
+              approvedBy,
+              approvedAt: Date.now(),
+            });
+            return true;
+          }
+          assertCanRemoveApproved(existing.status, callerIsEscotista);
+          await ctx.db.delete(existing._id);
+          return false;
+        }
+        await ctx.db.insert("irrCompletions", {
+          userId: effectiveUserId,
+          ramo,
+          itemId: args.itemId,
+          completedAt: Date.now(),
+          status,
           approvedBy,
-          approvedAt: Date.now(),
+          approvedAt: approvedBy ? Date.now() : undefined,
         });
-        approved = true;
-      } else {
-        assertCanRemoveApproved(existing.status, callerIsEscotista);
-        await ctx.db.delete(existing._id);
-      }
-    } else {
-      await ctx.db.insert("irrCompletions", {
-        userId: effectiveUserId,
-        ramo,
-        itemId: args.itemId,
-        completedAt: Date.now(),
-        status,
-        approvedBy,
-        approvedAt: approvedBy ? Date.now() : undefined,
-      });
-      if (status === "approved") approved = true;
-    }
-
-    return finishApproval(ctx, {
-      targetUserId: args.targetUserId,
-      caller,
-      subjectId: effectiveUserId,
-      before,
-      approved,
-      kind: "irr",
-      ref: { itemId: args.itemId },
-    });
+        return status === "approved";
+      },
+    );
   },
 });

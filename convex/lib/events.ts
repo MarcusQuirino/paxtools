@@ -6,33 +6,23 @@ import {
   type Ramo,
 } from "../../src/data/progression-data";
 import { getRamoRules } from "../../src/data/progression-rules";
+import { YOUNGER_SPECIALTY_BY_ID } from "../../src/data/specialty-data/younger";
+import {
+  OLDER_SPECIALTY_BY_ID,
+  PROJECT_STEP_LABELS,
+  type ProjectStep,
+} from "../../src/data/specialty-data/older";
 
 /**
- * Completion kinds that produce an approval/rejection audit line. Especialidades
- * are absent on purpose: since #47 they live in specialtyItemCompletions /
- * specialtyProjectReports, whose mutations write their own audit summaries.
+ * The thing an approval/rejection audit line is about — every kind of
+ * conclusão an escotista reviews.
  */
-export type CompletionKind = "action" | "custom" | "irr";
-
-export type CompletionDoc =
-  | Doc<"actionCompletions">
-  | Doc<"irrCompletions">
-  | Doc<"customActions">;
-
-/** Pull the label-relevant field off a completion row by its kind. */
-export function completionRef(
-  doc: CompletionDoc,
-  kind: CompletionKind,
-): { actionId?: string; itemId?: string; text?: string } {
-  switch (kind) {
-    case "action":
-      return { actionId: (doc as Doc<"actionCompletions">).actionId };
-    case "custom":
-      return { text: (doc as Doc<"customActions">).text };
-    case "irr":
-      return { itemId: (doc as Doc<"irrCompletions">).itemId };
-  }
-}
+export type ConclusaoLabel =
+  | { kind: "action"; actionId: string }
+  | { kind: "custom"; text: string }
+  | { kind: "irr"; itemId: string }
+  | { kind: "specialtyItem"; specialtyId: string; itemIndex: number }
+  | { kind: "specialtyStep"; specialtyId: string; step: ProjectStep };
 
 // Short audit labels for escoteiro's IRR items, kept byte-identical to preserve
 // existing escoteiro timeline lines. Non-escoteiro ramos fall back to their
@@ -45,15 +35,22 @@ const IRR_ITEM_LABELS: Record<string, string> = {
   irr_corte_honra: "Corte de Honra",
 };
 
+function specialtyName(specialtyId: string): string {
+  return (
+    YOUNGER_SPECIALTY_BY_ID.get(specialtyId)?.name ??
+    OLDER_SPECIALTY_BY_ID.get(specialtyId)?.name ??
+    specialtyId
+  );
+}
+
 /** Resolve a human label for the thing approved/rejected (audit-accurate). */
 export function describeCompletion(
   ramo: Ramo | null | undefined,
-  kind: CompletionKind,
-  ref: { actionId?: string; itemId?: string; text?: string },
+  label: ConclusaoLabel,
 ): string {
-  switch (kind) {
+  switch (label.kind) {
     case "action": {
-      const id = ref.actionId ?? "";
+      const id = label.actionId;
       const parsed = parseActionId(id);
       if (!parsed) return id;
       const eixos = getEixosForRamo(ramo ?? parsed.ramo);
@@ -68,9 +65,9 @@ export function describeCompletion(
       return id;
     }
     case "custom":
-      return ref.text ?? "Ação personalizada";
+      return label.text || "Ação personalizada";
     case "irr": {
-      const itemId = ref.itemId ?? "";
+      const itemId = label.itemId;
       // Audit-fidelity special case (NOT a display path): escoteiro keeps its
       // established concise audit labels so existing timelines stay consistent;
       // other ramos resolve their own IRR item text from getRamoRules. The
@@ -82,6 +79,10 @@ export function describeCompletion(
       const rules = getRamoRules(ramo);
       return rules.irr.items.find((i) => i.id === itemId)?.text ?? rules.irr.name;
     }
+    case "specialtyItem":
+      return `${specialtyName(label.specialtyId)} — item ${label.itemIndex + 1}`;
+    case "specialtyStep":
+      return `${specialtyName(label.specialtyId)} — etapa ${PROJECT_STEP_LABELS[label.step]}`;
   }
 }
 

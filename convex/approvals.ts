@@ -1,21 +1,11 @@
 import { query, mutation } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
-import { getAuthenticatedUser } from "./lib/authHelpers";
 import {
-  assertCanActOnEscoteiro,
   filterActiveGrupoMembers,
   filterVisibleEscoteiros,
   tryResolveRamoViewer,
 } from "./lib/ramoVisibility";
-import {
-  snapshotProgression,
-  detectLevelUps,
-  readProgression,
-  type LevelUpToast,
-  type ProgressionSnapshot,
-} from "./lib/progression";
+import { readProgression, type LevelUpToast } from "./lib/progression";
 import { catalogActionCounts } from "../src/lib/progression-state";
 import {
   filterObservableSections,
@@ -24,99 +14,12 @@ import {
   resolveObservedSection,
 } from "./lib/sections";
 import {
-  logRamoEvent,
-  describeCompletion,
-  completionRef,
-  type CompletionDoc,
-  type CompletionKind,
-} from "./lib/events";
-
-// The two "simple" completion tables share the userId/status shape, so a
-// single union id type lets one helper drive both of them.
-type CompletionId = Id<"actionCompletions"> | Id<"irrCompletions">;
-
-/**
- * Approve a single pending completion. Authenticates FIRST (before fetching the
- * doc) so an unauthenticated caller gets "Não autenticado" even for a dangling
- * id — preserve this ordering.
- */
-async function approvePendingCompletion(
-  ctx: MutationCtx,
-  completionId: CompletionId,
-  kind: CompletionKind,
-): Promise<LevelUpToast[]> {
-  const user = await getAuthenticatedUser(ctx);
-  const doc = await ctx.db.get(completionId);
-  if (!doc) throw new Error("Não encontrado");
-  if (doc.status !== "pending") throw new Error("Item não está pendente");
-
-  const { target } = await assertCanActOnEscoteiro(ctx, doc.userId);
-
-  const before = await snapshotProgression(ctx, doc.userId);
-  await ctx.db.patch(completionId, {
-    status: "approved",
-    approvedBy: user._id,
-    approvedAt: Date.now(),
-  });
-  await logRamoEvent(ctx, {
-    type: "approval",
-    actor: user,
-    subject: target,
-    summary: `Aprovou: ${describeCompletion(target.ramo, kind, completionRef(doc, kind))}`,
-  });
-  return detectLevelUps(ctx, user, target, before);
-}
-
-/**
- * Reject (delete) a single pending completion. Fetches the doc and checks
- * existence/status BEFORE auth (auth happens inside assertCanActOnEscoteiro)
- * — so an unauthenticated caller with a dangling id gets "Não encontrado".
- * Preserve this ordering.
- */
-async function rejectPendingCompletion(
-  ctx: MutationCtx,
-  completionId: CompletionId,
-  kind: CompletionKind,
-) {
-  const doc = await ctx.db.get(completionId);
-  if (!doc) throw new Error("Não encontrado");
-  if (doc.status !== "pending") throw new Error("Item não está pendente");
-
-  const { caller, target } = await assertCanActOnEscoteiro(ctx, doc.userId);
-  await logRamoEvent(ctx, {
-    type: "rejection",
-    actor: caller,
-    subject: target,
-    summary: `Rejeitou: ${describeCompletion(target.ramo, kind, completionRef(doc, kind))}`,
-  });
-  await ctx.db.delete(completionId);
-}
-
-type PendingHit = { kind: CompletionKind; doc: CompletionDoc };
-
-/**
- * Fetch the still-pending rows for a set of completion ids, authorizing each
- * against the caller. Non-pending rows (and not-yet-completed custom actions)
- * are skipped silently — matching the prior bulk semantics. Returns the rows so
- * the caller can snapshot progression BEFORE applying any writes (level-up
- * detection needs the pre-approval state).
- */
-async function collectPending(
-  ctx: MutationCtx,
-  ids: CompletionId[] | Id<"customActions">[],
-  kind: CompletionKind,
-  requireCompleted: boolean,
-): Promise<PendingHit[]> {
-  const hits: PendingHit[] = [];
-  for (const id of ids) {
-    const doc = await ctx.db.get(id);
-    if (!doc || doc.status !== "pending") continue;
-    if (requireCompleted && !(doc as Doc<"customActions">).completed) continue;
-    await assertCanActOnEscoteiro(ctx, doc.userId);
-    hits.push({ kind, doc: doc as CompletionDoc });
-  }
-  return hits;
-}
+  approveConclusao,
+  approveConclusoes,
+  rejectConclusao,
+  rejectConclusoes,
+  type ConclusaoRef,
+} from "./lib/review";
 
 export const getPendingForGroup = query({
   args: {},
@@ -174,8 +77,8 @@ export const getPendingForGroup = query({
         )
         .take(200);
 
-      // Older-group project-step submissions (#43). One card per pending step
-      // (at most one pending step per specialty due to sequential locking).
+      // Older-group etapa relatos (#43). One card per pending etapa; etapas
+      // are independent (ADR 0002), so several of one especialidade may wait.
       const pendingSpecialtyReports = await ctx.db
         .query("specialtyProjectReports")
         .withIndex("by_userId_and_status", (q) =>
@@ -306,84 +209,49 @@ export const getGroupStats = query({
   },
 });
 
+// Every approval/rejection goes through lib/review, which owns access, the
+// snapshot → write → audit → level-up ordering, and the per-kind rules.
+
 export const approveAction = mutation({
   args: { completionId: v.id("actionCompletions") },
-  handler: async (ctx, args) =>
-    approvePendingCompletion(ctx, args.completionId, "action"),
+  handler: async (ctx, args): Promise<LevelUpToast[]> =>
+    approveConclusao(ctx, { kind: "action", id: args.completionId }),
 });
 
 export const approveIrrItem = mutation({
   args: { completionId: v.id("irrCompletions") },
-  handler: async (ctx, args) =>
-    approvePendingCompletion(ctx, args.completionId, "irr"),
+  handler: async (ctx, args): Promise<LevelUpToast[]> =>
+    approveConclusao(ctx, { kind: "irr", id: args.completionId }),
 });
 
 export const approveCustomAction = mutation({
   args: { completionId: v.id("customActions") },
-  handler: async (ctx, args): Promise<LevelUpToast[]> => {
-    const user = await getAuthenticatedUser(ctx);
-    const doc = await ctx.db.get(args.completionId);
-    if (!doc) throw new Error("Não encontrado");
-    if (!doc.completed || doc.status !== "pending")
-      throw new Error("Item não está pendente");
-
-    const { target } = await assertCanActOnEscoteiro(ctx, doc.userId);
-
-    const before = await snapshotProgression(ctx, doc.userId);
-    await ctx.db.patch(args.completionId, {
-      status: "approved",
-      approvedBy: user._id,
-      approvedAt: Date.now(),
-    });
-    await logRamoEvent(ctx, {
-      type: "approval",
-      actor: user,
-      subject: target,
-      summary: `Aprovou: ${describeCompletion(target.ramo, "custom", { text: doc.text })}`,
-    });
-    return detectLevelUps(ctx, user, target, before);
-  },
-});
-
-export const rejectCustomAction = mutation({
-  args: { completionId: v.id("customActions") },
-  handler: async (ctx, args) => {
-    const doc = await ctx.db.get(args.completionId);
-    if (!doc) throw new Error("Não encontrado");
-    if (!doc.completed || doc.status !== "pending")
-      throw new Error("Item não está pendente");
-
-    const { caller, target } = await assertCanActOnEscoteiro(ctx, doc.userId);
-    await logRamoEvent(ctx, {
-      type: "rejection",
-      actor: caller,
-      subject: target,
-      summary: `Rejeitou: ${describeCompletion(target.ramo, "custom", { text: doc.text })}`,
-    });
-
-    await ctx.db.patch(args.completionId, {
-      completed: false,
-      status: undefined,
-      approvedBy: undefined,
-      approvedAt: undefined,
-    });
-  },
+  handler: async (ctx, args): Promise<LevelUpToast[]> =>
+    approveConclusao(ctx, { kind: "custom", id: args.completionId }),
 });
 
 export const rejectAction = mutation({
   args: { completionId: v.id("actionCompletions") },
-  handler: async (ctx, args) => {
-    await rejectPendingCompletion(ctx, args.completionId, "action");
-  },
+  handler: async (ctx, args) =>
+    rejectConclusao(ctx, { kind: "action", id: args.completionId }),
 });
 
 export const rejectIrrItem = mutation({
   args: { completionId: v.id("irrCompletions") },
-  handler: async (ctx, args) => {
-    await rejectPendingCompletion(ctx, args.completionId, "irr");
-  },
+  handler: async (ctx, args) =>
+    rejectConclusao(ctx, { kind: "irr", id: args.completionId }),
 });
 
+export const rejectCustomAction = mutation({
+  args: { completionId: v.id("customActions") },
+  handler: async (ctx, args) =>
+    rejectConclusao(ctx, { kind: "custom", id: args.completionId }),
+});
+
+/**
+ * Approve or reject a selection of ações, IRR items and ações personalizadas,
+ * possibly across several escoteiros. Rows no longer pending are skipped.
+ */
 export const bulkAction = mutation({
   args: {
     action: v.union(v.literal("approve"), v.literal("reject")),
@@ -392,134 +260,13 @@ export const bulkAction = mutation({
     customActionIds: v.optional(v.array(v.id("customActions"))),
   },
   handler: async (ctx, args): Promise<LevelUpToast[]> => {
-    const user = await getAuthenticatedUser(ctx);
-    const now = Date.now();
-
-    const hits = [
-      ...(await collectPending(ctx, args.actionIds, "action", false)),
-      ...(await collectPending(ctx, args.irrIds, "irr", false)),
-      ...(await collectPending(ctx, args.customActionIds ?? [], "custom", true)),
+    const refs: ConclusaoRef[] = [
+      ...args.actionIds.map((id) => ({ kind: "action" as const, id })),
+      ...args.irrIds.map((id) => ({ kind: "irr" as const, id })),
+      ...(args.customActionIds ?? []).map((id) => ({ kind: "custom" as const, id })),
     ];
-
-    // Distinct affected escoteiros — a bulk action can span several of them.
-    const subjectIds = [...new Set(hits.map((h) => h.doc.userId))];
-    const subjects = new Map<Id<"users">, Doc<"users">>();
-    for (const sid of subjectIds) {
-      const s = await ctx.db.get(sid);
-      if (s) subjects.set(sid, s);
-    }
-
-    if (args.action === "approve") {
-      // Snapshot each escoteiro BEFORE any write, then apply all approvals.
-      const before = new Map<Id<"users">, ProgressionSnapshot>();
-      for (const sid of subjectIds) {
-        before.set(sid, await snapshotProgression(ctx, sid));
-      }
-      for (const h of hits) {
-        await ctx.db.patch(h.doc._id, {
-          status: "approved",
-          approvedBy: user._id,
-          approvedAt: now,
-        });
-        const subject = subjects.get(h.doc.userId);
-        if (subject) {
-          await logRamoEvent(ctx, {
-            type: "approval",
-            actor: user,
-            subject,
-            summary: `Aprovou: ${describeCompletion(subject.ramo, h.kind, completionRef(h.doc, h.kind))}`,
-          });
-        }
-      }
-      const toasts: LevelUpToast[] = [];
-      for (const sid of subjectIds) {
-        const subject = subjects.get(sid);
-        const snap = before.get(sid);
-        if (subject && snap) {
-          toasts.push(...(await detectLevelUps(ctx, user, subject, snap)));
-        }
-      }
-      return toasts;
-    }
-
-    // Reject: log then remove. Simple tables are deleted; custom actions are
-    // reset (matching the prior behavior). Rejections never move the stage.
-    for (const h of hits) {
-      const subject = subjects.get(h.doc.userId);
-      if (subject) {
-        await logRamoEvent(ctx, {
-          type: "rejection",
-          actor: user,
-          subject,
-          summary: `Rejeitou: ${describeCompletion(subject.ramo, h.kind, completionRef(h.doc, h.kind))}`,
-        });
-      }
-      if (h.kind === "custom") {
-        await ctx.db.patch(h.doc._id, {
-          completed: false,
-          status: undefined,
-          approvedBy: undefined,
-          approvedAt: undefined,
-        });
-      } else {
-        await ctx.db.delete(h.doc._id);
-      }
-    }
+    if (args.action === "approve") return approveConclusoes(ctx, refs);
+    await rejectConclusoes(ctx, refs);
     return [];
-  },
-});
-
-export const approveAllForEscoteiro = mutation({
-  args: { escoteiroId: v.id("users") },
-  handler: async (ctx, args): Promise<LevelUpToast[]> => {
-    const user = await getAuthenticatedUser(ctx);
-    const { target } = await assertCanActOnEscoteiro(ctx, args.escoteiroId);
-
-    const now = Date.now();
-    const before = await snapshotProgression(ctx, args.escoteiroId);
-
-    // The per-table .take() limits differ (100/10/100) and custom filters
-    // on `completed`, so the queries stay inline.
-    const pendingActions = await ctx.db
-      .query("actionCompletions")
-      .withIndex("by_userId_and_status", (q) =>
-        q.eq("userId", args.escoteiroId).eq("status", "pending"),
-      )
-      .take(100);
-    const pendingIrr = await ctx.db
-      .query("irrCompletions")
-      .withIndex("by_userId_and_status", (q) =>
-        q.eq("userId", args.escoteiroId).eq("status", "pending"),
-      )
-      .take(10);
-    const pendingCustomActions = (
-      await ctx.db
-        .query("customActions")
-        .withIndex("by_userId_and_status", (q) =>
-          q.eq("userId", args.escoteiroId).eq("status", "pending"),
-        )
-        .take(100)
-    ).filter((c) => c.completed);
-
-    const approveAndLog = async (rows: CompletionDoc[], kind: CompletionKind) => {
-      for (const r of rows) {
-        await ctx.db.patch(r._id, {
-          status: "approved",
-          approvedBy: user._id,
-          approvedAt: now,
-        });
-        await logRamoEvent(ctx, {
-          type: "approval",
-          actor: user,
-          subject: target,
-          summary: `Aprovou: ${describeCompletion(target.ramo, kind, completionRef(r, kind))}`,
-        });
-      }
-    };
-    await approveAndLog(pendingActions, "action");
-    await approveAndLog(pendingIrr, "irr");
-    await approveAndLog(pendingCustomActions, "custom");
-
-    return detectLevelUps(ctx, user, target, before);
   },
 });

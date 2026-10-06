@@ -145,9 +145,11 @@ describe("toggleSpecialtyItem", () => {
         .withIndex("by_userId", (q) => q.eq("userId", escoteiroId))
         .collect(),
     );
-    const rowId = rows[0]!._id;
-    await as(t, escotistaId).mutation(api.specialties.approveSpecialtyItem, {
-      completionId: rowId,
+    await as(t, escotistaId).mutation(api.specialties.approveSpecialtyItems, {
+      escoteiroId,
+      specialtyId: "administracao",
+      ramoGroup: "younger",
+      itemIds: [rows[0]!._id],
     });
 
     // Escoteiro tries to uncheck approved — should throw
@@ -204,54 +206,60 @@ describe("toggleSpecialtyItem", () => {
   });
 });
 
-describe("approveSpecialtyItem", () => {
-  test("approve pending → status=approved", async () => {
+describe("toggleSpecialtyItem validation", () => {
+  test("rejects an unknown especialidade or an item outside its list", async () => {
     const t = convexTest(schema, modules);
-    const { escoteiroId, escotistaId } = await seedGroup(t);
-
-    await as(t, escoteiroId).mutation(api.specialties.toggleSpecialtyItem, {
-      specialtyId: "administracao",
-      itemIndex: 1,
-    });
-
-    const rows = await t.run(async (ctx) =>
-      ctx.db
-        .query("specialtyItemCompletions")
-        .withIndex("by_userId", (q) => q.eq("userId", escoteiroId))
-        .collect(),
-    );
-    const rowId = rows[0]!._id;
-
-    await as(t, escotistaId).mutation(api.specialties.approveSpecialtyItem, {
-      completionId: rowId,
-    });
-
-    const updated = await t.run(async (ctx) => ctx.db.get(rowId));
-    expect(updated!.status).toBe("approved");
-    expect(updated!.approvedBy).toBe(escotistaId);
+    const { escoteiroId } = await seedGroup(t);
+    await expect(
+      as(t, escoteiroId).mutation(api.specialties.toggleSpecialtyItem, {
+        specialtyId: "nao-existe",
+        itemIndex: 0,
+      }),
+    ).rejects.toThrow("Especialidade não encontrada");
+    await expect(
+      as(t, escoteiroId).mutation(api.specialties.toggleSpecialtyItem, {
+        specialtyId: "administracao",
+        itemIndex: 99,
+      }),
+    ).rejects.toThrow("Item inválido");
+    const rows = await t.run((ctx) => ctx.db.query("specialtyItemCompletions").collect());
+    expect(rows).toHaveLength(0);
   });
 
-  test("approve non-pending → throws", async () => {
+  test("a sênior or an escotista cannot write item rows", async () => {
     const t = convexTest(schema, modules);
-    const { escoteiroId, escotistaId } = await seedGroup(t);
-
-    // Insert already-approved row directly
-    const rowId = await t.run(async (ctx) =>
-      ctx.db.insert("specialtyItemCompletions", {
-        userId: escoteiroId,
-        ramoGroup: "younger",
+    const { escotistaId, groupId } = await seedGroup(t);
+    const seniorId = await insertUser(t, {
+      role: "escoteiro",
+      ramo: "senior",
+      groupId,
+      membershipStatus: "approved",
+      onboardingComplete: true,
+    });
+    await expect(
+      as(t, seniorId).mutation(api.specialties.toggleSpecialtyItem, {
         specialtyId: "administracao",
         itemIndex: 0,
-        completedAt: Date.now(),
-        status: "approved",
       }),
-    );
-
+    ).rejects.toThrow("registradas por etapas");
     await expect(
-      as(t, escotistaId).mutation(api.specialties.approveSpecialtyItem, {
-        completionId: rowId,
+      as(t, escotistaId).mutation(api.specialties.toggleSpecialtyItem, {
+        specialtyId: "administracao",
+        itemIndex: 0,
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow("Apenas escoteiros");
+  });
+
+  test("a lobinho or escoteiro cannot write etapa relatos", async () => {
+    const t = convexTest(schema, modules);
+    const { escoteiroId } = await seedGroup(t);
+    await expect(
+      as(t, escoteiroId).mutation(api.specialties.submitSpecialtyStep, {
+        specialtyId: "comunicacoes",
+        step: "conhecer",
+        text: "Relato",
+      }),
+    ).rejects.toThrow("registradas por itens");
   });
 });
 
@@ -1018,8 +1026,13 @@ describe("especialidade → bloco auto-completion (#44)", () => {
     let toasts: { kind: string }[] = [];
     for (const row of pending) {
       toasts = await as(t, escotistaId).mutation(
-        api.specialties.approveSpecialtyItem,
-        { completionId: row._id },
+        api.specialties.approveSpecialtyItems,
+        {
+          escoteiroId,
+          specialtyId: "administracao",
+          ramoGroup: "younger",
+          itemIds: [row._id],
+        },
       );
     }
 
@@ -1582,7 +1595,7 @@ describe("submitSpecialtyStep on behalf (escotista registers an etapa)", () => {
     expect(compartilhar.approvedBy).toBe(f.chefeSenior);
     expect(
       (await approvalEvents(t)).some((e) =>
-        e.summary?.startsWith('Registrou etapa "compartilhar"'),
+        e.summary === "Registrou: Comunicações — etapa Compartilhar",
       ),
     ).toBe(true);
 

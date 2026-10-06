@@ -1388,7 +1388,7 @@ export const seedSimRamo = internalMutation({
         type: "approval",
         actor: approver,
         subject: c.doc,
-        summary: `Aprovou: ${describeCompletion(ramo, "action", { actionId: c.sampleApprovedActionId })}`,
+        summary: `Aprovou: ${describeCompletion(ramo, { kind: "action", actionId: c.sampleApprovedActionId ?? "" })}`,
       });
       events++;
     }
@@ -1398,7 +1398,7 @@ export const seedSimRamo = internalMutation({
         type: "rejection",
         actor: approver,
         subject: rejected.doc,
-        summary: `Rejeitou: ${describeCompletion(ramo, "action", { actionId: rejected.nextActionId })}`,
+        summary: `Rejeitou: ${describeCompletion(ramo, { kind: "action", actionId: rejected.nextActionId ?? "" })}`,
       });
       events++;
     }
