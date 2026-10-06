@@ -89,7 +89,9 @@ function EscotistaDashboard() {
   return (
     <div className="space-y-4">
       {/* Group stats */}
-      <div className="rounded-md border-2 border-black bg-emerald-800 px-4 py-3 text-white shadow-[4px_4px_0px_0px_#065f46]">
+      <div
+        data-tour="group-card"
+        className="rounded-md border-2 border-black bg-emerald-800 px-4 py-3 text-white shadow-[4px_4px_0px_0px_#065f46]">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-black text-lg uppercase">
             {/* Own element + leading space — see the note in settings.tsx. */}
@@ -115,7 +117,7 @@ function EscotistaDashboard() {
         </div>
 
         {pickerSections.length > 0 && (
-          <div className="mb-3 space-y-1">
+          <div data-tour="section-picker" className="mb-3 space-y-1">
             <div className="flex items-center gap-2">
               <label
                 htmlFor="observed-section"
@@ -159,7 +161,7 @@ function EscotistaDashboard() {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-3">
+        <div data-tour="member-tabs" className="grid grid-cols-3 gap-3">
           <button
             type="button"
             onClick={() => setActiveTab("escoteiros")}
@@ -194,7 +196,7 @@ function EscotistaDashboard() {
       </div>
 
       {/* Search and filter */}
-      <div className="space-y-2">
+      <div data-tour="member-search" className="space-y-2">
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -312,7 +314,10 @@ function EscoteiroCard({
   onToggleFavorite: () => void;
 }) {
   return (
-    <div className="rounded-md border-2 border-black bg-card p-3 flex items-center gap-3 shadow-[2px_2px_0px_0px_#000]">
+    <div
+      data-tour="escoteiro-card"
+      className="rounded-md border-2 border-black bg-card p-3 flex items-center gap-3 shadow-[2px_2px_0px_0px_#000]"
+    >
       <Avatar className="size-10 border-2 border-black">
         <AvatarImage src={escoteiro.image ?? undefined} />
         <AvatarFallback className="text-xs font-bold">

@@ -11,6 +11,7 @@ import { EscoteiroShell } from "@/components/progression/escoteiro-shell";
 import { RamoNamesInputs } from "@/components/onboarding/ramo-names-inputs";
 import { RegiaoInput } from "@/components/onboarding/regiao-input";
 import { SectionsManager } from "@/components/settings/sections-manager";
+import { useTour } from "@/components/tour/tour-provider";
 import { type RamoNames } from "@/lib/ramos";
 import { formatGroupIdentity } from "@/lib/group-identity";
 import {
@@ -25,6 +26,7 @@ import {
   Settings as SettingsIcon,
   Trash2,
   User,
+  GraduationCap,
 } from "lucide-react";
 
 export const Route = createFileRoute("/settings")({
@@ -350,6 +352,8 @@ function SettingsPage() {
           </>
         )}
 
+        <TutorialSection />
+
         <AccountSection />
     </>
   );
@@ -389,6 +393,24 @@ function SettingsPage() {
         {sections}
       </div>
     </div>
+  );
+}
+
+function TutorialSection() {
+  const { startTour } = useTour();
+  return (
+    <section className="rounded-md border-2 border-black bg-card p-4 space-y-3">
+      <h2 className="text-sm font-black uppercase flex items-center gap-2">
+        <GraduationCap className="size-4" />
+        Tutorial
+      </h2>
+      <p className="text-xs text-muted-foreground">
+        Reveja o passo a passo das principais telas do app.
+      </p>
+      <Button variant="outline" onClick={startTour}>
+        Ver tutorial
+      </Button>
+    </section>
   );
 }
 

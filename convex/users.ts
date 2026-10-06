@@ -56,3 +56,12 @@ export const updateName = mutation({
     await ctx.db.patch(user._id, { name: trimmed });
   },
 });
+
+/** Marks the guided tour as seen (finished or skipped) so it stops auto-opening. */
+export const markTourSeen = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getAuthenticatedUser(ctx);
+    await ctx.db.patch(user._id, { tourSeenAt: Date.now() });
+  },
+});

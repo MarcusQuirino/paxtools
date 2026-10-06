@@ -41,6 +41,9 @@ export default defineSchema({
     // whole grupo. Stored per user so the choice survives a reload; a pointer
     // left behind by a deleted seção is inert — reads resolve it to "todas".
     observedSectionId: v.optional(v.id("sections")),
+    // When the user finished or skipped the guided tour. Unset means they
+    // have not seen it yet, so it opens on their next visit.
+    tourSeenAt: v.optional(v.number()),
   })
     .index("email", ["email"])
     .index("by_groupId", ["groupId"])

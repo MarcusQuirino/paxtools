@@ -13,7 +13,7 @@ export function OverallProgress({
   pendingBlockIds,
 }: OverallProgressProps) {
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div data-tour="overall-progress" className="grid grid-cols-2 gap-3">
       {eixos.map((eixo) => {
         const approved = eixo.blocos.filter((b) =>
           completedBlockIds.has(b.id),

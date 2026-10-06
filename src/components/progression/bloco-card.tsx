@@ -58,7 +58,7 @@ export function BlocoCard({
   ]);
 
   return (
-    <AccordionItem value={bloco.id}>
+    <AccordionItem value={bloco.id} data-tour="bloco">
       <AccordionTrigger className="px-3 hover:no-underline gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">

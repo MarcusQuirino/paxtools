@@ -3,15 +3,27 @@ import { Award, House, Star, UserRound } from "lucide-react";
 
 type IconType = React.ComponentType<{ className?: string }>;
 
-type Tab = { to: string; label: string; icon: IconType; exact?: boolean };
+type Tab = {
+  to: string;
+  label: string;
+  icon: IconType;
+  exact?: boolean;
+  /** `data-tour` anchor for the guided tour. */
+  tour?: string;
+};
 
 // The escoteiro's four top-level destinations. Full labels (no "Esp."): at
 // 11px/800 "Especialidades" fits a quarter of a 360px viewport.
 const TABS: Tab[] = [
   { to: "/", label: "Progressão", icon: House, exact: true },
-  { to: "/plan", label: "Plano", icon: Star },
-  { to: "/especialidades", label: "Especialidades", icon: Award },
-  { to: "/settings", label: "Perfil", icon: UserRound },
+  { to: "/plan", label: "Plano", icon: Star, tour: "tab-plano" },
+  {
+    to: "/especialidades",
+    label: "Especialidades",
+    icon: Award,
+    tour: "tab-especialidades",
+  },
+  { to: "/settings", label: "Perfil", icon: UserRound, tour: "tab-perfil" },
 ];
 
 const TAB_BASE =
@@ -40,6 +52,7 @@ export function EscoteiroTabBar() {
             <Link
               key={tab.to}
               to={tab.to}
+              data-tour={tab.tour}
               activeOptions={{ exact: tab.exact ?? false }}
               className={TAB_BASE}
               activeProps={{ className: TAB_ACTIVE }}

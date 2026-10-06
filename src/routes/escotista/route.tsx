@@ -37,21 +37,36 @@ export const Route = createFileRoute("/escotista")({
 
 type IconType = React.ComponentType<{ className?: string }>;
 
+// `tour` is the item's `data-tour` anchor for the guided tour.
 type NavItem =
-  | { kind: "link"; to: string; label: string; icon: IconType; exact?: boolean }
-  | { kind: "sheet"; label: string; icon: IconType };
+  | {
+      kind: "link";
+      to: string;
+      label: string;
+      icon: IconType;
+      exact?: boolean;
+      tour?: string;
+    }
+  | { kind: "sheet"; label: string; icon: IconType; tour?: string };
 
 // Primary bottom-bar slots. Adding a tab = adding one entry here.
 const NAV_ITEMS: NavItem[] = [
   { kind: "link", to: "/escotista", label: "Painel", icon: LayoutDashboard, exact: true },
-  { kind: "link", to: "/escotista/pending", label: "Pendentes", icon: Clock },
+  {
+    kind: "link",
+    to: "/escotista/pending",
+    label: "Pendentes",
+    icon: Clock,
+    tour: "nav-pendentes",
+  },
   {
     kind: "link",
     to: "/escotista/especialidades",
     label: "Especialidades",
     icon: Award,
+    tour: "nav-especialidades",
   },
-  { kind: "sheet", label: "Mais", icon: MoreHorizontal },
+  { kind: "sheet", label: "Mais", icon: MoreHorizontal, tour: "nav-mais" },
 ];
 
 type SecondaryItem = {
@@ -172,6 +187,7 @@ function EscotistaBottomNav({ isAdmin }: { isAdmin: boolean }) {
             <Link
               key={item.label}
               to={item.to}
+              data-tour={item.tour}
               className={PRIMARY_INACTIVE}
               activeProps={{ className: PRIMARY_ACTIVE }}
               activeOptions={{ exact: item.exact ?? false }}
@@ -187,6 +203,7 @@ function EscotistaBottomNav({ isAdmin }: { isAdmin: boolean }) {
           return (
             <Sheet key={item.label} open={sheetOpen} onOpenChange={setSheetOpen}>
               <SheetTrigger
+                data-tour={item.tour}
                 className={moreActive ? PRIMARY_ACTIVE : PRIMARY_INACTIVE}
               >
                 <Icon className="size-5" />
