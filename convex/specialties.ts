@@ -27,10 +27,7 @@ import {
   rejectConclusoes,
   type ConclusaoDoc,
 } from "./lib/review";
-import {
-  filterToObservedSection,
-  resolveObservedSection,
-} from "./lib/sections";
+import { readObservedEscoteiros } from "./lib/sections";
 import { readStandings } from "./lib/especialidades";
 import {
   compareByProximity,
@@ -379,38 +376,21 @@ export const rejectSpecialtyStep = mutation({
 
 const ramoGroupArg = v.union(v.literal("younger"), v.literal("older"));
 
-/** Upper bound on escoteiros per grupo read at once (same as the pending list). */
-const MAX_ESCOTEIROS = 500;
-
 /**
- * The escoteiros an aggregate especialidade view may count: visible to the
- * viewer (visibilidade de ramo), narrowed to the observed seção, and currently
- * in `ramoGroup`.
+ * The escoteiros an aggregate especialidade view may count: the ones the
+ * viewer is observing (visibilidade de ramo, then seção observada) whose
+ * current ramo is in `ramoGroup`.
  */
-async function visibleEscoteirosInRamoGroup(
+async function observedEscoteirosInRamoGroup(
   ctx: QueryCtx,
   viewer: RamoViewer,
   ramoGroup: RamoGroup,
-): Promise<{
-  escoteiros: Doc<"users">[];
-  observedSection: Doc<"sections"> | null;
-}> {
-  const all = await ctx.db
-    .query("users")
-    .withIndex("by_groupId_and_role", (q) =>
-      q.eq("groupId", viewer.groupId).eq("role", "escoteiro"),
-    )
-    .take(MAX_ESCOTEIROS);
-  const observedSection = await resolveObservedSection(
-    ctx,
-    viewer.user,
-    viewer.groupId,
-  );
-  const escoteiros = filterToObservedSection(
-    observedSection?._id ?? null,
-    filterVisibleEscoteiros(viewer, all),
-  ).filter((e) => ramoGroupForRamo(e.ramo) === ramoGroup);
-  return { escoteiros, observedSection };
+) {
+  const { escoteiros, observedSection } = await readObservedEscoteiros(ctx, viewer);
+  return {
+    escoteiros: escoteiros.filter((e) => ramoGroupForRamo(e.ramo) === ramoGroup),
+    observedSection,
+  };
 }
 
 /** The ramoGroups a viewer accompanies (an admin, both). */
@@ -461,7 +441,7 @@ export const getGroupSpecialtySummary = query({
     const viewer = await tryResolveRamoViewer(ctx);
     if (!viewer) return null;
 
-    const { escoteiros, observedSection } = await visibleEscoteirosInRamoGroup(
+    const { escoteiros, observedSection } = await observedEscoteirosInRamoGroup(
       ctx,
       viewer,
       args.ramoGroup,
@@ -549,7 +529,7 @@ export const getSpecialtyRoster = query({
     const viewer = await tryResolveRamoViewer(ctx);
     if (!viewer) return null;
 
-    const { escoteiros, observedSection } = await visibleEscoteirosInRamoGroup(
+    const { escoteiros, observedSection } = await observedEscoteirosInRamoGroup(
       ctx,
       viewer,
       args.ramoGroup,

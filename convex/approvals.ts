@@ -9,9 +9,8 @@ import { readProgression, type LevelUpToast } from "./lib/progression";
 import { catalogActionCounts } from "../src/lib/progression-state";
 import {
   filterObservableSections,
-  filterToObservedSection,
   listSectionsOfGroup,
-  resolveObservedSection,
+  readObservedEscoteiros,
 } from "./lib/sections";
 import {
   approveConclusao,
@@ -134,18 +133,10 @@ export const getGroupStats = query({
     const activeMembers = filterActiveGrupoMembers(viewer.groupId, members);
 
     // The seção the escotista is observing narrows the lista de jovens (and
-    // the counts derived from it) — always applied after the ramo rule, so it
-    // can only ever remove escoteiros from what they already see.
-    const observedSection = await resolveObservedSection(
+    // the counts derived from it) — after the ramo rule, never widening it.
+    const { escoteiros, observedSection } = await readObservedEscoteiros(
       ctx,
-      viewer.user,
-      viewer.groupId,
-    );
-    const escoteiros = filterToObservedSection(
-      observedSection?._id ?? null,
-      filterVisibleEscoteiros(viewer, members).filter(
-        (m) => m.role === "escoteiro",
-      ),
+      viewer,
     );
     const escotistas = activeMembers.filter((m) => m.role === "escotista");
 

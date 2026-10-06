@@ -1,5 +1,6 @@
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import { filterVisibleEscoteiros, type RamoViewer } from "./ramoVisibility";
 
 export type Ramo = Doc<"sections">["ramo"];
 
@@ -77,7 +78,8 @@ export function filterObservableSections(
 }
 
 /**
- * Narrow a list of escoteiros to the observed seção. An escoteiro with no
+ * Narrow a list of escoteiros to the observed seção. Prefer
+ * readObservedEscoteiros, which applies it after visibilidade de ramo. An escoteiro with no
  * seção is kept: CONTEXT.md pins that an unplaced escoteiro falls back to
  * plain ramo visibility, so a grupo part-way through placing its escoteiros
  * never loses sight of them.
@@ -90,6 +92,48 @@ export function filterToObservedSection<
 >(sectionId: Id<"sections"> | null, escoteiros: T[]): T[] {
   if (!sectionId) return escoteiros;
   return escoteiros.filter((e) => !e.sectionId || e.sectionId === sectionId);
+}
+
+/** Upper bound on escoteiros per grupo read at once (same as the pending list). */
+const MAX_ESCOTEIROS = 500;
+
+/**
+ * The escoteiros an escotista is looking at right now: those visibilidade de
+ * ramo lets them see, narrowed by their seção observada (an unplaced
+ * escoteiro stays in). The one place the two rules are composed, in the only
+ * order allowed — visibility first, so observing a seção can never widen what
+ * an escotista sees. Pass `ramo` to keep one ramo's escoteiros only.
+ *
+ * Applied by the lista de jovens, the stats cohort and the especialidades tab.
+ * Not (yet) by the pending queue, the member list or the timeline, which stay
+ * grupo-wide within visibilidade de ramo.
+ */
+export async function readObservedEscoteiros(
+  ctx: QueryCtx | MutationCtx,
+  viewer: RamoViewer,
+  opts: { ramo?: Ramo } = {},
+): Promise<{
+  escoteiros: Doc<"users">[];
+  observedSection: Doc<"sections"> | null;
+}> {
+  const all = await ctx.db
+    .query("users")
+    .withIndex("by_groupId_and_role", (q) =>
+      q.eq("groupId", viewer.groupId).eq("role", "escoteiro"),
+    )
+    .take(MAX_ESCOTEIROS);
+  const visible = filterVisibleEscoteiros(viewer, all).filter(
+    (e) => !opts.ramo || e.ramo === opts.ramo,
+  );
+  const observedSection = await resolveObservedSection(
+    ctx,
+    viewer.user,
+    viewer.groupId,
+  );
+  return {
+    escoteiros: filterToObservedSection(observedSection?._id ?? null, visible),
+    observedSection,
+  };
 }
 
 /**
