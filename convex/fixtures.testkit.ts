@@ -35,13 +35,15 @@ export const modules = {
   "./users.ts": () => import("./users"),
 };
 
-export type TestConvex = ReturnType<typeof convexTest>;
 export type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
 
 /** A fresh in-memory backend. */
-export function newTest(): TestConvex {
+export function newTest() {
   return convexTest(schema, modules);
 }
+
+/** The schema-typed test backend `newTest()` returns. */
+export type TestConvex = ReturnType<typeof newTest>;
 
 /**
  * Act as `userId`. `withIdentity({ subject })` makes @convex-dev/auth's

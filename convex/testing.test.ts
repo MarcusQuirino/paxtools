@@ -1,39 +1,19 @@
 /// <reference types="bun" />
 import { test, expect } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api, internal } from "./_generated/api";
 import { snapshotProgression } from "./lib/progression";
 import { getRamoRules } from "../src/data/progression-rules";
+import { newTest } from "./fixtures.testkit";
 
 const TEST_EMAIL = "wipeme@test.paxtools.local";
 const REAL_EMAIL = "real@gmail.com";
 const RAMOS = ["lobinho", "escoteiro", "senior", "pioneiro"] as const;
 
-// Bun's test runner has no `import.meta.glob` (Vite-only). Enumerate
-// convex modules explicitly so the in-memory backend can load them.
-// At least one "_generated/" path must be present so convex-test can
-// locate the project root via findModulesRoot.
-const modules = {
-  "./_generated/api.js": () => import("./_generated/api.js"),
-  "./_generated/server.js": () => import("./_generated/server.js"),
-  "./approvals.ts": () => import("./approvals"),
-  "./auth.config.ts": () => import("./auth.config"),
-  "./auth.ts": () => import("./auth"),
-  "./groups.ts": () => import("./groups"),
-  "./http.ts": () => import("./http"),
-  "./onboarding.ts": () => import("./onboarding"),
-  "./plan.ts": () => import("./plan"),
-  "./progression.ts": () => import("./progression"),
-  "./testing.ts": () => import("./testing"),
-  "./users.ts": () => import("./users"),
-};
-
 test("wipeTestData removes only @test.paxtools.local users", async () => {
   const prev = process.env.TEST_AUTH;
   process.env.TEST_AUTH = "1";
   try {
-    const t = convexTest(schema, modules);
+    const t = newTest();
 
     const realId = await t.run(async (ctx) => {
       const real = await ctx.db.insert("users", {
@@ -70,7 +50,7 @@ test("seedSimulatedTroop covers all four ramos: stats, especialidades, IRR, pend
   const prev = process.env.TEST_AUTH;
   process.env.TEST_AUTH = "1";
   try {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await t.mutation(internal.testing.seedTestUsers, {});
     const res = await t.action(internal.testing.seedSimulatedTroop, {});
 
@@ -207,7 +187,7 @@ test("updateName rejects unauthenticated callers", async () => {
   const prev = process.env.TEST_AUTH;
   process.env.TEST_AUTH = "1";
   try {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await expect(
       t.mutation(api.users.updateName, { name: "Test Name" }),
     ).rejects.toThrow("Não autenticado");

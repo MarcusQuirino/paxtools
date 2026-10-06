@@ -1,53 +1,8 @@
 /// <reference types="bun" />
 import { describe, test, expect } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-
-// Bun's test runner has no `import.meta.glob` (Vite-only). Enumerate convex
-// modules explicitly so the in-memory backend can load them. At least one
-// "_generated/" path must be present so convex-test can find the project root.
-const modules = {
-  "./_generated/api.js": () => import("./_generated/api.js"),
-  "./_generated/server.js": () => import("./_generated/server.js"),
-  "./approvals.ts": () => import("./approvals"),
-  "./auth.config.ts": () => import("./auth.config"),
-  "./auth.ts": () => import("./auth"),
-  "./groups.ts": () => import("./groups"),
-  "./http.ts": () => import("./http"),
-  "./onboarding.ts": () => import("./onboarding"),
-  "./plan.ts": () => import("./plan"),
-  "./progression.ts": () => import("./progression"),
-  "./testing.ts": () => import("./testing"),
-  "./users.ts": () => import("./users"),
-};
-
-type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
-
-// `withIdentity({ subject: userId })` makes @convex-dev/auth's getAuthUserId
-// return `userId` (it splits the JWT subject on "|" and takes the first part).
-function as(t: ReturnType<typeof convexTest>, userId: Id<"users">) {
-  return t.withIdentity({ subject: userId });
-}
-
-async function insertUser(
-  t: ReturnType<typeof convexTest>,
-  fields: Partial<{
-    name: string;
-    email: string;
-    role: "escoteiro" | "escotista";
-    ramo: Ramo;
-    escotistaRamos: Ramo[];
-    groupId: Id<"groups">;
-    isAdmin: boolean;
-    membershipStatus: "pending" | "approved";
-    onboardingComplete: boolean;
-    bannedAt: number;
-  }> = {},
-): Promise<Id<"users">> {
-  return await t.run(async (ctx) => ctx.db.insert("users", { name: "U", ...fields }));
-}
+import { as, insertUser, newTest, type Ramo, type TestConvex } from "./fixtures.testkit";
 
 /**
  * Directly insert a plannedItem row, bypassing validation/positioning logic.
@@ -55,7 +10,7 @@ async function insertUser(
  * reads (#37) for a default (ramo-less → escoteiro) test user.
  */
 async function insertPlanned(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   userId: Id<"users">,
   itemKey: string,
   position: number,
@@ -68,7 +23,7 @@ async function insertPlanned(
 
 /** Read a single plannedItem row (by user + itemKey) for assertions. */
 async function getPlanned(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   userId: Id<"users">,
   itemKey: string,
 ) {
@@ -83,13 +38,13 @@ async function getPlanned(
 
 describe("getMyPlan", () => {
   test("returns [] for unauthenticated", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const res = await t.query(api.plan.getMyPlan, {});
     expect(res).toEqual([]);
   });
 
   test("returns the user's planned items ordered by position ascending", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t);
 
     // Insert out-of-order positions.
@@ -103,7 +58,7 @@ describe("getMyPlan", () => {
   });
 
   test("only returns the caller's own items", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const me = await insertUser(t);
     const other = await insertUser(t);
     await insertPlanned(t, me, "custom:mine", 0);
@@ -116,7 +71,7 @@ describe("getMyPlan", () => {
 
 describe("togglePlanned: key validation", () => {
   test("throws for keys failing ITEM_KEY_PATTERN", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t);
 
     await expect(
@@ -144,7 +99,7 @@ describe("togglePlanned: key validation", () => {
   });
 
   test("accepts valid keys (new 4-part action, legacy 3-part action, specialty, especialidade, custom)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t);
 
     const validKeys = [
@@ -167,7 +122,7 @@ describe("togglePlanned: key validation", () => {
 
 describe("togglePlanned: toggle behavior", () => {
   test("first toggle inserts at position 0 when plan empty; second toggle removes it", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t);
     const key = "action:escoteiro:aprendizagem-continua:fixed:0";
 
@@ -183,7 +138,7 @@ describe("togglePlanned: toggle behavior", () => {
   });
 
   test("positions increment: toggling key A then key B yields positions 0 then 1", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t);
     const keyA = "custom:a";
     const keyB = "custom:b";
@@ -200,7 +155,7 @@ describe("togglePlanned: toggle behavior", () => {
 
 describe("togglePlanned: MAX_PLANNED_ITEMS limit", () => {
   test("throws 'Limite de itens no plano atingido' once 500 items exist", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t);
 
     // Bulk-insert 500 planned items directly.
@@ -223,7 +178,7 @@ describe("togglePlanned: MAX_PLANNED_ITEMS limit", () => {
 
 describe("reorderPlan", () => {
   test("throws when the itemKey isn't planned for the user", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t);
     await expect(
       as(t, userId).mutation(api.plan.reorderPlan, {
@@ -235,7 +190,7 @@ describe("reorderPlan", () => {
   });
 
   test("with both before and after → midpoint position", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t);
     await insertPlanned(t, userId, "custom:before", 0);
     await insertPlanned(t, userId, "custom:target", 1);
@@ -253,7 +208,7 @@ describe("reorderPlan", () => {
   });
 
   test("with only before → before.position + 1", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t);
     await insertPlanned(t, userId, "custom:before", 5);
     await insertPlanned(t, userId, "custom:target", 0);
@@ -269,7 +224,7 @@ describe("reorderPlan", () => {
   });
 
   test("with only after → after.position - 1", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t);
     await insertPlanned(t, userId, "custom:after", 5);
     await insertPlanned(t, userId, "custom:target", 0);
@@ -285,7 +240,7 @@ describe("reorderPlan", () => {
   });
 
   test("with neither before nor after → throws 'Reordenação inválida'", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t);
     await insertPlanned(t, userId, "custom:target", 0);
 
@@ -306,7 +261,7 @@ describe("reorderPlan", () => {
   // behavior: a midpoint that equals an unrelated row's position is written
   // as-is, producing duplicate positions (no uniqueness enforcement).
   test("midpoint can collide with an existing row's position (current behavior)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t);
     await insertPlanned(t, userId, "custom:before", 0);
     await insertPlanned(t, userId, "custom:mid", 2); // unrelated row sitting at 2
@@ -334,7 +289,7 @@ describe("reorderPlan", () => {
 
 describe("ramo-scoped plano (#37)", () => {
   test("getMyPlan returns only the current ramo's planned items", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
     await t.run(async (ctx) => {
       await ctx.db.insert("plannedItems", {
@@ -359,7 +314,7 @@ describe("ramo-scoped plano (#37)", () => {
   });
 
   test("togglePlanned stamps the acting user's ramo, and the same key in another ramo is independent", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t, { role: "escoteiro", ramo: "lobinho" });
     // A pre-existing escoteiro row with the SAME itemKey must not be toggled off.
     await t.run(async (ctx) => {

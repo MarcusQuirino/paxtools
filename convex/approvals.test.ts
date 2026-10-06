@@ -1,58 +1,13 @@
 /// <reference types="bun" />
 import { describe, test, expect } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { getEixosForRamo } from "../src/data/progression-data";
-
-// Bun's test runner has no `import.meta.glob` (Vite-only). Enumerate convex
-// modules explicitly so the in-memory backend can load them. At least one
-// "_generated/" path must be present so convex-test can find the project root.
-const modules = {
-  "./_generated/api.js": () => import("./_generated/api.js"),
-  "./_generated/server.js": () => import("./_generated/server.js"),
-  "./approvals.ts": () => import("./approvals"),
-  "./auth.config.ts": () => import("./auth.config"),
-  "./auth.ts": () => import("./auth"),
-  "./groups.ts": () => import("./groups"),
-  "./http.ts": () => import("./http"),
-  "./onboarding.ts": () => import("./onboarding"),
-  "./plan.ts": () => import("./plan"),
-  "./progression.ts": () => import("./progression"),
-  "./testing.ts": () => import("./testing"),
-  "./users.ts": () => import("./users"),
-};
-
-type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
-
-// `withIdentity({ subject: userId })` makes @convex-dev/auth's getAuthUserId
-// return `userId` (it splits the JWT subject on "|" and takes the first part).
-function as(t: ReturnType<typeof convexTest>, userId: Id<"users">) {
-  return t.withIdentity({ subject: userId });
-}
-
-async function insertUser(
-  t: ReturnType<typeof convexTest>,
-  fields: Partial<{
-    name: string;
-    email: string;
-    role: "escoteiro" | "escotista";
-    ramo: Ramo;
-    escotistaRamos: Ramo[];
-    groupId: Id<"groups">;
-    isAdmin: boolean;
-    membershipStatus: "pending" | "approved";
-    onboardingComplete: boolean;
-    bannedAt: number;
-  }> = {},
-): Promise<Id<"users">> {
-  return await t.run(async (ctx) => ctx.db.insert("users", { name: "U", ...fields }));
-}
+import { as, insertUser, newTest, type Ramo, type TestConvex } from "./fixtures.testkit";
 
 /** Seed a group owned by a fresh admin escotista; returns ids. */
 async function seedGroup(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   opts: { ramoNames?: Record<string, string> } = {},
 ) {
   const adminId = await insertUser(t, {
@@ -88,7 +43,7 @@ async function seedGroup(
 
 /** Insert an approved escoteiro into the group. */
 async function seedEscoteiro(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   groupId: Id<"groups">,
   ramo: Ramo = "escoteiro",
   extra: Partial<{
@@ -115,7 +70,7 @@ const CATALOG_ACTION_IDS = getEixosForRamo("escoteiro").flatMap((e) =>
 let nextAction = 0;
 
 async function insertAction(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   userId: Id<"users">,
   status: "pending" | "approved" | undefined = "pending",
   actionId = CATALOG_ACTION_IDS[nextAction++ % CATALOG_ACTION_IDS.length]!,
@@ -131,7 +86,7 @@ async function insertAction(
 }
 
 async function insertIrr(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   userId: Id<"users">,
   status: "pending" | "approved" | undefined = "pending",
   ramo: "lobinho" | "escoteiro" | "senior" | "pioneiro" = "escoteiro",
@@ -148,7 +103,7 @@ async function insertIrr(
 }
 
 async function insertCustom(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   userId: Id<"users">,
   opts: {
     completed?: boolean;
@@ -173,7 +128,7 @@ async function insertCustom(
 
 describe("approveAction / approveIrrItem", () => {
   test("approveAction throws 'Não encontrado' for a dangling id", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     const id = await insertAction(t, esc);
@@ -184,7 +139,7 @@ describe("approveAction / approveIrrItem", () => {
   });
 
   test("approveAction throws 'não está pendente' when status is approved", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     const id = await insertAction(t, esc, "approved");
@@ -194,7 +149,7 @@ describe("approveAction / approveIrrItem", () => {
   });
 
   test("approveAction sets status=approved, approvedBy=caller, approvedAt", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     const id = await insertAction(t, esc);
@@ -206,7 +161,7 @@ describe("approveAction / approveIrrItem", () => {
   });
 
   test("approveIrrItem: dangling -> 'Não encontrado'; approved -> 'não está pendente'; success", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
 
@@ -230,7 +185,7 @@ describe("approveAction / approveIrrItem", () => {
   });
 
   test("same-group approved escotista (non-admin, matching ramo) can approve", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     const escotista = await insertUser(t, {
       role: "escotista",
@@ -254,7 +209,7 @@ describe("approveAction / approveIrrItem", () => {
 
 describe("approveCustomAction", () => {
   test("requires completed===true AND status==='pending'", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
 
@@ -280,7 +235,7 @@ describe("approveCustomAction", () => {
   });
 
   test("dangling id -> 'Não encontrado'", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     const id = await insertCustom(t, esc);
@@ -297,7 +252,7 @@ describe("approveCustomAction", () => {
 
 describe("rejectAction / rejectIrrItem (delete)", () => {
   test("rejectAction deletes the row", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     const id = await insertAction(t, esc);
@@ -307,7 +262,7 @@ describe("rejectAction / rejectIrrItem (delete)", () => {
   });
 
   test("rejectIrrItem deletes the row", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     const id = await insertIrr(t, esc);
@@ -317,7 +272,7 @@ describe("rejectAction / rejectIrrItem (delete)", () => {
   });
 
   test("rejectAction: dangling -> 'Não encontrado'; not pending -> 'não está pendente'", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
 
@@ -341,7 +296,7 @@ describe("rejectAction / rejectIrrItem (delete)", () => {
   // info-leak in functions the spec calls security-critical. Pinning current
   // behavior.
   test("rejectAction leaks existence: unauthenticated + dangling id -> 'Não encontrado'", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     const gone = await insertAction(t, esc);
@@ -355,7 +310,7 @@ describe("rejectAction / rejectIrrItem (delete)", () => {
 
 describe("rejectCustomAction (patch, not delete)", () => {
   test("does NOT delete; sets completed=false, status=undefined", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     const id = await insertCustom(t, esc, { completed: true, status: "pending" });
@@ -369,7 +324,7 @@ describe("rejectCustomAction (patch, not delete)", () => {
   });
 
   test("requires completed && pending: completed=false -> 'não está pendente'", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     const id = await insertCustom(t, esc, { completed: false, status: "pending" });
@@ -385,7 +340,7 @@ describe("rejectCustomAction (patch, not delete)", () => {
 
 describe("cross-group authorization", () => {
   test("approveAction: escotista from a DIFFERENT group is rejected", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     // Group A with its admin.
     const { adminId: adminA } = await seedGroup(t);
     // A separate group B with an escoteiro owning a pending row.
@@ -407,7 +362,7 @@ describe("cross-group authorization", () => {
   });
 
   test("rejectAction: escotista from a DIFFERENT group is rejected", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId: adminA } = await seedGroup(t);
     const groupB = await t.run(async (ctx) =>
       ctx.db.insert("groups", {
@@ -436,7 +391,7 @@ describe("cross-group authorization", () => {
 
 describe("ramo authorization", () => {
   test("non-admin escotista without the target's ramo is rejected", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     // escotista covers only 'senior'.
     const escotista = await insertUser(t, {
@@ -455,7 +410,7 @@ describe("ramo authorization", () => {
   });
 
   test("admin escotista bypasses the ramo check", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t); // admin escotistaRamos=['escoteiro']
     // target is a 'senior' escoteiro -> outside admin's ramos, but admin bypasses.
     const esc = await seedEscoteiro(t, groupId, "senior");
@@ -466,7 +421,7 @@ describe("ramo authorization", () => {
   });
 
   test("approving a banned escoteiro's stale pending conclusão fails", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId, "escoteiro");
     const id = await insertAction(t, esc); // pending row left behind by the ban
@@ -479,7 +434,7 @@ describe("ramo authorization", () => {
   });
 
   test("rejecting a banned escoteiro's stale pending conclusão fails", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId, "escoteiro");
     const id = await insertAction(t, esc);
@@ -492,7 +447,7 @@ describe("ramo authorization", () => {
   });
 
   test("unstamped (undefined) membershipStatus caller can approve an in-ramo escoteiro", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     // Legacy escotista: membershipStatus was never stamped.
     const escotista = await insertUser(t, {
@@ -514,7 +469,7 @@ describe("ramo authorization", () => {
 
 describe("bulkAction", () => {
   test("approve: approves all pending action/lis/custom rows", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     const a = await insertAction(t, esc);
@@ -540,7 +495,7 @@ describe("bulkAction", () => {
   });
 
   test("reject: deletes action/lis rows; resets custom actions", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     const a = await insertAction(t, esc);
@@ -568,7 +523,7 @@ describe("bulkAction", () => {
   });
 
   test("non-pending rows are skipped (no throw)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     const approvedAction = await insertAction(t, esc, "approved");
@@ -597,7 +552,7 @@ describe("bulkAction", () => {
   });
 
   test("customActionIds is optional (omitted)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     const a = await insertAction(t, esc);
@@ -618,14 +573,14 @@ describe("bulkAction", () => {
 
 describe("getPendingForGroup", () => {
   test("returns [] for unauthenticated", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await seedGroup(t);
     const res = await t.query(api.approvals.getPendingForGroup, {});
     expect(res).toEqual([]);
   });
 
   test("returns [] for a non-escotista (escoteiro caller)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     const res = await as(t, esc).query(api.approvals.getPendingForGroup, {});
@@ -633,7 +588,7 @@ describe("getPendingForGroup", () => {
   });
 
   test("returns [] for an escotista with no group", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escotista = await insertUser(t, {
       role: "escotista",
       escotistaRamos: ["escoteiro"],
@@ -643,7 +598,7 @@ describe("getPendingForGroup", () => {
   });
 
   test("admin sees one entry per escoteiro with >0 pending; totalPending correct", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     await insertAction(t, esc);
@@ -660,7 +615,7 @@ describe("getPendingForGroup", () => {
   });
 
   test("only COMPLETED custom actions count; a not-completed-only escoteiro is absent", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     // Only a not-completed custom action (status pending) -> filtered out.
@@ -671,7 +626,7 @@ describe("getPendingForGroup", () => {
   });
 
   test("banned and non-approved escoteiros are excluded", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
 
     const banned = await seedEscoteiro(t, groupId, "escoteiro", { bannedAt: 123 });
@@ -687,7 +642,7 @@ describe("getPendingForGroup", () => {
   });
 
   test("non-admin escotista only sees escoteiros within escotistaRamos", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     const escotista = await insertUser(t, {
       role: "escotista",
@@ -707,7 +662,7 @@ describe("getPendingForGroup", () => {
   });
 
   test("unstamped (undefined membershipStatus) escotista caller gets results", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     // Legacy escotista row: membershipStatus was never stamped.
     const escotista = await insertUser(t, {
@@ -722,7 +677,7 @@ describe("getPendingForGroup", () => {
   });
 
   test("legacy grupo-creator (isAdmin unset) sees every ramo's escoteiros", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     // Creator predating the isAdmin flag: admin only via group.createdBy.
     const creator = await insertUser(t, {
@@ -739,7 +694,7 @@ describe("getPendingForGroup", () => {
   });
 
   test("banned escotista caller gets [] (not an error)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     const banned = await insertUser(t, {
       role: "escotista",
@@ -755,7 +710,7 @@ describe("getPendingForGroup", () => {
   });
 
   test("ramo-less escoteiro's pendências are visible to admins only", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const nonAdmin = await insertUser(t, {
       role: "escotista",
@@ -786,7 +741,7 @@ describe("getPendingForGroup", () => {
 
 describe("getGroupStats", () => {
   test("returns null for a non-escotista", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     const res = await as(t, esc).query(api.approvals.getGroupStats, {});
@@ -794,7 +749,7 @@ describe("getGroupStats", () => {
   });
 
   test("returns null for an escotista with no group", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escotista = await insertUser(t, {
       role: "escotista",
       escotistaRamos: ["escoteiro"],
@@ -806,7 +761,7 @@ describe("getGroupStats", () => {
   // The escotista painel builds the "38/RS" identity from this query, not from
   // groups.getMyGroup — so the fallback has to hold here too.
   test("carries the group's numeral and região, null when there is none", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
 
     const before = await as(t, adminId).query(api.approvals.getGroupStats, {});
@@ -819,7 +774,7 @@ describe("getGroupStats", () => {
   });
 
   test("returns counts and exposes group.password for an admin", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     // 1 escoteiro + the admin escotista already in the group.
     const esc = await seedEscoteiro(t, groupId);
@@ -843,7 +798,7 @@ describe("getGroupStats", () => {
   });
 
   test("counts only the escoteiro's current-ramo ações (a past ramo never inflates them)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const esc = await seedEscoteiro(t, groupId);
     await insertAction(t, esc, "approved");
@@ -860,7 +815,7 @@ describe("getGroupStats", () => {
   });
 
   test("non-admin escotista's escoteiroStats is ramo-filtered", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     const escotista = await insertUser(t, {
       role: "escotista",
@@ -882,7 +837,7 @@ describe("getGroupStats", () => {
   });
 
   test("totalMembers/escotistaStats stay grupo-wide for a non-admin viewer", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escotista = await insertUser(t, {
       role: "escotista",
@@ -908,7 +863,7 @@ describe("getGroupStats", () => {
   });
 
   test("legacy grupo-creator (isAdmin unset) gets isAdmin=true and sees all ramos", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     const creator = await insertUser(t, {
       role: "escotista",
@@ -926,7 +881,7 @@ describe("getGroupStats", () => {
   });
 
   test("banned escotista caller gets null (not an error)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     const banned = await insertUser(t, {
       role: "escotista",
@@ -946,7 +901,7 @@ describe("getGroupStats", () => {
 
 describe("getGroupStats: seção observada", () => {
   /** Grupo with two seções of the same ramo and one escoteiro in each. */
-  async function seedTwoSections(t: ReturnType<typeof convexTest>) {
+  async function seedTwoSections(t: TestConvex) {
     const { adminId, groupId } = await seedGroup(t);
     const norte = await as(t, adminId).mutation(api.groups.addSection, {
       name: "Tropa Norte",
@@ -970,7 +925,7 @@ describe("getGroupStats: seção observada", () => {
   }
 
   test("with no seção observed the whole grupo is listed", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, doNorte, doSul } = await seedTwoSections(t);
     const res = await as(t, adminId).query(api.approvals.getGroupStats, {});
     expect(res?.observedSection).toBeNull();
@@ -980,7 +935,7 @@ describe("getGroupStats: seção observada", () => {
   });
 
   test("observing a seção narrows the list and its counts to that seção", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, norte, doNorte, doSul } = await seedTwoSections(t);
     await insertAction(t, doNorte, "pending");
     await insertAction(t, doSul, "pending");
@@ -1002,7 +957,7 @@ describe("getGroupStats: seção observada", () => {
   // CONTEXT.md: an unplaced escoteiro falls back to plain ramo visibility, so
   // a grupo mid-way through placing its escoteiros never loses sight of them.
   test("an escoteiro with no seção stays visible under any observed seção", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId, norte } = await seedTwoSections(t);
     const semSecao = await seedEscoteiro(t, groupId, "escoteiro");
     await as(t, adminId).mutation(api.groups.setObservedSection, {
@@ -1019,7 +974,7 @@ describe("getGroupStats: seção observada", () => {
   // setObservedSection would accept — otherwise the UI offers a seção the
   // server then refuses.
   test("observableSections offers a non-admin only their own ramos", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId, norte, sul } = await seedTwoSections(t);
     const alcateia = await as(t, adminId).mutation(api.groups.addSection, {
       name: "Alcateia",
@@ -1047,7 +1002,7 @@ describe("getGroupStats: seção observada", () => {
   // Otherwise the picker would read "Todas as seções" while the list below it
   // is still narrowed to a seção the escotista can no longer pick.
   test("observableSections keeps the observed seção after the ramos change", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId, norte } = await seedTwoSections(t);
     const escotista = await insertUser(t, {
       role: "escotista",
@@ -1071,8 +1026,8 @@ describe("getGroupStats: seção observada", () => {
 
   // A seção filter narrows what an escotista sees; it never widens it.
   test("the ramo rule still applies inside the observed seção", async () => {
-    const t = convexTest(schema, modules);
-    const { adminId, groupId, norte, doNorte } = await seedTwoSections(t);
+    const t = newTest();
+    const { groupId, norte, doNorte } = await seedTwoSections(t);
     const escotista = await insertUser(t, {
       role: "escotista",
       escotistaRamos: ["escoteiro"],
@@ -1098,7 +1053,7 @@ describe("getGroupStats: seção observada", () => {
 
 describe("cross-surface consistency", () => {
   test("getPendingForGroup and getGroupMembers expose the same escoteiros to a non-admin escotista", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     // Non-admin viewer accompanying a single ramo.
     const viewer = await insertUser(t, {

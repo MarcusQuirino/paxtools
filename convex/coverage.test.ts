@@ -1,34 +1,12 @@
 /// <reference types="bun" />
 import { describe, test, expect } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import type { Id } from "./_generated/dataModel";
 import { snapshotProgression } from "./lib/progression";
-
-// Per-file modules map (Bun has no import.meta.glob). At least one
-// "_generated/" path is required so convex-test finds the project root.
-const modules = {
-  "./_generated/api.js": () => import("./_generated/api.js"),
-  "./_generated/server.js": () => import("./_generated/server.js"),
-  "./approvals.ts": () => import("./approvals"),
-  "./auth.config.ts": () => import("./auth.config"),
-  "./auth.ts": () => import("./auth"),
-  "./groups.ts": () => import("./groups"),
-  "./http.ts": () => import("./http"),
-  "./onboarding.ts": () => import("./onboarding"),
-  "./plan.ts": () => import("./plan"),
-  "./progression.ts": () => import("./progression"),
-  "./testing.ts": () => import("./testing"),
-  "./users.ts": () => import("./users"),
-};
-// NOTE: do NOT list "./stats.ts" here — it does not exist until Task 3, and a
-// phantom module path makes convex-test throw ERR_MODULE_NOT_FOUND (Step 2
-// would fail for the wrong reason). coverage.test.ts calls the helpers via
-// t.run, never via api.stats, so it needs no stats module.
+import { newTest, type TestConvex } from "./fixtures.testkit";
 
 describe("snapshotProgression completedBlockCount (Task 1)", () => {
   test("works under a QueryCtx (run) and reports zero blocks for a fresh escoteiro", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const escoteiro: Id<"users"> = await t.run(async (ctx) =>
       ctx.db.insert("users", { name: "E", role: "escoteiro", ramo: "escoteiro" }),
     );
@@ -44,7 +22,7 @@ const A_FIX0 = "escoteiro:aprendizagem-continua:fixed:0";
 const A_FIX1 = "escoteiro:aprendizagem-continua:fixed:1";
 const A_VAR0 = "escoteiro:aprendizagem-continua:variable:0";
 
-async function seedCoverage(t: ReturnType<typeof convexTest>) {
+async function seedCoverage(t: TestConvex) {
   const adminId: Id<"users"> = await t.run((ctx) =>
     ctx.db.insert("users", {
       name: "Admin", role: "escotista", escotistaRamos: ["escoteiro"],
@@ -88,7 +66,7 @@ async function seedCoverage(t: ReturnType<typeof convexTest>) {
 
 describe("computeRamoCoverage (Task 2)", () => {
   test("counts approved only, excludes banned/other-ramo, computes counts", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedCoverage(t);
     const cov: RamoCoverage = await t.run((ctx) =>
       computeRamoCoverage(ctx, { groupId, ramo: "escoteiro" }),
@@ -104,7 +82,7 @@ describe("computeRamoCoverage (Task 2)", () => {
   });
 
   test("topGapsFixed ASC, neglectedVariable ASC, mostDone DESC by completedCount", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedCoverage(t);
     const cov = await t.run((ctx) =>
       computeRamoCoverage(ctx, { groupId, ramo: "escoteiro" }),
@@ -123,7 +101,7 @@ describe("computeRamoCoverage (Task 2)", () => {
   });
 
   test("eixo coveragePct and avg completion match the pinned formulas", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedCoverage(t);
     const cov = await t.run((ctx) =>
       computeRamoCoverage(ctx, { groupId, ramo: "escoteiro" }),
@@ -140,7 +118,7 @@ describe("computeRamoCoverage (Task 2)", () => {
   });
 
   test("empty ramo (no scouts) returns zeros, not NaN", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedCoverage(t);
     const cov = await t.run((ctx) =>
       computeRamoCoverage(ctx, { groupId, ramo: "pioneiro" }),
@@ -152,7 +130,7 @@ describe("computeRamoCoverage (Task 2)", () => {
   });
 
   test("stageDistribution sums to scoutCount and contains all stage ids", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedCoverage(t);
     const cov = await t.run((ctx) =>
       computeRamoCoverage(ctx, { groupId, ramo: "escoteiro" }),
@@ -169,7 +147,7 @@ describe("computeRamoCoverage (Task 2)", () => {
   // A regression to `=== "approved"` would drop this row (undefined !== "approved")
   // and make completedCount 0, failing the assertion.
   test("omitted status (undefined) counts as approved — regression guard", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const adminId: Id<"users"> = await t.run((ctx) =>
       ctx.db.insert("users", {
         name: "Admin2", role: "escotista", escotistaRamos: ["escoteiro"],
@@ -211,7 +189,7 @@ describe("computeRamoCoverage (Task 2)", () => {
   // Catches wrong denominator, wrong activity subset, or off-by-one without
   // hardcoding catalog sizes (any catalog change keeps the test valid).
   test("eixo aggregates match independent recomputation from per-activity data", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedCoverage(t);
     const cov = await t.run((ctx) =>
       computeRamoCoverage(ctx, { groupId, ramo: "escoteiro" }),
@@ -244,7 +222,7 @@ describe("computeRamoCoverage (Task 2)", () => {
   // Gap 3: duplicate completion rows for the same scout/action must count once;
   // a foreign actionId not in the catalog must be silently dropped.
   test("duplicate rows count once per scout; foreign actionId does not inflate counts", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const adminId: Id<"users"> = await t.run((ctx) =>
       ctx.db.insert("users", {
         name: "Admin3", role: "escotista", escotistaRamos: ["escoteiro"],
@@ -298,7 +276,7 @@ describe("computeRamoCoverage (Task 2)", () => {
   // Gap 4: among equal-completedCount entries in mostDone (e.g. the many
   // zero-count actions), actionId must be in ascending order (tie-break rule).
   test("mostDone ties broken by actionId ascending", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedCoverage(t);
     const cov = await t.run((ctx) =>
       computeRamoCoverage(ctx, { groupId, ramo: "escoteiro" }),

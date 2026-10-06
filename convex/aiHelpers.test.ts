@@ -1,37 +1,17 @@
 /// <reference types="bun" />
 import { describe, test, expect } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { internal, api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { as, newTest, type Ramo, type TestConvex } from "./fixtures.testkit";
 
-// Bun has no import.meta.glob — enumerate modules explicitly. NOTE: ai.ts is a
-// "use node" file and is intentionally NOT listed; these tests only exercise
-// the V8-runtime helpers.
-const modules = {
-  "./_generated/api.js": () => import("./_generated/api.js"),
-  "./_generated/server.js": () => import("./_generated/server.js"),
-  "./aiHelpers.ts": () => import("./aiHelpers"),
-  "./auth.config.ts": () => import("./auth.config"),
-  "./auth.ts": () => import("./auth"),
-  "./featureFlags.ts": () => import("./featureFlags"),
-  "./http.ts": () => import("./http"),
-};
-
-type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
-
-function as(t: ReturnType<typeof convexTest>, userId: Id<"users">) {
-  return t.withIdentity({ subject: userId });
-}
-
-async function enableAiFlag(t: ReturnType<typeof convexTest>) {
+async function enableAiFlag(t: TestConvex) {
   await t.mutation(internal.featureFlags.setFlag, {
     key: "ai_suggestions",
     enabled: true,
   });
 }
 
-async function seedGroupWithAdmin(t: ReturnType<typeof convexTest>) {
+async function seedGroupWithAdmin(t: TestConvex) {
   const adminId = await t.run(async (ctx) =>
     ctx.db.insert("users", { name: "Admin", role: "escotista", escotistaRamos: ["escoteiro"], onboardingComplete: true }),
   );
@@ -45,7 +25,7 @@ async function seedGroupWithAdmin(t: ReturnType<typeof convexTest>) {
 }
 
 async function seedEscotista(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   groupId: Id<"groups">,
   ramos: Ramo[],
 ) {
@@ -63,7 +43,7 @@ async function seedEscotista(
 
 describe("ai_suggestions feature flag", () => {
   test("prepareSuggestion throws while the flag is off (default)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroupWithAdmin(t);
     const escId = await seedEscotista(t, groupId, ["escoteiro"]);
     await expect(
@@ -72,7 +52,7 @@ describe("ai_suggestions feature flag", () => {
   });
 
   test("getCachedSuggestion returns null while the flag is off, even with a cached row", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroupWithAdmin(t);
     const escId = await seedEscotista(t, groupId, ["escoteiro"]);
     await t.mutation(internal.aiHelpers.saveSuggestion, {
@@ -86,7 +66,7 @@ describe("ai_suggestions feature flag", () => {
   });
 
   test("isEnabled reflects setFlag on/off", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     expect(await t.query(api.featureFlags.isEnabled, { key: "ai_suggestions" })).toBe(false);
     await enableAiFlag(t);
     expect(await t.query(api.featureFlags.isEnabled, { key: "ai_suggestions" })).toBe(true);
@@ -97,7 +77,7 @@ describe("ai_suggestions feature flag", () => {
 
 describe("prepareSuggestion authz", () => {
   test("escotista in ramo gets coverage for that ramo", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await enableAiFlag(t);
     const { groupId } = await seedGroupWithAdmin(t);
     const escId = await seedEscotista(t, groupId, ["escoteiro"]);
@@ -111,7 +91,7 @@ describe("prepareSuggestion authz", () => {
   });
 
   test("non-admin asking for a ramo outside escotistaRamos is rejected on both AI surfaces", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await enableAiFlag(t);
     const { groupId } = await seedGroupWithAdmin(t);
     const escId = await seedEscotista(t, groupId, ["escoteiro"]);
@@ -126,7 +106,7 @@ describe("prepareSuggestion authz", () => {
   });
 
   test("escotista with no ramos and omitted ramo gets 'Selecione um ramo'", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await enableAiFlag(t);
     const { groupId } = await seedGroupWithAdmin(t);
     const escId = await seedEscotista(t, groupId, []);
@@ -139,7 +119,7 @@ describe("prepareSuggestion authz", () => {
   });
 
   test("legacy grupo-creator (isAdmin unset) gets admin scope on AI", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await enableAiFlag(t);
     // Creator predating the isAdmin flag: createdBy points at them, flag unset.
     const creatorId = await t.run(async (ctx) =>
@@ -178,7 +158,7 @@ describe("prepareSuggestion authz", () => {
   });
 
   test("admin may request any ramo", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await enableAiFlag(t);
     const { adminId } = await seedGroupWithAdmin(t);
     const out = await as(t, adminId).mutation(internal.aiHelpers.prepareSuggestion, {
@@ -188,7 +168,7 @@ describe("prepareSuggestion authz", () => {
   });
 
   test("omitted ramo defaults to caller's first escotistaRamos entry", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await enableAiFlag(t);
     const { groupId } = await seedGroupWithAdmin(t);
     const escId = await seedEscotista(t, groupId, ["senior", "pioneiro"]);
@@ -199,7 +179,7 @@ describe("prepareSuggestion authz", () => {
 
 describe("saveSuggestion + getCachedSuggestion + rate limit", () => {
   test("save then read back the cached row; re-prepare within 30s throws", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await enableAiFlag(t);
     const { groupId } = await seedGroupWithAdmin(t);
     const escId = await seedEscotista(t, groupId, ["escoteiro"]);
@@ -225,7 +205,7 @@ describe("saveSuggestion + getCachedSuggestion + rate limit", () => {
   });
 
   test("prepare claims the cooldown atomically: a second prepare right after the first throws", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await enableAiFlag(t);
     const { groupId } = await seedGroupWithAdmin(t);
     const escId = await seedEscotista(t, groupId, ["escoteiro"]);
@@ -239,7 +219,7 @@ describe("saveSuggestion + getCachedSuggestion + rate limit", () => {
   });
 
   test("getCachedSuggestion returns null for a claim stub without content", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await enableAiFlag(t);
     const { groupId } = await seedGroupWithAdmin(t);
     const escId = await seedEscotista(t, groupId, ["escoteiro"]);
@@ -249,7 +229,7 @@ describe("saveSuggestion + getCachedSuggestion + rate limit", () => {
   });
 
   test("getCachedSuggestion returns null when nothing cached", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await enableAiFlag(t);
     const { groupId } = await seedGroupWithAdmin(t);
     const escId = await seedEscotista(t, groupId, ["escoteiro"]);
@@ -258,7 +238,7 @@ describe("saveSuggestion + getCachedSuggestion + rate limit", () => {
   });
 
   test("second saveSuggestion replaces rather than duplicates (one row)", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroupWithAdmin(t);
 
     await t.mutation(internal.aiHelpers.saveSuggestion, {

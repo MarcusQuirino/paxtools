@@ -1,57 +1,11 @@
 /// <reference types="bun" />
 import { describe, test, expect } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
-
-// Bun's test runner has no `import.meta.glob` (Vite-only). Enumerate convex
-// modules explicitly so the in-memory backend can load them. At least one
-// "_generated/" path must be present so convex-test can find the project root.
-const modules = {
-  "./_generated/api.js": () => import("./_generated/api.js"),
-  "./_generated/server.js": () => import("./_generated/server.js"),
-  "./approvals.ts": () => import("./approvals"),
-  "./auth.config.ts": () => import("./auth.config"),
-  "./auth.ts": () => import("./auth"),
-  "./groups.ts": () => import("./groups"),
-  "./http.ts": () => import("./http"),
-  "./onboarding.ts": () => import("./onboarding"),
-  "./plan.ts": () => import("./plan"),
-  "./progression.ts": () => import("./progression"),
-  "./testing.ts": () => import("./testing"),
-  "./users.ts": () => import("./users"),
-};
-
-type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
-
-// `withIdentity({ subject: userId })` makes @convex-dev/auth's getAuthUserId
-// return `userId` (it splits the JWT subject on "|" and takes the first part).
-function as(t: ReturnType<typeof convexTest>, userId: Id<"users">) {
-  return t.withIdentity({ subject: userId });
-}
-
-async function insertUser(
-  t: ReturnType<typeof convexTest>,
-  fields: Partial<{
-    name: string;
-    email: string;
-    role: "escoteiro" | "escotista";
-    ramo: Ramo;
-    escotistaRamos: Ramo[];
-    groupId: Id<"groups">;
-    isAdmin: boolean;
-    membershipStatus: "pending" | "approved";
-    onboardingComplete: boolean;
-    bannedAt: number;
-  }> = {},
-): Promise<Id<"users">> {
-  return await t.run(async (ctx) => ctx.db.insert("users", { name: "U", ...fields }));
-}
+import { as, insertUser, newTest, type TestConvex } from "./fixtures.testkit";
 
 /** Seed a group owned by a fresh admin escotista; returns ids. */
 async function seedGroup(
-  t: ReturnType<typeof convexTest>,
+  t: TestConvex,
   opts: { ramoNames?: Record<string, string> } = {},
 ) {
   const adminId = await insertUser(t, {
@@ -83,13 +37,13 @@ async function seedGroup(
 
 describe("viewer", () => {
   test("returns null when unauthenticated", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const res = await t.query(api.users.viewer, {});
     expect(res).toBeNull();
   });
 
   test("returns the user doc when authenticated", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t, { name: "Alice" });
     const res = await as(t, userId).query(api.users.viewer, {});
     expect(res?._id).toBe(userId);
@@ -99,7 +53,7 @@ describe("viewer", () => {
 
 describe("updateName", () => {
   test("trims and patches the name", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t, { name: "Old" });
     await as(t, userId).mutation(api.users.updateName, { name: "  New Name  " });
     const user = await t.run(async (ctx) => ctx.db.get(userId));
@@ -107,7 +61,7 @@ describe("updateName", () => {
   });
 
   test("throws for empty / whitespace name", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t, {});
     await expect(
       as(t, userId).mutation(api.users.updateName, { name: "   " }),
@@ -115,7 +69,7 @@ describe("updateName", () => {
   });
 
   test("throws for name longer than 100 chars", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const userId = await insertUser(t, {});
     await expect(
       as(t, userId).mutation(api.users.updateName, { name: "x".repeat(101) }),
@@ -123,7 +77,7 @@ describe("updateName", () => {
   });
 
   test("throws when unauthenticated", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     await expect(
       t.mutation(api.users.updateName, { name: "x" }),
     ).rejects.toThrow("Não autenticado");
@@ -132,7 +86,7 @@ describe("updateName", () => {
 
 describe("toggleFavoriteEscoteiro", () => {
   test("throws unless caller is an escotista", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { groupId } = await seedGroup(t);
     const escoteiro = await insertUser(t, {
       role: "escoteiro",
@@ -154,7 +108,7 @@ describe("toggleFavoriteEscoteiro", () => {
   });
 
   test("throws when target is missing or not an escoteiro", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const otherEscotista = await insertUser(t, {
       role: "escotista",
@@ -170,7 +124,7 @@ describe("toggleFavoriteEscoteiro", () => {
   });
 
   test("throws when target is not in the caller's group", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId } = await seedGroup(t);
     // escoteiro in a different (no) group.
     const outsider = await insertUser(t, {
@@ -185,7 +139,7 @@ describe("toggleFavoriteEscoteiro", () => {
   });
 
   test("toggles add then remove", async () => {
-    const t = convexTest(schema, modules);
+    const t = newTest();
     const { adminId, groupId } = await seedGroup(t);
     const escoteiro = await insertUser(t, {
       role: "escoteiro",
