@@ -1,7 +1,7 @@
 /**
  * M13 — Full onboarding completion via the JOIN-GROUP path (issue #58, story 52).
  *
- * Persona: `onboarding-m13` (onboarding-m13@test.paxtools.local), a DEDICATED
+ * Persona: `onboarding-m13`, a DEDICATED
  * onboarding persona owned solely by this spec (see tests/utils/personas.ts).
  * It starts not-onboarded (role=null, onboardingComplete=false, no group).
  *
@@ -24,8 +24,9 @@
 
 import { testAs, expect } from "../../fixtures/auth";
 import { resetOnboardingUser } from "../../utils/convex-cli";
+import { login } from "../../utils/personas";
 
-const M13_EMAIL = "onboarding-m13@test.paxtools.local";
+const M13_ID = login("onboarding-m13");
 const GROUP_PASSWORD = "TESTQA";
 
 const test = testAs("onboarding-m13");
@@ -33,7 +34,7 @@ const test = testAs("onboarding-m13");
 test.beforeEach(async () => {
   // Reset ONLY this persona → not-onboarded. Session row is patched, not
   // recreated, so the captured storageState remains valid afterwards.
-  await resetOnboardingUser(M13_EMAIL);
+  await resetOnboardingUser(M13_ID);
 });
 
 test("escoteiro completes onboarding via role → ramo → join group", async ({

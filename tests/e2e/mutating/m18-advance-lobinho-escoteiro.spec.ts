@@ -26,8 +26,8 @@
  *
  * AUTH: this runs against a shared, already-running dev server with siblings in
  * parallel; captured storageStates can be stale/expired. Every navigation is
- * routed through `gotoReady`, which signs the context back in via the test-only
- * signin form (VITE_TEST_AUTH) on demand — it never calls any testing:* function
+ * routed through `gotoReady`, which signs the context back in via the registro
+ * sign-in form on demand — it never calls any testing:* function
  * and never writes another persona's auth file.
  *
  * OWNERSHIP: mutates ONLY Helena's ramo. Shared admin login as actor; painéis
@@ -36,35 +36,33 @@
  */
 
 import { test, expect, type Page, type Locator } from "@playwright/test";
+import { login } from "../../utils/personas";
+import { SCOUT_SIGNIN_ID } from "../../utils/selectors";
+import { submitSignIn } from "../../utils/signin";
 
-const SUFFIX = "@test.paxtools.local";
-const PW = process.env.TEST_AUTH_PASSWORD ?? "paxtools-test-only";
-
-const ADMIN = { state: "tests/.auth/admin--m18.json", email: `admin${SUFFIX}` };
-const HELENA = { state: "tests/.auth/sim-troop-lobinho-8.json", email: `sim-troop-lobinho-8${SUFFIX}`, name: "Helena Braga" };
-const RENATA = { state: "tests/.auth/sim-escotista-escoteiro-1--m18.json", email: `sim-escotista-escoteiro-1${SUFFIX}` }; // escoteiro escotista
-const MARINA = { state: "tests/.auth/sim-escotista-lobinho-1--m18.json", email: `sim-escotista-lobinho-1${SUFFIX}` }; // lobinho escotista
+const ADMIN = { state: "tests/.auth/admin--m18.json", scoutId: login("admin") };
+const HELENA = { state: "tests/.auth/sim-troop-lobinho-8.json", scoutId: login("sim-troop-lobinho-8"), name: "Helena Braga" };
+const RENATA = { state: "tests/.auth/sim-escotista-escoteiro-1--m18.json", scoutId: login("sim-escotista-escoteiro-1") }; // escoteiro escotista
+const MARINA = { state: "tests/.auth/sim-escotista-lobinho-1--m18.json", scoutId: login("sim-escotista-lobinho-1") }; // lobinho escotista
 
 const LOCK_TEXT = /Complete todos os 18 blocos para desbloquear o checklist/;
 const LOBINHO_ETAPAS = ["Pata Tenra", "Saltador", "Rastreador", "Caçador"];
 
 /**
  * Navigate to `url` and wait for `ready`, recovering from the cold-auth /signin
- * bounce: if the test-only signin form appears, sign `email` back in and retry.
+ * bounce: if the registro sign-in form appears, sign `scoutId` back in and retry.
  */
-async function gotoReady(page: Page, url: string, ready: Locator, email: string) {
-  const submit = page.getByTestId("test-signin-submit");
+async function gotoReady(page: Page, url: string, ready: Locator, scoutId: string) {
+  const idField = page.getByTestId(SCOUT_SIGNIN_ID);
   for (let attempt = 0; attempt < 6; attempt++) {
     await page.goto(url);
     const outcome = await Promise.race([
       ready.waitFor({ state: "visible", timeout: 10_000 }).then(() => "ready" as const).catch(() => "x" as const),
-      submit.waitFor({ state: "visible", timeout: 10_000 }).then(() => "signin" as const).catch(() => "x" as const),
+      idField.waitFor({ state: "visible", timeout: 10_000 }).then(() => "signin" as const).catch(() => "x" as const),
     ]);
     if (outcome === "ready") return;
     if (outcome === "signin") {
-      await page.getByTestId("test-signin-email").fill(email);
-      await page.getByTestId("test-signin-password").fill(PW);
-      await submit.click();
+      await submitSignIn(page, scoutId);
       await page.waitForURL((u) => !/\/signin/.test(u.pathname), { timeout: 20_000 }).catch(() => {});
     }
   }
@@ -72,8 +70,8 @@ async function gotoReady(page: Page, url: string, ready: Locator, email: string)
 }
 
 /** Load an escotista painel (search box is the readiness signal). */
-async function gotoPainel(page: Page, email: string) {
-  await gotoReady(page, "/escotista", page.getByPlaceholder("Buscar escoteiro..."), email);
+async function gotoPainel(page: Page, scoutId: string) {
+  await gotoReady(page, "/escotista", page.getByPlaceholder("Buscar escoteiro..."), scoutId);
 }
 
 /** Flip a scout's ramo via the admin member ramo editor (setMemberRamo). */
@@ -82,7 +80,7 @@ async function setScoutRamo(admin: Page, scoutName: string, ramoLabel: string) {
     admin,
     "/escotista/admin",
     admin.getByRole("heading", { name: "Membros", exact: true }),
-    ADMIN.email,
+    ADMIN.scoutId,
   );
   const row = admin.getByRole("listitem").filter({ hasText: scoutName });
   await expect(row).toBeVisible({ timeout: 15_000 });
@@ -115,7 +113,7 @@ test("M18 admin advances Helena lobinho→escoteiro: fresh progression, younger 
     await setScoutRamo(admin, HELENA.name, "Escoteiro");
 
     // ── Rule 1: dashboard starts FRESH on the escoteiro ramo ──────────────────
-    await gotoReady(helena, "/", helena.getByText("Etapa Atual"), HELENA.email);
+    await gotoReady(helena, "/", helena.getByText("Etapa Atual"), HELENA.scoutId);
     await expect(
       helena.getByRole("heading", { name: "Pista", exact: true }),
     ).toBeVisible();
@@ -131,17 +129,17 @@ test("M18 admin advances Helena lobinho→escoteiro: fresh progression, younger 
     // ── Rule 2: younger especialidade CARRIES (shared younger catalog) ────────
     // Brasilidades (Nível 1, 3/6) still renders at its level as an escoteiro.
     const card = helena.getByRole("button", { name: /^Brasilidades/ });
-    await gotoReady(helena, "/especialidades?specialty=brasilidades", card, HELENA.email);
+    await gotoReady(helena, "/especialidades?specialty=brasilidades", card, HELENA.scoutId);
     await expect(card).toContainText("Nível 1");
     await expect(card).toContainText("3/6 itens aprovados");
 
     // ── Rule 3: visibility flips lobinho → escoteiro escotista ────────────────
-    await gotoPainel(renata, RENATA.email);
+    await gotoPainel(renata, RENATA.scoutId);
     await expect(
       renata.getByText(HELENA.name, { exact: true }),
     ).toBeVisible({ timeout: 15_000 });
 
-    await gotoPainel(marina, MARINA.email);
+    await gotoPainel(marina, MARINA.scoutId);
     // Settle Marina's painel on a known lobinho scout, then assert Helena gone.
     await expect(
       marina.getByText("Alice Prado", { exact: true }),
@@ -150,7 +148,7 @@ test("M18 admin advances Helena lobinho→escoteiro: fresh progression, younger 
   } finally {
     // ── Self-clean: restore Helena to lobinho and verify her prior state ──────
     await setScoutRamo(admin, HELENA.name, "Lobinho");
-    await gotoReady(helena, "/", helena.getByText("Etapa Atual"), HELENA.email);
+    await gotoReady(helena, "/", helena.getByText("Etapa Atual"), HELENA.scoutId);
     await expect(
       helena.getByRole("heading", { name: "Saltador", exact: true }),
     ).toBeVisible();

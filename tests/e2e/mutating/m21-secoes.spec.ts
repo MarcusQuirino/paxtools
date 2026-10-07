@@ -32,6 +32,9 @@
 
 import { testAs, expect } from "../../fixtures/auth";
 import type { Locator, Page } from "@playwright/test";
+import { login } from "../../utils/personas";
+import { SCOUT_SIGNIN_ID } from "../../utils/selectors";
+import { submitSignIn } from "../../utils/signin";
 
 const test = testAs("admin--m21");
 
@@ -43,8 +46,7 @@ const SECTION_B = "__TEST__ Tropa M21 Beta";
 const RAMO_LABEL = "Escoteiro";
 const SCOUT = "João Mendes";
 
-const ADMIN_EMAIL = "admin@test.paxtools.local";
-const PW = process.env.TEST_AUTH_PASSWORD ?? "paxtools-test-only";
+const ADMIN_ID = login("admin");
 
 /** exact:true throughout — "Alfa" is a substring of "Alfa II", and getByLabel
  *  matches a case-insensitive substring by default. */
@@ -58,11 +60,11 @@ const sectionNameInput = (p: Page, name: string) =>
  * context spending the single-use refresh token) can strand a captured session
  * on /signin. Every sibling spec that drives a shared login carries some form
  * of this — m12's ensureSignedIn, m17's gotoSettingsAwait, m18's gotoReady.
- * Re-authenticating in-context via the test-only form never touches the
+ * Re-authenticating in-context via the registro sign-in form never touches the
  * captured auth file, so the ownership rules still hold.
  */
 async function gotoReady(p: Page, url: string, ready: Locator): Promise<void> {
-  const submit = p.getByTestId("test-signin-submit");
+  const idField = p.getByTestId(SCOUT_SIGNIN_ID);
   for (let attempt = 0; attempt < 4; attempt++) {
     await p.goto(url);
     const outcome = await Promise.race([
@@ -70,16 +72,14 @@ async function gotoReady(p: Page, url: string, ready: Locator): Promise<void> {
         .waitFor({ state: "visible", timeout: 10_000 })
         .then(() => "ready" as const)
         .catch(() => "x" as const),
-      submit
+      idField
         .waitFor({ state: "visible", timeout: 10_000 })
         .then(() => "signin" as const)
         .catch(() => "x" as const),
     ]);
     if (outcome === "ready") return;
     if (outcome === "signin") {
-      await p.getByTestId("test-signin-email").fill(ADMIN_EMAIL);
-      await p.getByTestId("test-signin-password").fill(PW);
-      await submit.click();
+      await submitSignIn(p, ADMIN_ID);
       await p
         .waitForURL((u) => !/\/signin/.test(u.pathname), { timeout: 20_000 })
         .catch(() => {});

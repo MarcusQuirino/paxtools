@@ -28,6 +28,7 @@ import type * as lib_ramoVisibility from "../lib/ramoVisibility.js";
 import type * as lib_review from "../lib/review.js";
 import type * as lib_sections from "../lib/sections.js";
 import type * as lib_statsCohort from "../lib/statsCohort.js";
+import type * as lib_testAccounts from "../lib/testAccounts.js";
 import type * as managedAccounts from "../managedAccounts.js";
 import type * as migrations from "../migrations.js";
 import type * as onboarding from "../onboarding.js";
@@ -65,6 +66,7 @@ declare const fullApi: ApiFromModules<{
   "lib/review": typeof lib_review;
   "lib/sections": typeof lib_sections;
   "lib/statsCohort": typeof lib_statsCohort;
+  "lib/testAccounts": typeof lib_testAccounts;
   managedAccounts: typeof managedAccounts;
   migrations: typeof migrations;
   onboarding: typeof onboarding;

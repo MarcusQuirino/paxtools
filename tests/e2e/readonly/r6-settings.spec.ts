@@ -21,6 +21,9 @@
 
 import { approvedTest, escotistaTest, adminTest, expect } from "../../fixtures/auth";
 import type { Page } from "@playwright/test";
+import { login } from "../../utils/personas";
+import { SCOUT_SIGNIN_ID } from "../../utils/selectors";
+import { submitSignIn } from "../../utils/signin";
 
 const GROUP_NAME = "__TEST__ Grupo QA";
 const ADMIN_HEADING = "Gerenciar grupo";
@@ -32,22 +35,18 @@ const ADMIN_HEADING = "Gerenciar grupo";
  * shared storageState files, and Convex Auth's single-use refresh-token
  * rotation can revoke a session mid-run when boots interleave (concentrated
  * here in CI, where low latency tightens the race). If we land on /signin,
- * re-authenticate via the test form (sign-in only, no data mutation) and
+ * re-authenticate via the registro sign-in form (sign-in only, no data mutation) and
  * continue — the same pattern the mutating specs use.
  */
-async function gotoSettings(page: Page, email: string): Promise<void> {
+async function gotoSettings(page: Page, scoutId: string): Promise<void> {
   await page.goto("/settings");
   const heading = page.getByRole("heading", { name: "Seu nome" });
-  const signinEmail = page.getByTestId("test-signin-email");
-  await expect(heading.or(signinEmail).first()).toBeVisible({
+  const signinId = page.getByTestId(SCOUT_SIGNIN_ID);
+  await expect(heading.or(signinId).first()).toBeVisible({
     timeout: 20_000,
   });
-  if (await signinEmail.isVisible()) {
-    await signinEmail.fill(email);
-    await page
-      .getByTestId("test-signin-password")
-      .fill(process.env.TEST_AUTH_PASSWORD ?? "paxtools-test-only");
-    await page.getByTestId("test-signin-submit").click();
+  if (await signinId.isVisible()) {
+    await submitSignIn(page, scoutId);
     await expect(page).not.toHaveURL(/\/signin/, { timeout: 20_000 });
     await page.goto("/settings");
     await expect(heading).toBeVisible({ timeout: 20_000 });
@@ -57,7 +56,7 @@ async function gotoSettings(page: Page, email: string): Promise<void> {
 // ── Escoteiro persona: escoteiro-approved (name "approved", not admin) ───────
 approvedTest.describe("R6 settings — escoteiro (approved)", () => {
   approvedTest.beforeEach(async ({ page }) => {
-    await gotoSettings(page, "approved@test.paxtools.local");
+    await gotoSettings(page, login("approved"));
   });
 
   approvedTest("profile shows the signed-in escoteiro's current name", async ({
@@ -97,7 +96,7 @@ approvedTest.describe("R6 settings — escoteiro (approved)", () => {
 // ── Escotista persona: escotista (name "escotista", NOT admin) ───────────────
 escotistaTest.describe("R6 settings — escotista (non-admin)", () => {
   escotistaTest.beforeEach(async ({ page }) => {
-    await gotoSettings(page, "escotista@test.paxtools.local");
+    await gotoSettings(page, login("escotista"));
   });
 
   escotistaTest("profile shows the signed-in escotista's current name", async ({
@@ -133,7 +132,7 @@ escotistaTest.describe("R6 settings — escotista (non-admin)", () => {
 // ── Admin persona: admin (name "admin", role escotista, isAdmin) ─────────────
 adminTest.describe("R6 settings — admin", () => {
   adminTest.beforeEach(async ({ page }) => {
-    await gotoSettings(page, "admin@test.paxtools.local");
+    await gotoSettings(page, login("admin"));
   });
 
   adminTest("profile shows the signed-in admin's current name", async ({

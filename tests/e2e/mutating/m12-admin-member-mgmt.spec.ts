@@ -26,12 +26,15 @@
  *
  * RESILIENCE: the suite shares one dev server + Convex deployment; a reseed
  * elsewhere invalidates captured sessions, so `ensureSignedIn` re-authenticates
- * in-context via the hidden test signin form (never a testing:* function; the
+ * in-context via the registro sign-in form (never a testing:* function; the
  * shared admin.json is left untouched).
  */
 
 import { test, expect } from "@playwright/test";
 import type { Page, Locator } from "@playwright/test";
+import { login } from "../../utils/personas";
+import { SCOUT_SIGNIN_ID } from "../../utils/selectors";
+import { submitSignIn } from "../../utils/signin";
 
 const ADMIN_STATE = "tests/.auth/admin--m12.json";
 const BRUNO_STATE = "tests/.auth/sim-escotista-escoteiro-2.json";
@@ -39,11 +42,10 @@ const ZECA_STATE = "tests/.auth/sim-troop-senior-11.json";
 const ELOA_STATE = "tests/.auth/sim-troop-pioneiro-3.json";
 const HUGO_STATE = "tests/.auth/sim-escotista-pioneiro-2.json";
 
-const ADMIN_EMAIL = "admin@test.paxtools.local";
-const BRUNO_EMAIL = "sim-escotista-escoteiro-2@test.paxtools.local";
-const ZECA_EMAIL = "sim-troop-senior-11@test.paxtools.local";
-const HUGO_EMAIL = "sim-escotista-pioneiro-2@test.paxtools.local";
-const PASSWORD = "paxtools-test-only";
+const ADMIN_ID = login("admin");
+const BRUNO_ID = login("sim-escotista-escoteiro-2");
+const ZECA_ID = login("sim-troop-senior-11");
+const HUGO_ID = login("sim-escotista-pioneiro-2");
 
 const BRUNO = "Bruno Valente";
 const ZECA = "Zeca Amorim";
@@ -54,10 +56,8 @@ const HUGO = "Hugo Tavares";
 // be slow under contention — first-load waits are deliberately long.
 const LOAD = 45_000;
 
-async function signInForm(page: Page, email: string) {
-  await page.getByTestId("test-signin-email").fill(email);
-  await page.getByTestId("test-signin-password").fill(PASSWORD);
-  await page.getByTestId("test-signin-submit").click();
+async function signInForm(page: Page, scoutId: string) {
+  await submitSignIn(page, scoutId);
   await expect(page).not.toHaveURL(/\/signin/, { timeout: LOAD });
 }
 
@@ -71,10 +71,10 @@ async function signInForm(page: Page, email: string) {
 async function loadReady(
   page: Page,
   url: string,
-  email: string,
+  scoutId: string,
   ready: () => Locator,
 ) {
-  const signin = page.getByTestId("test-signin-email");
+  const signin = page.getByTestId(SCOUT_SIGNIN_ID);
   for (let attempt = 0; attempt < 4; attempt++) {
     await page.goto(url);
     try {
@@ -83,7 +83,7 @@ async function loadReady(
       continue; // blank/slow load — retry
     }
     if (await signin.isVisible()) {
-      await signInForm(page, email).catch(() => {});
+      await signInForm(page, scoutId).catch(() => {});
       continue;
     }
     await expect(ready()).toBeVisible({ timeout: 20_000 });
@@ -104,7 +104,7 @@ function memberRow(page: Page, name: string) {
 
 /** Open the admin page (re-authing if needed) and wait for the Membros list. */
 async function gotoAdmin(page: Page) {
-  await loadReady(page, "/escotista/admin", ADMIN_EMAIL, () =>
+  await loadReady(page, "/escotista/admin", ADMIN_ID, () =>
     page.getByRole("heading", { name: "Membros" }),
   );
 }
@@ -162,7 +162,7 @@ test("M12a: promoting Bruno unlocks his admin surface; demote re-locks it", asyn
   const brunoPage = await brunoCtx.newPage();
 
   const openMaisSheet = async () => {
-    await loadReady(brunoPage, "/escotista", BRUNO_EMAIL, () =>
+    await loadReady(brunoPage, "/escotista", BRUNO_ID, () =>
       brunoPage.getByTestId("escotista-bottom-nav"),
     );
     await brunoPage.getByRole("button", { name: "Mais" }).click();
@@ -238,11 +238,11 @@ test("M12b: flipping Zeca to escotista swaps his shell; revert restores it", asy
   // Escoteiro-only nav link vs escotista-only shell testid: orthogonal,
   // role-exclusive surface signals (each retries through a reseed/dead session).
   const expectEscoteiroShell = () =>
-    loadReady(zecaPage, "/", ZECA_EMAIL, () =>
+    loadReady(zecaPage, "/", ZECA_ID, () =>
       zecaPage.getByRole("link", { name: "Plano" }),
     );
   const expectEscotistaShell = () =>
-    loadReady(zecaPage, "/escotista", ZECA_EMAIL, () =>
+    loadReady(zecaPage, "/escotista", ZECA_ID, () =>
       zecaPage.getByTestId("escotista-bottom-nav"),
     );
 
@@ -374,7 +374,7 @@ test("M12d: adding lobinho to Hugo expands his painel visibility; revert restore
   };
 
   const loadHugoPainel = async () => {
-    await loadReady(hugoPage, "/escotista", HUGO_EMAIL, () =>
+    await loadReady(hugoPage, "/escotista", HUGO_ID, () =>
       hugoPage.getByText(CLARA),
     );
   };

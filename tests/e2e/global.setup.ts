@@ -5,8 +5,8 @@
  *      users + simulated troop). Both targets get the identical dataset, so
  *      exact-count assertions behave the same on local and staging.
  *   2. Capture a logged-in storageState for every manifest persona
- *      (tests/utils/personas.ts) via the hidden test-only credentials form,
- *      in small concurrent batches so setup stays fast.
+ *      (tests/utils/personas.ts) via the real registro sign-in form, in small
+ *      concurrent batches so setup stays fast.
  *
  * Set E2E_SKIP_SEED=1 to skip the reseed AND the recapture when iterating on
  * specs locally (reseeding recreates sim users with fresh IDs, which would
@@ -21,27 +21,20 @@ import { test as setup, expect } from "@playwright/test";
 import type { Browser } from "@playwright/test";
 import { resetTestData } from "../utils/convex-cli";
 import { LOGIN_PERSONAS, authFile } from "../utils/personas";
-import {
-  TEST_SIGNIN_EMAIL,
-  TEST_SIGNIN_PASSWORD,
-  TEST_SIGNIN_SUBMIT,
-} from "../utils/selectors";
+import { submitSignIn } from "../utils/signin";
 
 const CAPTURE_BATCH = 6;
 
 async function captureState(
   browser: Browser,
-  email: string,
+  scoutId: string,
   slug: string,
-  password: string,
 ): Promise<void> {
   const ctx = await browser.newContext();
   try {
     const page = await ctx.newPage();
     await page.goto("/signin");
-    await page.getByTestId(TEST_SIGNIN_EMAIL).fill(email);
-    await page.getByTestId(TEST_SIGNIN_PASSWORD).fill(password);
-    await page.getByTestId(TEST_SIGNIN_SUBMIT).click();
+    await submitSignIn(page, scoutId);
     // Destination differs per role state — assert we left signin, nothing more.
     await expect(page).not.toHaveURL(/\/signin/, { timeout: 15_000 });
     await ctx.storageState({ path: authFile(slug) });
@@ -57,13 +50,11 @@ setup("reseed + capture auth states", async ({ browser }) => {
 
   await resetTestData();
 
-  const password = process.env.TEST_AUTH_PASSWORD ?? "paxtools-test-only";
-
   const queue = [...LOGIN_PERSONAS];
   for (let i = 0; i < queue.length; i += CAPTURE_BATCH) {
     const batch = queue.slice(i, i + CAPTURE_BATCH);
     await Promise.all(
-      batch.map((p) => captureState(browser, p.email, p.slug, password)),
+      batch.map((p) => captureState(browser, p.scoutId, p.slug)),
     );
   }
 });
