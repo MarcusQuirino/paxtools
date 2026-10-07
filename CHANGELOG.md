@@ -1,5 +1,21 @@
 # paxtools
 
+## 1.8.0
+
+### Minor Changes
+
+- c9f03b3: Contas gerenciadas: escotistas can create access for members without a Google account, who sign in with their registro escoteiro + password. Temporary password on creation and reset, forced change on first sign-in, and "Alterar senha" in the profile.
+- e7e18c7: Guided tour for new members: on their first visit a step-by-step overlay spotlights the main screens — progressão, plano and especialidades for escoteiros; painel, pendentes and especialidades for escotistas (plus the Admin area for admins). Finishing or skipping it is saved on the user, and it can be replayed anytime from Perfil/Ajustes → "Ver tutorial".
+
+### Patch Changes
+
+- cdec8fa: Relicencia o projeto de MIT para AGPL-3.0-only e adiciona link "Código-fonte" no rodapé.
+- e306383: Every approval and rejection — ações, ações personalizadas, IRR items, especialidade items and etapas — now goes through one review module that owns access checks, the level-up cascade and the audit line. Especialidade reviews now get readable timeline lines ("Aprovou: Administração — item 3") instead of raw ids, and the escoteiro's own especialidade writes are validated against the catalog. Removed unused mutations (approveAllForEscoteiro, approveSpecialtyItem) and the dead escotista branch of toggleSpecialtyItem.
+- e306383: Especialidades: one standing module decides earned / level / progress everywhere. Duplicate or out-of-range item rows no longer complete a bloco, and bloco completion, the escotista roster, stats, the escoteiro page, the ficha and the plano now always agree. Two standing queries replace the four raw-row queries.
+- b22771e: Botão "Copiar senha" na senha temporária (copia só a senha, com alternativa quando o navegador bloqueia a área de transferência); o tutorial agora abre para a conta nova mesmo depois de outra conta tê-lo fechado na mesma aba.
+- e306383: The lista de jovens, the stats cohort and the especialidades tab now read "the escoteiros this escotista is observing" from one place (visibilidade de ramo, then the seção observada), with a test that they always count the same people.
+- e306383: Progression is derived by one module on both sides: the server's level-up snapshot, coverage and the escotista dashboard, and the escoteiro's own view all go through it. The dashboard's per-escoteiro "aprovadas" now counts only the escoteiro's current ramo, so a past ramo no longer inflates it.
+
 ## 1.7.0
 
 ### Minor Changes
