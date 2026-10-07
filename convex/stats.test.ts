@@ -461,4 +461,94 @@ describe("getRamoSpecialties", () => {
       as(t, escotistaId).query(api.stats.getRamoSpecialties, { ramo: "senior" }),
     ).rejects.toThrow("Você não acompanha esse ramo");
   });
+
+  test("rankings: tie-breaks and top-N caps for topEarned, blocos and demand", async () => {
+    const t = newTest();
+    const { escotistaId, groupId } = await seed(t);
+    const [s1, s2, s3, s4] = await Promise.all(
+      ["S1", "S2", "S3", "S4"].map((n) => addScout(t, groupId, n, "escoteiro")),
+    );
+    const earn = (userId: Id<"users">, id: string) =>
+      items(t, userId, id, YOUNGER_SPECIALTY_BY_ID.get(id)!.items.length / 2, 0);
+    const start = (userId: Id<"users">, id: string) => items(t, userId, id, 1, 0);
+
+    for (const id of [
+      "astronomia",
+      "biblioteconomia",
+      "artesanato",
+      "administracao",
+      "aeronautica",
+      "arte-digital",
+    ]) {
+      await earn(s1!, id);
+    }
+    await earn(s2!, "astronomia");
+    await start(s2!, "biblioteconomia");
+    await start(s2!, "artesanato");
+    await start(s3!, "biblioteconomia");
+    await earn(s4!, "artes-visuais");
+
+    let position = 0;
+    await t.run(async (ctx) => {
+      for (const [userId, id] of [
+        [s1, "astronomia"], [s2, "astronomia"], [s3, "astronomia"],
+        [s3, "aeronautica"], [s4, "aeronautica"],
+        [s1, "administracao"], [s2, "administracao"],
+        [s4, "arte-digital"], [s4, "artes-visuais"], [s4, "biblioteconomia"],
+      ] as const) {
+        await ctx.db.insert("plannedItems", {
+          userId: userId!, ramo: "escoteiro", itemKey: `especialidade:${id}`, position: position++,
+        });
+      }
+    });
+
+    const esp = await as(t, escotistaId).query(api.stats.getRamoSpecialties, { ramo: "escoteiro" });
+
+    // Earned count desc, then in-progress desc, then id; capped at 5 — so the
+    // remaining earned-1/in-progress-0 ties (arte-digital, artes-visuais) drop.
+    expect(esp.totals.distinctEarned).toBe(7);
+    expect(esp.topEarned.map((s) => [s.specialtyId, s.earnedCount, s.inProgressCount])).toEqual([
+      ["astronomia", 2, 0],
+      ["biblioteconomia", 1, 2],
+      ["artesanato", 1, 1],
+      ["administracao", 1, 0],
+      ["aeronautica", 1, 0],
+    ]);
+
+    // artesanato/arte-digital (S1) + artes-visuais (S4) both complete
+    // criatividade-inovacao; administracao (S1) completes autonomia-lideranca.
+    // A bloco counts each escoteiro once, most escoteiros first.
+    expect(esp.blocosViaEspecialidade.map((b) => [b.blocoId, b.scoutCount])).toEqual([
+      ["criatividade-inovacao", 2],
+      ["autonomia-lideranca", 1],
+    ]);
+
+    // Most starred first; among equals the least started (unmet demand) first,
+    // then id; capped at 5 — artes-visuais (1 starred, already started) drops.
+    expect(esp.demand.map((d) => [d.specialtyId, d.starredCount, d.startedCount])).toEqual([
+      ["astronomia", 3, 2],
+      ["aeronautica", 2, 0],
+      ["administracao", 2, 1],
+      ["arte-digital", 1, 0],
+      ["biblioteconomia", 1, 0],
+    ]);
+  });
+
+  test("pending is oldest first and capped at 10", async () => {
+    const t = newTest();
+    const { escotistaId, groupId } = await seed(t);
+    const scouts = await Promise.all(
+      Array.from({ length: 12 }, (_, i) => addScout(t, groupId, `P${i}`, "escoteiro")),
+    );
+    // Scout i's oldest pending item is at 1000 - i: the last scouts are oldest.
+    for (const [i, s] of scouts.entries()) await items(t, s, YOUNGER_ID, 0, 2, 1000 - i);
+
+    const esp = await as(t, escotistaId).query(api.stats.getRamoSpecialties, { ramo: "escoteiro" });
+    expect(esp.totals.pending).toBe(24);
+    expect(esp.pending).toHaveLength(10);
+    expect(esp.pending.map((p) => p.oldestAt)).toEqual(
+      Array.from({ length: 10 }, (_, i) => 989 + i),
+    );
+    expect(esp.pending[0]!.escoteiroId).toBe(scouts[11]!);
+  });
 });

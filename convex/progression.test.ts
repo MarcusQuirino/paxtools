@@ -469,6 +469,84 @@ describe("toggleIrrItem", () => {
     expect(escRows[0]!.status).toBe("approved");
   });
 
+  test("escotista with targetUserId approves an existing PENDING row in place and audits it", async () => {
+    const t = newTest();
+    const { adminId, groupId } = await seedGroup(t);
+    const escoteiro = await insertUser(t, {
+      name: "Ana",
+      role: "escoteiro",
+      ramo: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+    });
+    const pendingId = await t.run(async (ctx) =>
+      ctx.db.insert("irrCompletions", {
+        userId: escoteiro,
+        ramo: "escoteiro",
+        itemId: "irr_jornada",
+        completedAt: 1,
+        status: "pending",
+      }),
+    );
+
+    const toasts = await as(t, adminId).mutation(api.progression.toggleIrrItem, {
+      itemId: "irr_jornada",
+      targetUserId: escoteiro,
+    });
+
+    // Promoted, not toggled off: same row, now approved by the escotista.
+    expect(toasts).toEqual([]);
+    const rows = await t.run(async (ctx) =>
+      ctx.db
+        .query("irrCompletions")
+        .withIndex("by_userId", (q) => q.eq("userId", escoteiro))
+        .collect(),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!._id).toBe(pendingId);
+    expect(rows[0]!.status).toBe("approved");
+    expect(rows[0]!.approvedBy).toBe(adminId);
+    expect(rows[0]!.approvedAt).toBeDefined();
+    expect(rows[0]!.completedAt).toBe(1);
+    const events = await t.run((ctx) => ctx.db.query("events").collect());
+    expect(events.map((e) => [e.type, e.summary])).toEqual([
+      ["approval", "Aprovou: Jornada de Travessia"],
+    ]);
+  });
+
+  test("escotista with targetUserId un-marks an APPROVED row without auditing an approval", async () => {
+    const t = newTest();
+    const { adminId, groupId } = await seedGroup(t);
+    const escoteiro = await insertUser(t, {
+      role: "escoteiro",
+      ramo: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+    });
+    await t.run(async (ctx) =>
+      ctx.db.insert("irrCompletions", {
+        userId: escoteiro,
+        ramo: "escoteiro",
+        itemId: "irr_jornada",
+        completedAt: 1,
+        status: "approved",
+      }),
+    );
+    await as(t, adminId).mutation(api.progression.toggleIrrItem, {
+      itemId: "irr_jornada",
+      targetUserId: escoteiro,
+    });
+    const rows = await t.run(async (ctx) =>
+      ctx.db
+        .query("irrCompletions")
+        .withIndex("by_userId", (q) => q.eq("userId", escoteiro))
+        .collect(),
+    );
+    expect(rows).toHaveLength(0);
+    const events = await t.run((ctx) => ctx.db.query("events").collect());
+    expect(events).toEqual([]);
+  });
+
   test("reads are ramo-scoped: only the current ramo's items return; other ramo retained", async () => {
     const t = newTest();
     const user = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });

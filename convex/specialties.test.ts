@@ -1269,6 +1269,49 @@ describe("getGroupSpecialtySummary", () => {
     expect(roster!.people.map((p) => p._id).sort()).toEqual([f.a, c].sort());
   });
 
+  test("orders by total activity, then conquered count, then id; caps the avatar stack at 4", async () => {
+    const t = newTest();
+    const { escotistaId, groupId } = await seedGroup(t);
+    const p: Id<"users">[] = [];
+    for (let i = 0; i < 5; i++) p.push(await insertScout(t, groupId, "escoteiro", `P${i}`));
+    const start = (who: number[], id: string) =>
+      Promise.all(who.map((i) => insertItems(t, p[i]!, id, [{ index: 0, status: "approved" }])));
+    const earn = (who: number[], id: string) =>
+      Promise.all(
+        who.map((i) =>
+          insertItems(
+            t,
+            p[i]!,
+            id,
+            [0, 1, 2, 3].map((index) => ({ index, status: "approved" as const })),
+          ),
+        ),
+      );
+    await start([0, 1, 2, 3, 4], "administracao"); // 5 em andamento
+    await earn([0, 1], "aeronautica"); // 3 total, 2 conquistaram
+    await start([2], "aeronautica");
+    await earn([0], "astronomia"); // 3 total, 1 conquistou
+    await start([1, 2], "astronomia");
+    await start([0, 1, 2], "artesanato"); // 3 total, 0 — ties broken by id
+    await start([0, 1, 2], "arte-digital");
+
+    const res = await as(t, escotistaId).query(
+      api.specialties.getGroupSpecialtySummary,
+      { ramoGroup: "younger" },
+    );
+    expect(
+      res!.specialties.map((s) => [s.specialtyId, s.earnedCount, s.inProgressCount]),
+    ).toEqual([
+      ["administracao", 0, 5],
+      ["aeronautica", 2, 1],
+      ["astronomia", 1, 2],
+      ["arte-digital", 0, 3],
+      ["artesanato", 0, 3],
+    ]);
+    expect(res!.specialties[0]!.avatars).toHaveLength(4);
+    expect(res!.totals).toEqual({ earned: 3, inProgress: 14 });
+  });
+
   test("non-escotista or unauthenticated caller → null", async () => {
     const t = newTest();
     const f = await seedTroop(t);

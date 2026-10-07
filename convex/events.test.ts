@@ -3,6 +3,7 @@ import { describe, test, expect } from "bun:test";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { diffProgression } from "./lib/progression";
+import { describeCompletion } from "./lib/events";
 import { getEixosForRamo } from "../src/data/progression-data";
 import { deriveProgression } from "../src/lib/progression-state";
 import { as, newTest, type Ramo, type TestConvex } from "./fixtures.testkit";
@@ -256,7 +257,9 @@ describe("level-up detection", () => {
     expect(levelUp).toMatchObject({
       scope: "ramo",
       subjectRamo: "escoteiro",
+      stageId: "trilha",
       stageName: "Trilha",
+      summary: "Subiu para Trilha",
     });
   });
 
@@ -278,6 +281,241 @@ describe("level-up detection", () => {
     expect(toasts).toEqual([]);
     const events = await listEvents(t);
     expect(events.some((e) => e.type === "levelUp")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// IRR conquered (lisDeOuro) — the approval that completes the IRR
+// ---------------------------------------------------------------------------
+describe("IRR level-up", () => {
+  /**
+   * Every bloco of `ramo` complete (all its ações approved) and every manual
+   * IRR item approved except irr_corte_honra, which is left pending. Approving
+   * that one row is what completes the IRR. Returns the pending row's id.
+   */
+  async function seedOneStepFromIrr(
+    t: TestConvex,
+    userId: Id<"users">,
+    ramo: Ramo,
+    adminId: Id<"users">,
+  ) {
+    const actionIds = getEixosForRamo(ramo)
+      .flatMap((e) => e.blocos)
+      .flatMap((b) => [...b.fixedActions, ...b.variableActions])
+      .map((a) => a.id);
+    const approvedIrr = ["irr_promessa", "irr_jornada", "irr_autoavaliacao"];
+
+    // Sanity: the seed sits exactly one approval short of the IRR.
+    const state = (irr: string[]) =>
+      deriveProgression({
+        ramo,
+        actions: actionIds.map((actionId) => ({ actionId })),
+        customActions: [],
+        irrItems: irr.map((itemId) => ({ itemId })),
+        earnedSpecialtyIds: [],
+      });
+    expect(state(approvedIrr).blocksComplete).toBe(true);
+    expect(state(approvedIrr).irrComplete).toBe(false);
+    expect(state([...approvedIrr, "irr_corte_honra"]).irrComplete).toBe(true);
+
+    return await t.run(async (ctx) => {
+      for (const actionId of actionIds) {
+        await ctx.db.insert("actionCompletions", {
+          userId,
+          actionId,
+          completedAt: 1,
+          status: "approved",
+          approvedBy: adminId,
+          approvedAt: 1,
+        });
+      }
+      for (const itemId of approvedIrr) {
+        await ctx.db.insert("irrCompletions", {
+          userId,
+          ramo,
+          itemId,
+          completedAt: 1,
+          status: "approved",
+          approvedBy: adminId,
+          approvedAt: 1,
+        });
+      }
+      return await ctx.db.insert("irrCompletions", {
+        userId,
+        ramo,
+        itemId: "irr_corte_honra",
+        completedAt: 1,
+        status: "pending",
+      });
+    });
+  }
+
+  test("approving the last IRR item logs a lisDeOuro event and toasts the Lis de Ouro", async () => {
+    const t = newTest();
+    const { adminId, groupId } = await seedGroup(t);
+    const escId = await seedEscoteiro(t, groupId, "escoteiro", "João");
+    const completionId = await seedOneStepFromIrr(t, escId, "escoteiro", adminId);
+
+    const toasts = await as(t, adminId).mutation(api.approvals.approveIrrItem, {
+      completionId,
+    });
+
+    expect(toasts).toEqual([
+      {
+        subjectUserId: escId,
+        subjectName: "João",
+        kind: "lisDeOuro",
+        stageName: "Lis de Ouro",
+      },
+    ]);
+    const events = await listEvents(t);
+    const irr = events.filter((e) => e.type === "lisDeOuro");
+    expect(irr).toHaveLength(1);
+    expect(irr[0]).toMatchObject({
+      scope: "ramo",
+      groupId,
+      subjectRamo: "escoteiro",
+      subjectUserId: escId,
+      actorUserId: adminId,
+      summary: "Conquistou a Lis de Ouro",
+    });
+    // An IRR is not an etapa: no stage on the row, and no levelUp alongside
+    // (every bloco was already complete before the approval).
+    expect(irr[0]!.stageId).toBeUndefined();
+    expect(irr[0]!.stageName).toBeUndefined();
+    expect(events.some((e) => e.type === "levelUp")).toBe(false);
+    // The approval itself is audited too, with the item's short label.
+    expect(events.find((e) => e.type === "approval")?.summary).toBe(
+      "Aprovou: Corte de Honra",
+    );
+  });
+
+  test("another ramo's IRR is named from its rules (sênior → Escoteiro da Pátria), via a direct mark", async () => {
+    const t = newTest();
+    const { adminId, groupId } = await seedGroup(t);
+    const escId = await seedEscoteiro(t, groupId, "senior", "Sofia");
+    await seedOneStepFromIrr(t, escId, "senior", adminId);
+
+    // The escotista ticks the pending item on the escoteiro's page.
+    const toasts = await as(t, adminId).mutation(api.progression.toggleIrrItem, {
+      itemId: "irr_corte_honra",
+      targetUserId: escId,
+    });
+
+    expect(toasts).toEqual([
+      expect.objectContaining({ kind: "lisDeOuro", stageName: "Escoteiro da Pátria" }),
+    ]);
+    const events = await listEvents(t);
+    expect(events.find((e) => e.type === "lisDeOuro")).toMatchObject({
+      subjectRamo: "senior",
+      summary: "Conquistou a Escoteiro da Pátria",
+    });
+    // Non-escoteiro ramos label the item with their own IRR text.
+    expect(events.find((e) => e.type === "approval")?.summary).toBe(
+      "Aprovou: Ser avaliado positivamente pela sua Patrulha e pelos Escotistas",
+    );
+  });
+
+  test("approving a non-final IRR item fires nothing", async () => {
+    const t = newTest();
+    const { adminId, groupId } = await seedGroup(t);
+    const escId = await seedEscoteiro(t, groupId, "escoteiro");
+    const completionId = await t.run((ctx) =>
+      ctx.db.insert("irrCompletions", {
+        userId: escId,
+        ramo: "escoteiro",
+        itemId: "irr_promessa",
+        completedAt: 1,
+        status: "pending",
+      }),
+    );
+    const toasts = await as(t, adminId).mutation(api.approvals.approveIrrItem, {
+      completionId,
+    });
+    expect(toasts).toEqual([]);
+    const events = await listEvents(t);
+    expect(events.some((e) => e.type === "lisDeOuro")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// describeCompletion — the audit label fallbacks
+// ---------------------------------------------------------------------------
+describe("describeCompletion", () => {
+  const blocoA = getEixosForRamo("escoteiro")[0]!.blocos[0]!;
+
+  test("an action resolves to its catalog text", () => {
+    expect(
+      describeCompletion("escoteiro", {
+        kind: "action",
+        actionId: `escoteiro:${blocoA.id}:fixed:0`,
+      }),
+    ).toBe(blocoA.fixedActions[0]!.text);
+  });
+
+  test("an action falls back to its raw id when unparseable, its bloco is unknown, or its index is out of range", () => {
+    for (const actionId of [
+      "garbage",
+      "escoteiro:bloco-inexistente:fixed:0",
+      `escoteiro:${blocoA.id}:fixed:99`,
+      `escoteiro:${blocoA.id}:variable:99`,
+    ]) {
+      expect(describeCompletion("escoteiro", { kind: "action", actionId })).toBe(
+        actionId,
+      );
+    }
+  });
+
+  test("an action of a user with no ramo resolves from the id's own ramo", () => {
+    const lobinhoBloco = getEixosForRamo("lobinho")[0]!.blocos[0]!;
+    expect(
+      describeCompletion(null, {
+        kind: "action",
+        actionId: `lobinho:${lobinhoBloco.id}:fixed:0`,
+      }),
+    ).toBe(lobinhoBloco.fixedActions[0]!.text);
+  });
+
+  // BUG: the label resolves from the subject's *current* ramo, not the ramo the
+  // id carries. Bloco ids are shared across ramos, so a past-ramo ação still
+  // pending after setMemberRamo (getPendingForGroup lists it, approveAction
+  // accepts it) is audited with the new ramo's text for the same slot.
+  test.failing("an action approved after a ramo change is labelled with its own ramo's text", () => {
+    const lobinhoBloco = getEixosForRamo("lobinho")[0]!.blocos[0]!;
+    expect(
+      describeCompletion("escoteiro", {
+        kind: "action",
+        actionId: `lobinho:${lobinhoBloco.id}:fixed:0`,
+      }),
+    ).toBe(lobinhoBloco.fixedActions[0]!.text);
+  });
+
+  test("a custom action uses its text, or a generic label when empty", () => {
+    expect(describeCompletion("escoteiro", { kind: "custom", text: "Fiz X" })).toBe(
+      "Fiz X",
+    );
+    expect(describeCompletion("escoteiro", { kind: "custom", text: "" })).toBe(
+      "Ação personalizada",
+    );
+  });
+
+  test("an escoteiro (or ramo-less) IRR item keeps its short audit label; unknown ids pass through", () => {
+    expect(describeCompletion("escoteiro", { kind: "irr", itemId: "irr_jornada" })).toBe(
+      "Jornada de Travessia",
+    );
+    expect(describeCompletion(undefined, { kind: "irr", itemId: "irr_promessa" })).toBe(
+      "Promessa Escoteira",
+    );
+    expect(describeCompletion("escoteiro", { kind: "irr", itemId: "irr_x" })).toBe("irr_x");
+  });
+
+  test("another ramo's IRR item uses that ramo's item text, falling back to the IRR name", () => {
+    expect(describeCompletion("lobinho", { kind: "irr", itemId: "irr_jornada" })).toBe(
+      "Vivenciou o Caminho Caçador",
+    );
+    expect(describeCompletion("pioneiro", { kind: "irr", itemId: "irr_x" })).toBe(
+      "Insígnia de BP",
+    );
   });
 });
 
