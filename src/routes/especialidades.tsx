@@ -66,9 +66,12 @@ import {
 /** Collapsible open-state that opens (and stays openable) when `shouldOpen`. */
 function useAutoOpen(shouldOpen: boolean) {
   const [open, setOpen] = useState(shouldOpen);
-  useEffect(() => {
+  // Adjust during render (not in an effect) when `shouldOpen` flips on.
+  const [prevShouldOpen, setPrevShouldOpen] = useState(shouldOpen);
+  if (shouldOpen !== prevShouldOpen) {
+    setPrevShouldOpen(shouldOpen);
     if (shouldOpen) setOpen(true);
-  }, [shouldOpen]);
+  }
   return [open, setOpen] as const;
 }
 
@@ -756,9 +759,13 @@ function StepCard({
   const [text, setText] = useState(etapa?.text ?? "");
 
   // Keep the local draft in sync when the stored relato changes (e.g. approval).
-  useEffect(() => {
+  // Adjusted during render rather than in an effect to avoid a cascading render.
+  const storedKey = `${etapa?.rowId ?? ""}\u0000${etapa?.text ?? ""}`;
+  const [syncedKey, setSyncedKey] = useState(storedKey);
+  if (storedKey !== syncedKey) {
+    setSyncedKey(storedKey);
     setText(etapa?.text ?? "");
-  }, [etapa?.rowId, etapa?.text]);
+  }
 
   const canEdit = !isApproved;
   const dirty = text.trim() !== (etapa?.text ?? "").trim();
