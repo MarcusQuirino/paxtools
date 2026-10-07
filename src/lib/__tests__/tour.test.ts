@@ -2,6 +2,7 @@ import { describe, it, expect } from "bun:test";
 import {
   ESCOTEIRO_TOUR,
   escotistaTour,
+  isTourOpen,
   placeCard,
   shouldAutoStartTour,
   tourStepsFor,
@@ -82,6 +83,29 @@ describe("shouldAutoStartTour", () => {
       expect(shouldAutoStartTour(escoteiro, path)).toBe(false);
     }
     expect(shouldAutoStartTour(escoteiro, "/settings")).toBe(true);
+  });
+});
+
+describe("isTourOpen", () => {
+  const base = { userId: "a", replayingFor: null, dismissedFor: null, autoStart: true };
+
+  it("opens on a first visit and stays shut once closed", () => {
+    expect(isTourOpen(base)).toBe(true);
+    expect(isTourOpen({ ...base, dismissedFor: "a" })).toBe(false);
+  });
+
+  it("does not let a previous account's close hide it from the next", () => {
+    expect(isTourOpen({ ...base, userId: "b", dismissedFor: "a" })).toBe(true);
+  });
+
+  it("replays only for the member who asked", () => {
+    const replaying = { ...base, autoStart: false, replayingFor: "a" };
+    expect(isTourOpen(replaying)).toBe(true);
+    expect(isTourOpen({ ...replaying, userId: "b" })).toBe(false);
+  });
+
+  it("stays shut while signed out", () => {
+    expect(isTourOpen({ ...base, userId: null, replayingFor: "a" })).toBe(false);
   });
 });
 

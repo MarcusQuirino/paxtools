@@ -11,7 +11,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
 import { api } from "../../../convex/_generated/api";
 import { GuidedTour } from "@/components/tour/guided-tour";
-import { shouldAutoStartTour, tourStepsFor } from "@/lib/tour";
+import { isTourOpen, shouldAutoStartTour, tourStepsFor } from "@/lib/tour";
 
 const TourContext = createContext<{ startTour: () => void } | null>(null);
 
@@ -33,22 +33,29 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const { data: user } = useQuery(convexQuery(api.users.viewer, {}));
   const { data: group } = useQuery(convexQuery(api.groups.getMyGroup, {}));
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const [replaying, setReplaying] = useState(false);
+  const userId = user?._id ?? null;
+  // Both keyed by member: this provider survives signing out and back in
+  // as someone else in the same tab.
+  const [replayingFor, setReplayingFor] = useState<string | null>(null);
   // Closed this session: don't reopen while markTourSeen is still landing.
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedFor, setDismissedFor] = useState<string | null>(null);
 
   const markSeenFn = useConvexMutation(api.users.markTourSeen);
   const { mutate: markSeen } = useMutation({ mutationFn: markSeenFn });
 
-  const open =
-    replaying || (!dismissed && shouldAutoStartTour(user ?? null, pathname));
+  const open = isTourOpen({
+    userId,
+    replayingFor,
+    dismissedFor,
+    autoStart: shouldAutoStartTour(user ?? null, pathname),
+  });
 
-  const startTour = useCallback(() => setReplaying(true), []);
+  const startTour = useCallback(() => setReplayingFor(userId), [userId]);
   const closeTour = useCallback(() => {
-    setDismissed(true);
-    setReplaying(false);
+    setDismissedFor(userId);
+    setReplayingFor(null);
     markSeen({});
-  }, [markSeen]);
+  }, [userId, markSeen]);
 
   const role = user?.role;
   const isAdmin = !!group?.isAdmin;

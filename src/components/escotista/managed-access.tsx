@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { RamoPicker } from "@/components/onboarding/ramo-picker";
 import type { Ramo } from "@/lib/ramos";
 import { userErrorMessage } from "@/lib/user-error-message";
+import { copyText } from "@/lib/clipboard";
 import { Check, Copy, KeyRound, UserPlus } from "lucide-react";
 
 type Credentials = { name: string; scoutId: string; password: string };
@@ -25,13 +26,14 @@ type Credentials = { name: string; scoutId: string; password: string };
  * hashed, so once this closes it can only be replaced, never shown again.
  */
 function CredentialsCard({ credentials }: { credentials: Credentials }) {
-  const [copied, setCopied] = useState(false);
-  const text = `Paxtools — ${credentials.name}\nRegistro: ${credentials.scoutId}\nSenha temporária: ${credentials.password}\n${window.location.origin}/signin`;
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
 
-  const copy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copy = async (host: HTMLElement) => {
+    const ok = await copyText(credentials.password, host);
+    setCopyState(ok ? "copied" : "failed");
+    setTimeout(() => setCopyState("idle"), 2000);
   };
 
   return (
@@ -57,9 +59,22 @@ function CredentialsCard({ credentials }: { credentials: Credentials }) {
         Anote ou envie agora — a senha não aparece de novo. No primeiro acesso{" "}
         {credentials.name} vai criar a própria senha.
       </p>
-      <Button variant="outline" size="sm" onClick={() => void copy()}>
-        {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-        {copied ? "Copiado!" : "Copiar acesso"}
+      <Button
+        variant="outline"
+        size="sm"
+        data-testid="copy-managed-password"
+        onClick={(e) => void copy(e.currentTarget.parentElement ?? document.body)}
+      >
+        {copyState === "copied" ? (
+          <Check className="size-4" />
+        ) : (
+          <Copy className="size-4" />
+        )}
+        {copyState === "copied"
+          ? "Senha copiada!"
+          : copyState === "failed"
+            ? "Não deu para copiar — anote a senha"
+            : "Copiar senha"}
       </Button>
     </div>
   );

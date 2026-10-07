@@ -199,6 +199,27 @@ export function shouldAutoStartTour(
   );
 }
 
+/**
+ * Whether the tour is on screen. Replaying and closing it are remembered per
+ * member: the provider outlives a sign-out, so what the previous account did
+ * in this tab must neither hide the tour from the next one nor open it.
+ */
+export function isTourOpen({
+  userId,
+  replayingFor,
+  dismissedFor,
+  autoStart,
+}: {
+  userId: string | null;
+  replayingFor: string | null;
+  dismissedFor: string | null;
+  autoStart: boolean;
+}): boolean {
+  if (!userId) return false;
+  if (replayingFor === userId) return true;
+  return dismissedFor !== userId && autoStart;
+}
+
 export type Rect = { top: number; left: number; width: number; height: number };
 
 /** Gap between the spotlight and the card, and the card and the viewport. */

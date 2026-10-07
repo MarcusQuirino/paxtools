@@ -15,6 +15,7 @@ import { useTour } from "@/components/tour/tour-provider";
 import { ChangePasswordForm } from "@/components/auth/change-password-form";
 import { type RamoNames } from "@/lib/ramos";
 import { formatGroupIdentity } from "@/lib/group-identity";
+import { copyText } from "@/lib/clipboard";
 import {
   ArrowLeft,
   Users,
@@ -110,7 +111,7 @@ function SettingsPage() {
 
   const handleCopyPassword = async () => {
     if (!group?.password) return;
-    await navigator.clipboard.writeText(group.password);
+    if (!(await copyText(group.password))) return;
     setCopiedPassword(true);
     setTimeout(() => setCopiedPassword(false), 2000);
   };
