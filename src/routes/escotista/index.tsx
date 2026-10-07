@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatGroupIdentity } from "@/lib/group-identity";
 import { RegiaoInput } from "@/components/onboarding/regiao-input";
 import { CreateManagedMemberButton } from "@/components/escotista/managed-access";
+import { copyText } from "@/lib/clipboard";
 import {
   Star,
   Search,
@@ -85,7 +86,7 @@ function EscotistaDashboard() {
 
   const handleCopyPassword = async () => {
     if (!stats.group.password) return;
-    await navigator.clipboard.writeText(stats.group.password);
+    if (!(await copyText(stats.group.password))) return;
     setCopiedPassword(true);
     setTimeout(() => setCopiedPassword(false), 2000);
   };
