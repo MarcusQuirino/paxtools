@@ -26,7 +26,7 @@ export function StageBanner({
 
   if (irrComplete) {
     return (
-      <div className="rounded-md border-2 border-black bg-yellow-400 p-5 text-black shadow-[4px_4px_0px_0px_#000]">
+      <div data-tour="stage-banner" className="rounded-md border-2 border-black bg-yellow-400 p-5 text-black shadow-[4px_4px_0px_0px_#000]">
         <div className="flex items-center gap-3">
           <Trophy className="size-10" />
           <div>
@@ -46,7 +46,7 @@ export function StageBanner({
   const remainingToIrr = Math.max(0, threshold - completedBlockCount);
 
   return (
-    <div className="rounded-md border-2 border-black bg-emerald-700 px-4 py-3 text-white shadow-[4px_4px_0px_0px_#065f46]">
+    <div data-tour="stage-banner" className="rounded-md border-2 border-black bg-emerald-700 px-4 py-3 text-white shadow-[4px_4px_0px_0px_#065f46]">
       <div className="flex items-baseline justify-between mb-1.5">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest opacity-80">

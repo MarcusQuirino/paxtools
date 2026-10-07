@@ -8,6 +8,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
+import { TourProvider } from "@/components/tour/tour-provider";
 import "../../styles/globals.css";
 
 class ErrorBoundary extends Component<
@@ -94,7 +95,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
       </head>
       <body>
         <ErrorBoundary>
-          {children}
+          <TourProvider>{children}</TourProvider>
         </ErrorBoundary>
         <Toaster />
         <Scripts />

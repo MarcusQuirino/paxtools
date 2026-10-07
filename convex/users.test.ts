@@ -163,3 +163,18 @@ describe("toggleFavoriteEscoteiro", () => {
     expect(admin?.favoriteEscoteiroIds).toEqual([]);
   });
 });
+
+describe("markTourSeen", () => {
+  test("stamps tourSeenAt on the caller", async () => {
+    const t = newTest();
+    const userId = await insertUser(t, { name: "Alice" });
+    await as(t, userId).mutation(api.users.markTourSeen, {});
+    const user = await t.run(async (ctx) => ctx.db.get(userId));
+    expect(typeof user?.tourSeenAt).toBe("number");
+  });
+
+  test("rejects an unauthenticated caller", async () => {
+    const t = newTest();
+    await expect(t.mutation(api.users.markTourSeen, {})).rejects.toThrow();
+  });
+});

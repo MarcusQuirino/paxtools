@@ -32,6 +32,10 @@
  *     escotista painel for every later spec using the admin login.
  *   - membership queue rows → each membership spec asserts only on its own
  *     personas' cards, never on exact queue counts.
+ *   - `tourSeenAt` on the escoteiro-approved and escotista rows →
+ *     m23-guided-tour.spec.ts re-stamps it when closing the tour. The seed
+ *     sets it on every persona so the tour never covers another spec's page;
+ *     no other spec may assert on it.
  */
 
 export interface ManifestEntry {

@@ -37,6 +37,7 @@ export function RecognitionSection({
   return (
     <section className="rounded-md overflow-hidden border-2 border-black bg-card">
       <div
+        data-tour="recognition"
         className="px-4 py-3 text-white border-b-2 border-black"
         style={{ backgroundColor: irr.color }}
       >

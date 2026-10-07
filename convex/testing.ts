@@ -545,6 +545,9 @@ export const seedTestUsers = internalMutation({
         membershipStatus: entry.membershipStatus,
         onboardingComplete: entry.onboardingComplete,
         groupId: entry.inGroup ? groupId : undefined,
+        // Seeded personas skip the guided tour — it would cover the page in
+        // every e2e spec. The tour's own spec replays it from Perfil.
+        tourSeenAt: existingUser?.tourSeenAt ?? Date.now(),
       };
 
       if (entry.banned) {
@@ -1124,7 +1127,11 @@ export const seedSimRamo = internalMutation({
       name: string,
       patch: Partial<Doc<"users">>,
     ): Promise<Doc<"users">> => {
-      const userId = await ctx.db.insert("users", { email, name });
+      const userId = await ctx.db.insert("users", {
+        email,
+        name,
+        tourSeenAt: now,
+      });
       await ensureAuthAccount(ctx, userId, email);
       await ctx.db.patch(userId, patch);
       const doc = await ctx.db.get(userId);
