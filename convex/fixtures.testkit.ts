@@ -26,6 +26,7 @@ export const modules = {
   "./featureFlags.ts": () => import("./featureFlags"),
   "./groups.ts": () => import("./groups"),
   "./http.ts": () => import("./http"),
+  "./managedAccounts.ts": () => import("./managedAccounts"),
   "./onboarding.ts": () => import("./onboarding"),
   "./plan.ts": () => import("./plan"),
   "./progression.ts": () => import("./progression"),

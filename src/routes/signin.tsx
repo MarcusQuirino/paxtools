@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useConvexAuth } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { SignInWithGoogle } from "@/components/auth/sign-in";
+import { SignInWithGoogle, SignInWithScoutId } from "@/components/auth/sign-in";
 import { Footer } from "@/components/footer";
 import { Compass, Map, Award, TrendingUp } from "lucide-react";
 
@@ -103,7 +103,15 @@ function LoginPage({ loading = false }: { loading?: boolean }) {
             {loading ? (
               <div className="h-11 rounded-md border-2 border-black bg-muted animate-pulse" />
             ) : (
-              <SignInWithGoogle />
+              <div className="space-y-4">
+                <SignInWithGoogle />
+                <div className="flex items-center gap-2 text-xs font-bold uppercase text-muted-foreground">
+                  <div className="flex-1 border-t-2 border-black/20" />
+                  <span>ou</span>
+                  <div className="flex-1 border-t-2 border-black/20" />
+                </div>
+                <SignInWithScoutId />
+              </div>
             )}
           </div>
 

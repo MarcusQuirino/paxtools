@@ -256,6 +256,11 @@ export const leaveGroup = mutation({
   handler: async (ctx) => {
     const user = await getAuthenticatedUser(ctx);
     if (!user.groupId) throw new Error("Você não está em nenhum grupo");
+    // A conta gerenciada was created by this grupo and has no other way back
+    // in; leaving would strand it.
+    if (user.scoutId) {
+      throw new Error("Contas com registro não podem sair do grupo. Fale com um escotista.");
+    }
 
     if (user.isAdmin) {
       const otherAdmins = await ctx.db
@@ -336,6 +341,8 @@ export const getGroupMembers = query({
       escotistaRamos: m.escotistaRamos,
       isAdmin: m.isAdmin === true,
       sectionId: m.sectionId ?? null,
+      // Set on a conta gerenciada — the UI offers "Gerar nova senha".
+      scoutId: m.scoutId ?? null,
     }));
   },
 });

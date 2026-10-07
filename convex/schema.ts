@@ -44,8 +44,18 @@ export default defineSchema({
     // When the user finished or skipped the guided tour. Unset means they
     // have not seen it yet, so it opens on their next visit.
     tourSeenAt: v.optional(v.number()),
+    // Conta gerenciada: signs in with this six-digit registro escoteiro + a
+    // password instead of Google. Mirrors the `managed` authAccounts row's
+    // providerAccountId so it can be shown and looked up.
+    scoutId: v.optional(v.string()),
+    // The escotista who created this conta gerenciada.
+    managedBy: v.optional(v.id("users")),
+    // Set when an escotista issues a temporary password (creation or reset);
+    // the member must choose their own before using the app.
+    mustChangePassword: v.optional(v.boolean()),
   })
     .index("email", ["email"])
+    .index("by_scoutId", ["scoutId"])
     .index("by_groupId", ["groupId"])
     .index("by_groupId_and_role", ["groupId", "role"])
     .index("by_groupId_and_status", ["groupId", "membershipStatus"])

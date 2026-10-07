@@ -320,4 +320,6 @@ Contribuicoes sao bem-vindas! Veja [CONTRIBUTING.md](CONTRIBUTING.md) para detal
 
 ## Licenca
 
-Este projeto esta licenciado sob a [MIT License](LICENSE).
+Este projeto esta licenciado sob a [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-only).
+
+Voce pode hospedar sua propria instancia. Se modificar o codigo e disponibiliza-lo para usuarios pela rede, a AGPL exige que voce ofereca o codigo-fonte modificado a esses usuarios.

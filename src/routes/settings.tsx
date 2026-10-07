@@ -12,6 +12,7 @@ import { RamoNamesInputs } from "@/components/onboarding/ramo-names-inputs";
 import { RegiaoInput } from "@/components/onboarding/regiao-input";
 import { SectionsManager } from "@/components/settings/sections-manager";
 import { useTour } from "@/components/tour/tour-provider";
+import { ChangePasswordForm } from "@/components/auth/change-password-form";
 import { type RamoNames } from "@/lib/ramos";
 import { formatGroupIdentity } from "@/lib/group-identity";
 import {
@@ -27,6 +28,7 @@ import {
   Trash2,
   User,
   GraduationCap,
+  KeyRound,
 } from "lucide-react";
 
 export const Route = createFileRoute("/settings")({
@@ -119,6 +121,8 @@ function SettingsPage() {
     <>
         <UserNameSection currentName={user.name ?? ""} />
 
+        {user.scoutId && <PasswordSection scoutId={user.scoutId} />}
+
         {/* Role section */}
         <section className="rounded-md border-2 border-black bg-card p-4 space-y-3">
           <h2 className="text-sm font-black uppercase flex items-center gap-2">
@@ -192,16 +196,19 @@ function SettingsPage() {
                   </p>
                 )}
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLeave}
-                disabled={leaving}
-                className="text-destructive hover:text-destructive"
-              >
-                <LogOut className="size-4 mr-1" />
-                {leaving ? "Saindo..." : "Sair do grupo"}
-              </Button>
+              {/* A conta gerenciada belongs to the grupo that created it. */}
+              {!user.scoutId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLeave}
+                  disabled={leaving}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <LogOut className="size-4 mr-1" />
+                  {leaving ? "Saindo..." : "Sair do grupo"}
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -426,6 +433,23 @@ function AccountSection() {
         <LogOut className="size-4 mr-1" />
         Sair da conta
       </Button>
+    </section>
+  );
+}
+
+function PasswordSection({ scoutId }: { scoutId: string }) {
+  return (
+    <section className="rounded-md border-2 border-black bg-card p-4 space-y-3">
+      <h2 className="text-sm font-black uppercase flex items-center gap-2">
+        <KeyRound className="size-4" />
+        Acesso
+      </h2>
+      <p className="text-xs text-muted-foreground">
+        Você entra com o registro{" "}
+        <span className="font-mono font-bold text-foreground">{scoutId}</span>.
+        Esqueceu a senha? Um escotista pode gerar uma nova.
+      </p>
+      <ChangePasswordForm scoutId={scoutId} forced={false} />
     </section>
   );
 }

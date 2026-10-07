@@ -15,6 +15,8 @@ type RouteRole = "escoteiro" | "escotista";
  *
  * Redirects (via effect) to:
  *   - `/signin` when unauthenticated,
+ *   - `/trocar-senha` while a conta gerenciada still holds a temporary
+ *     password,
  *   - `/onboarding` when onboarding is incomplete,
  *   - the other role's home when the role doesn't belong on this route.
  *
@@ -47,6 +49,10 @@ export function useAuthGate(requireRole: RouteRole): {
       return;
     }
     if (!user) return;
+    if (user.mustChangePassword) {
+      void navigate({ to: "/trocar-senha" });
+      return;
+    }
     if (!user.onboardingComplete) {
       void navigate({ to: "/onboarding" });
       return;
@@ -60,6 +66,7 @@ export function useAuthGate(requireRole: RouteRole): {
     !isLoading &&
     isAuthenticated &&
     !!user &&
+    !user.mustChangePassword &&
     user.onboardingComplete === true &&
     !roleMismatch;
 

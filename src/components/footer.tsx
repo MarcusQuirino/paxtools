@@ -1,4 +1,4 @@
-import { Bug } from "lucide-react";
+import { Bug, Code } from "lucide-react";
 
 const REPO_URL = "https://github.com/MarcusQuirino/paxtools";
 
@@ -50,6 +50,16 @@ export function Footer({ className }: { className?: string }) {
         >
           <Bug className="size-3.5" />
           Reportar um bug
+        </a>
+        <span className="text-border">|</span>
+        <a
+          href={REPO_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 font-bold text-muted-foreground underline-offset-4 hover:text-foreground hover:underline transition-colors"
+        >
+          <Code className="size-3.5" />
+          Código-fonte
         </a>
       </div>
     </footer>
