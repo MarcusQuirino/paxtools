@@ -7,6 +7,7 @@ import { api } from "../../../convex/_generated/api";
 import { Dashboard } from "../index";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Eye } from "lucide-react";
+import { ResetManagedPasswordButton } from "@/components/escotista/managed-access";
 
 export const Route = createFileRoute("/escotista/escoteiro/$escoteiroId")({
   component: ImpersonationView,
@@ -64,6 +65,13 @@ function ImpersonationContent({
             </p>
           </div>
         </div>
+        {escoteiro?.scoutId && (
+          <ResetManagedPasswordButton
+            userId={escoteiro._id}
+            name={escoteiro.name ?? "Escoteiro"}
+            compact
+          />
+        )}
       </div>
 
       <Dashboard targetUserId={escoteiroId} />

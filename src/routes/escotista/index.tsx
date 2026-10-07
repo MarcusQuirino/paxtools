@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { formatGroupIdentity } from "@/lib/group-identity";
 import { RegiaoInput } from "@/components/onboarding/regiao-input";
+import { CreateManagedMemberButton } from "@/components/escotista/managed-access";
 import {
   Star,
   Search,
@@ -30,6 +31,9 @@ function EscotistaDashboard() {
   const { data: user } = useSuspenseQuery(convexQuery(api.users.viewer, {}));
   const { data: stats } = useSuspenseQuery(
     convexQuery(api.approvals.getGroupStats, {}),
+  );
+  const { data: myGroup } = useSuspenseQuery(
+    convexQuery(api.groups.getMyGroup, {}),
   );
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -223,6 +227,17 @@ function EscotistaDashboard() {
           )}
         </div>
       </div>
+
+      {/* Conta gerenciada: members without Google. Any escotista adds
+          escoteiros of their ramos; only admins add escotistas. */}
+      {activeTab === "escoteiros"
+        ? (myGroup?.isAdmin || (user?.escotistaRamos?.length ?? 0) > 0) && (
+            <CreateManagedMemberButton
+              role="escoteiro"
+              ramoOptions={myGroup?.isAdmin ? undefined : user?.escotistaRamos}
+            />
+          )
+        : myGroup?.isAdmin && <CreateManagedMemberButton role="escotista" />}
 
       {/* Member list */}
       <div className="space-y-2">

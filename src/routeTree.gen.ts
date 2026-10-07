@@ -16,6 +16,7 @@ import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as PlanRouteImport } from './routes/plan'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SigninRouteImport } from './routes/signin'
+import { Route as TrocarSenhaRouteImport } from './routes/trocar-senha'
 import { Route as EscotistaIndexRouteImport } from './routes/escotista/index'
 import { Route as EscotistaAdminRouteImport } from './routes/escotista/admin'
 import { Route as EscotistaPendingRouteImport } from './routes/escotista/pending'
@@ -58,6 +59,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const SigninRoute = SigninRouteImport.update({
   id: '/signin',
   path: '/signin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrocarSenhaRoute = TrocarSenhaRouteImport.update({
+  id: '/trocar-senha',
+  path: '/trocar-senha',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EscotistaIndexRoute = EscotistaIndexRouteImport.update({
@@ -112,6 +118,7 @@ export interface FileRoutesByFullPath {
   '/plan': typeof PlanRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
+  '/trocar-senha': typeof TrocarSenhaRoute
   '/escotista/admin': typeof EscotistaAdminRoute
   '/escotista/pending': typeof EscotistaPendingRoute
   '/escotista/stats': typeof EscotistaStatsRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByTo {
   '/plan': typeof PlanRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
+  '/trocar-senha': typeof TrocarSenhaRoute
   '/escotista/admin': typeof EscotistaAdminRoute
   '/escotista/pending': typeof EscotistaPendingRoute
   '/escotista/stats': typeof EscotistaStatsRoute
@@ -146,6 +154,7 @@ export interface FileRoutesById {
   '/plan': typeof PlanRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
+  '/trocar-senha': typeof TrocarSenhaRoute
   '/escotista/admin': typeof EscotistaAdminRoute
   '/escotista/pending': typeof EscotistaPendingRoute
   '/escotista/stats': typeof EscotistaStatsRoute
@@ -165,6 +174,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/settings'
     | '/signin'
+    | '/trocar-senha'
     | '/escotista/admin'
     | '/escotista/pending'
     | '/escotista/stats'
@@ -181,6 +191,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/settings'
     | '/signin'
+    | '/trocar-senha'
     | '/escotista/admin'
     | '/escotista/pending'
     | '/escotista/stats'
@@ -198,6 +209,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/settings'
     | '/signin'
+    | '/trocar-senha'
     | '/escotista/admin'
     | '/escotista/pending'
     | '/escotista/stats'
@@ -216,6 +228,7 @@ export interface RootRouteChildren {
   PlanRoute: typeof PlanRoute
   SettingsRoute: typeof SettingsRoute
   SigninRoute: typeof SigninRoute
+  TrocarSenhaRoute: typeof TrocarSenhaRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -267,6 +280,13 @@ declare module '@tanstack/react-router' {
       path: '/signin'
       fullPath: '/signin'
       preLoaderRoute: typeof SigninRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trocar-senha': {
+      id: '/trocar-senha'
+      path: '/trocar-senha'
+      fullPath: '/trocar-senha'
+      preLoaderRoute: typeof TrocarSenhaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/escotista/': {
@@ -363,6 +383,7 @@ const rootRouteChildren: RootRouteChildren = {
   PlanRoute: PlanRoute,
   SettingsRoute: SettingsRoute,
   SigninRoute: SigninRoute,
+  TrocarSenhaRoute: TrocarSenhaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

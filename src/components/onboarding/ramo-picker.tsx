@@ -14,6 +14,8 @@ type Props = (
     }
 ) & {
   variant?: "dark" | "light";
+  /** Restrict the choice to these ramos (default: all). */
+  options?: Ramo[];
 };
 
 export function RamoPicker(props: Props) {
@@ -53,7 +55,7 @@ export function RamoPicker(props: Props) {
 
   return (
     <div className="grid grid-cols-2 gap-3">
-      {RAMOS.map((r) => {
+      {RAMOS.filter((r) => !props.options || props.options.includes(r)).map((r) => {
         const selected = isSelected(r);
         return (
           <button
