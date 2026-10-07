@@ -3,7 +3,7 @@
 import { ConvexError, v } from "convex/values";
 import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { generateObject } from "ai";
+import { generateText, Output } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { ramoValidator } from "./schema";
 import {
@@ -43,16 +43,16 @@ export const suggestActivities = action({
 
     let object: SuggestionResult;
     try {
-      ({ object } = await generateObject({
+      ({ output: object } = await generateText({
         model: anthropic("claude-sonnet-4-6"),
-        schema: suggestionSchema,
+        output: Output.object({ schema: suggestionSchema }),
         system,
         prompt,
         // Cost ceiling per call; the zod schema also bounds what we persist.
         maxOutputTokens: 3000,
       }));
     } catch (err) {
-      console.error("AI generateObject failed:", err);
+      console.error("AI suggestion generation failed:", err);
       throw new ConvexError(
         "Não foi possível gerar sugestões agora. Verifique a chave da IA no deployment ou tente novamente.",
       );
