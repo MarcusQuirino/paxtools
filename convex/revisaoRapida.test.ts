@@ -229,7 +229,32 @@ describe("undoMarkAction", () => {
     expect((await allEvents(t)).map((e) => e._id)).toEqual([unrelated!._id]);
   });
 
-  test("escoteiro's undo refuses once an escotista has approved the conclusão in the meantime", async () => {
+  test("an escotista's undo only deletes events its own mark logged, even if the receipt lists others", async () => {
+    const t = newTest();
+    const { groupId } = await seedGrupo(t);
+    const esc = await addEscoteiro(t, groupId);
+    const chefe = await addEscotista(t, groupId, ["escoteiro"]);
+    const earlier = await as(t, chefe).mutation(api.progression.markAction, {
+      actionId: "escoteiro:aprendizagem-continua:fixed:1",
+      targetUserId: esc,
+    });
+    const receipt = await as(t, chefe).mutation(api.progression.markAction, {
+      actionId: ACTION_ID,
+      targetUserId: esc,
+    });
+
+    // A stale/forged receipt that also lists the earlier mark's approval event.
+    const res = await as(t, chefe).mutation(api.progression.undoMarkAction, {
+      ...undoArgs(receipt),
+      eventIds: [...earlier.eventIds, ...receipt.eventIds],
+      targetUserId: esc,
+    });
+
+    expect(res).toEqual({ removed: true });
+    expect((await allEvents(t)).map((e) => e._id)).toEqual(earlier.eventIds);
+  });
+
+  test("escoteiro's undo removes nothing (no error) once an escotista has approved the conclusão in the meantime", async () => {
     const t = newTest();
     const { groupId } = await seedGrupo(t);
     const esc = await addEscoteiro(t, groupId);
@@ -241,9 +266,9 @@ describe("undoMarkAction", () => {
       completionId: receipt.completionId!,
     });
 
-    await expect(
-      as(t, esc).mutation(api.progression.undoMarkAction, undoArgs(receipt)),
-    ).rejects.toThrow("Item já aprovado pelo escotista");
+    const res = await as(t, esc).mutation(api.progression.undoMarkAction, undoArgs(receipt));
+
+    expect(res).toEqual({ removed: false });
     const rows = await completionsOf(t, esc);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.status).toBe("approved");

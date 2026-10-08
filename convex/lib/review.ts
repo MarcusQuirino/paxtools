@@ -22,7 +22,6 @@ import { getAuthenticatedUser } from "./authHelpers";
 import { assertCanActOnEscoteiro } from "./ramoVisibility";
 import {
   detectLevelUps,
-  detectLevelUpsLogged,
   snapshotProgression,
   type LevelUpToast,
   type ProgressionSnapshot,
@@ -138,7 +137,7 @@ async function approveLoaded(
   }
   const toasts: LevelUpToast[] = [];
   for (const [id, subject] of subjects) {
-    toasts.push(...(await detectLevelUps(ctx, actor, subject, before.get(id)!)));
+    toasts.push(...(await detectLevelUps(ctx, actor, subject, before.get(id)!)).toasts);
   }
   return toasts;
 }
@@ -229,26 +228,11 @@ export async function rejectConclusoes(
  * an especialidade item, registering an etapa on their behalf). `write`
  * performs the change and returns whether an approval landed; only then is it
  * audited (as `verb`, default "Aprovou") and the level-up cascade run against
- * the progression from before the write. Access must already be checked.
+ * the progression from before the write. Returns the level-up toasts and the
+ * ids of every event it logged (the approval plus any levelUp/lisDeOuro), so
+ * an undo can remove them. Access must already be checked.
  */
 export async function recordDirectApproval(
-  ctx: MutationCtx,
-  args: {
-    actor: Doc<"users">;
-    subject: Doc<"users">;
-    label: ConclusaoLabel;
-    verb?: string;
-  },
-  write: () => Promise<boolean>,
-): Promise<LevelUpToast[]> {
-  return (await recordDirectApprovalLogged(ctx, args, write)).toasts;
-}
-
-/**
- * recordDirectApproval, also returning the ids of every event it logged (the
- * approval plus any levelUp/lisDeOuro) so an undo can remove them.
- */
-export async function recordDirectApprovalLogged(
   ctx: MutationCtx,
   args: {
     actor: Doc<"users">;
@@ -266,7 +250,7 @@ export async function recordDirectApprovalLogged(
     subject: args.subject,
     summary: `${args.verb ?? "Aprovou"}: ${describeCompletion(args.subject.ramo, args.label)}`,
   });
-  const { toasts, eventIds } = await detectLevelUpsLogged(
+  const { toasts, eventIds } = await detectLevelUps(
     ctx,
     args.actor,
     args.subject,
