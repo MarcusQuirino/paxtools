@@ -437,7 +437,7 @@ export const wipeTestData = internalAction({
 });
 
 /**
- * Staging-only: delete every REAL user (anyone outside the reserved `99xxxx`
+ * Staging-only: delete every REAL user (anyone outside the reserved `99xxxxx`
  * test registros) so the Google onboarding flow can be re-tested
  * from scratch. Seeded test users and the test group are untouched.
  *

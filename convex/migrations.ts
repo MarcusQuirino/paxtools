@@ -4,6 +4,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { backfillSectionsForGroup } from "./lib/sections";
 import schema from "./schema";
 import { drainLegacySpecialtyRow } from "./lib/legacySpecialty";
+import { widenLegacyTestRegistro } from "./lib/legacyTestRegistro";
 
 /**
  * Stateful migrations via @convex-dev/migrations.
@@ -75,6 +76,18 @@ export const dropLegacySpecialtyCompletions = migrations.define({
 });
 
 /**
+ * Hotfix: registros escoteiros are seven digits, not six. Re-key every
+ * 6-digit test persona (`99xxxx` → `99xxxxx`) so seeded logins keep working
+ * after the validation change. Real users are untouched; idempotent.
+ */
+export const testRegistrosToSevenDigits = migrations.define({
+  table: "users",
+  migrateOne: async (ctx, user) => {
+    await widenLegacyTestRegistro(ctx, user);
+  },
+});
+
+/**
  * Append-only, ordered registry of every migration that must run before a
  * release's frontend goes live. The pre-component migrations (legacy
  * action-id prefixing, Lis de Ouro→IRR copy, ramo backfills, specialty
@@ -87,6 +100,7 @@ const REGISTRY: Parameters<typeof migrations.runSerially>[1] = [
   // registry is append-only, so this order is now fixed.
   internal.migrations.sectionsFromRamoNames,
   internal.migrations.dropLegacySpecialtyCompletions,
+  internal.migrations.testRegistrosToSevenDigits,
 ];
 
 /** Run every registered migration in order. Invoked by the deploy workflows. */

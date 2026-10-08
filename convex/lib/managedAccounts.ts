@@ -11,12 +11,12 @@ export const MIN_PASSWORD_LENGTH = 6;
 export const MAX_PASSWORD_LENGTH = 64;
 
 /**
- * Normalize a registro escoteiro: a six-digit number. Pasted forms with dots,
+ * Normalize a registro escoteiro: a seven-digit number. Pasted forms with dots,
  * dashes or spaces are accepted. Returns null for anything else.
  */
 export function normalizeScoutId(raw: string): string | null {
   const digits = raw.replace(/[\s.\-/]/g, "");
-  return /^\d{6}$/.test(digits) ? digits : null;
+  return /^\d{7}$/.test(digits) ? digits : null;
 }
 
 const OBVIOUS_PASSWORDS = new Set([

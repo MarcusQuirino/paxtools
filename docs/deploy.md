@@ -85,10 +85,10 @@ the frontend ships). Never edit or reorder a migration that has run anywhere.
   (idempotent; run from your machine, affects staging).
 - `bun run staging:wipe-real` — delete all REAL (Google) accounts and their
   data from staging, so onboarding can be re-tested from scratch. Test users
-  (registros `99xxxx`) survive. Guarded by `TEST_AUTH=1`, so it cannot run
+  (registros `99xxxxx`) survive. Guarded by `TEST_AUTH=1`, so it cannot run
   on prod.
 - `bun run staging:reset` — wipe + re-seed the test users.
-- Sign in on staging with the registro form (any seeded `99xxxx` persona —
+- Sign in on staging with the registro form (any seeded `99xxxxx` persona —
   see `convex/lib/testAccounts.ts` — + the shared test password) or with
   Google.
 

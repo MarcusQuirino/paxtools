@@ -22,6 +22,7 @@ import type * as lib_coverage from "../lib/coverage.js";
 import type * as lib_especialidades from "../lib/especialidades.js";
 import type * as lib_events from "../lib/events.js";
 import type * as lib_legacySpecialty from "../lib/legacySpecialty.js";
+import type * as lib_legacyTestRegistro from "../lib/legacyTestRegistro.js";
 import type * as lib_managedAccounts from "../lib/managedAccounts.js";
 import type * as lib_progression from "../lib/progression.js";
 import type * as lib_ramoVisibility from "../lib/ramoVisibility.js";
@@ -60,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   "lib/especialidades": typeof lib_especialidades;
   "lib/events": typeof lib_events;
   "lib/legacySpecialty": typeof lib_legacySpecialty;
+  "lib/legacyTestRegistro": typeof lib_legacyTestRegistro;
   "lib/managedAccounts": typeof lib_managedAccounts;
   "lib/progression": typeof lib_progression;
   "lib/ramoVisibility": typeof lib_ramoVisibility;

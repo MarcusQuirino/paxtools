@@ -6,13 +6,15 @@ import type { Doc } from "./_generated/dataModel";
 import { snapshotProgression } from "./lib/progression";
 import { getRamoRules } from "../src/data/progression-rules";
 import { newTest } from "./fixtures.testkit";
+import { widenLegacyTestRegistro } from "./lib/legacyTestRegistro";
 import {
   CANONICAL_SCOUT_IDS,
   DEFAULT_TEST_PASSWORD,
   simScoutId,
   type SimKind,
+  widenLegacyTestScoutId,
 } from "./lib/testAccounts";
-import { MANAGED_PROVIDER } from "./lib/managedAccounts";
+import { MANAGED_PROVIDER, normalizeScoutId } from "./lib/managedAccounts";
 
 const RAMOS = ["lobinho", "escoteiro", "senior", "pioneiro"] as const;
 
@@ -26,7 +28,7 @@ function isSim(kind: SimKind) {
   return (u: Doc<"users">) => u.scoutId !== undefined && ids.has(u.scoutId);
 }
 
-test("wipeTestData removes only test users (99xxxx registros + legacy emails)", async () => {
+test("wipeTestData removes only test users (99xxxxx registros + legacy emails)", async () => {
   const prev = process.env.TEST_AUTH;
   process.env.TEST_AUTH = "1";
   try {
@@ -41,7 +43,7 @@ test("wipeTestData removes only test users (99xxxx registros + legacy emails)", 
         scoutId: "123456",
         name: "Real Managed",
       });
-      await ctx.db.insert("users", { scoutId: "990123", name: "Test User" });
+      await ctx.db.insert("users", { scoutId: "9900123", name: "Test User" });
       await ctx.db.insert("users", {
         email: "wipeme@test.paxtools.local",
         name: "Legacy Test User",
@@ -218,4 +220,42 @@ test("updateName rejects unauthenticated callers", async () => {
     if (prev === undefined) delete process.env.TEST_AUTH;
     else process.env.TEST_AUTH = prev;
   }
+});
+
+test("test registros are seven digits; legacy 6-digit ones widen to the same layout", () => {
+  for (const id of Object.values(CANONICAL_SCOUT_IDS)) {
+    expect(normalizeScoutId(id)).toBe(id);
+  }
+  expect(simScoutId("senior", "pending", 7)).toBe("9933007");
+  expect(normalizeScoutId(simScoutId("pioneiro", "troop", 99))).not.toBeNull();
+  expect(widenLegacyTestScoutId("990001")).toBe(CANONICAL_SCOUT_IDS.admin);
+  expect(widenLegacyTestScoutId("993307")).toBe("9933007");
+  expect(widenLegacyTestScoutId("9900001")).toBeNull();
+  expect(widenLegacyTestScoutId("123456")).toBeNull();
+});
+
+test("widenLegacyTestRegistro re-keys test personas only", async () => {
+  const t = newTest();
+  const { testId, realId } = await t.run(async (ctx) => {
+    const testId = await ctx.db.insert("users", { scoutId: "990001", name: "Admin" });
+    await ctx.db.insert("authAccounts", {
+      userId: testId,
+      provider: MANAGED_PROVIDER,
+      providerAccountId: "990001",
+      secret: "x",
+    });
+    const realId = await ctx.db.insert("users", { scoutId: "1234567", name: "Real" });
+    return { testId, realId };
+  });
+  await t.run(async (ctx) => {
+    for (const u of await ctx.db.query("users").collect()) {
+      await widenLegacyTestRegistro(ctx, u);
+    }
+  });
+  await t.run(async (ctx) => {
+    expect((await ctx.db.get(testId))?.scoutId).toBe("9900001");
+    expect((await ctx.db.get(realId))?.scoutId).toBe("1234567");
+    const accounts = await ctx.db.query("authAccounts").collect();
+    expect(accounts.map((a) => a.providerAccountId)).toEqual(["9900001"]);
+  });
 });

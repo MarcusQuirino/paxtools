@@ -1,5 +1,11 @@
 # paxtools
 
+## 1.9.1
+
+### Patch Changes
+
+- Hotfix: registro escoteiro tem 7 dígitos, não 6. Login por registro + senha e criação de conta gerenciada agora exigem 7 dígitos; personas de teste migradas para `99xxxxx`.
+
 ## 1.9.0
 
 ### Minor Changes

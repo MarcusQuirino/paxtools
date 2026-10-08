@@ -58,9 +58,9 @@ Password for every seeded persona: `paxtools-test-only` (or the deployment's
 `TEST_AUTH_PASSWORD`, which the seed hashes). A wrong password reads
 "Registro ou senha incorretos", and ten misses in an hour lock the registro.
 
-Registro `990006` (`progression`) is the default persona to reach for — an
+Registro `9900006` (`progression`) is the default persona to reach for — an
 approved escoteiro with partial progression, so the home view has real data in
-it. Admin is `990001`. Test registros all live in `99xxxx`; the mapping is in
+it. Admin is `9900001`. Test registros all live in `99xxxxx`; the mapping is in
 `convex/lib/testAccounts.ts`, and the full persona list with roles, ramos and
 membership states in `tests/utils/catalog.ts` — read them rather than
 guessing.

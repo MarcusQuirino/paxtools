@@ -17,7 +17,7 @@
  * Every persona is a conta gerenciada: it signs in with its registro + the
  * shared test password through the real `/signin` form. Registros come from
  * `convex/lib/testAccounts.ts`; `login()` maps a persona's login name to it:
- *   canonical  admin, escotista, pending, …            → 990NNN
+ *   canonical  admin, escotista, pending, …            → 990NNNN
  *   scouts     sim-troop-<ramo>-<i+1>    (SIM_SPECS order)
  *   escotistas sim-escotista-<ramo>-<j+1>
  *   pending    sim-pending-<ramo>-1 / sim-pending-escotista-<ramo>-1

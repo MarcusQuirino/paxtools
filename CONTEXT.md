@@ -39,7 +39,7 @@ An escotista who manages the grupo and sees every ramo. The grupo's creator is a
 _Avoid_: owner, superuser
 
 **Conta gerenciada**:
-A member who signs in with their six-digit **registro escoteiro** and a password instead of Google — for children or anyone without a Google account. It is never self-registered: any escotista creates one for an escoteiro of a ramo they accompany (an [[admin]], any ramo), and only an admin creates one for an escotista. It starts already approved in the creator's grupo, onboarded, and with a temporary password the member must replace on first sign-in. A forgotten password is replaced, never recovered: whoever can act on the member issues a new temporary one, signing them out everywhere. Has no email or photo, and cannot leave its grupo.
+A member who signs in with their seven-digit **registro escoteiro** and a password instead of Google — for children or anyone without a Google account. It is never self-registered: any escotista creates one for an escoteiro of a ramo they accompany (an [[admin]], any ramo), and only an admin creates one for an escotista. It starts already approved in the creator's grupo, onboarded, and with a temporary password the member must replace on first sign-in. A forgotten password is replaced, never recovered: whoever can act on the member issues a new temporary one, signing them out everywhere. Has no email or photo, and cannot leave its grupo.
 _Avoid_: conta infantil, usuário local, login sem Google (in prose)
 
 **Visibilidade de ramo**:

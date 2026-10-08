@@ -49,7 +49,7 @@ export default defineSchema({
     // When the user finished or skipped the guided tour. Unset means they
     // have not seen it yet, so it opens on their next visit.
     tourSeenAt: v.optional(v.number()),
-    // Conta gerenciada: signs in with this six-digit registro escoteiro + a
+    // Conta gerenciada: signs in with this seven-digit registro escoteiro + a
     // password instead of Google. Mirrors the `managed` authAccounts row's
     // providerAccountId so it can be shown and looked up.
     scoutId: v.optional(v.string()),

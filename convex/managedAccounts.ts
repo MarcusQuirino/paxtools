@@ -138,7 +138,7 @@ export const createManagedMember = action({
     if (!name) throw new ConvexError("Informe o nome");
     if (name.length > 100) throw new ConvexError("Nome muito longo");
     const scoutId = normalizeScoutId(args.scoutId);
-    if (!scoutId) throw new ConvexError("O registro deve ter 6 dígitos");
+    if (!scoutId) throw new ConvexError("O registro deve ter 7 dígitos");
     const escotistaRamos =
       args.role === "escotista"
         ? Array.from(new Set(args.escotistaRamos ?? []))
