@@ -1,5 +1,18 @@
 # paxtools
 
+## 1.9.0
+
+### Minor Changes
+
+- 9263b2a: Revisão rápida: um baralho de cartas com todas as ações ainda não marcadas do ramo. Arraste para a direita (já fiz), esquerda (ainda não), cima (pro Plano) ou baixo (desfazer), ou use os botões e as setas do teclado. O escoteiro abre pelo card amarelo na home e suas marcações vão para Pendentes; o escotista revisa por um escoteiro de cada vez, a partir do painel ou da página do escoteiro, e suas marcações já saem aprovadas.
+
+### Patch Changes
+
+- 0cfb3dd: Atualiza dependências para as versões mais recentes (AI SDK 7, lucide-react 1, changesets 3, concurrently 10) e corrige vulnerabilidades transitivas (shell-quote, source-map-js, braces, sprintf-js).
+- 652b8c6: CI and deploys run on Node 24 LTS (pinned via `engines.node`), GitHub Actions bumped to their Node 24 majors (checkout v7, cache v6, upload-artifact v7, setup-node v7), runners pinned to ubuntu-24.04, and all lint warnings fixed.
+- 50de70e: Tests: close unit/integration gaps left by recent features — admin promotion/demotion, member role/ramo changes, pending memberships, managed-account creation/reset rules and the managed sign-in provider (signUp/reset refused, registro check), IRR level-up events, audit labels, stats especialidades ordering, plan-view resolution, clipboard fallback, level-up toasts and error-message unwrapping. Two known bugs pinned as `test.failing`.
+- cd64d42: Test personas now sign in as contas gerenciadas (registro `99xxxx` + senha) through the real sign-in form; the separate test-only login provider and hidden form are gone.
+
 ## 1.8.0
 
 ### Minor Changes
