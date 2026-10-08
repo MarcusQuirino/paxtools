@@ -8,6 +8,10 @@ import { Dashboard } from "../index";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Eye } from "lucide-react";
 import { ResetManagedPasswordButton } from "@/components/escotista/managed-access";
+import { useProgression } from "@/hooks/use-progression";
+import { countRevisaoDeck } from "@/lib/revisao-deck";
+import { revisaoButtonLabel } from "@/lib/revisao-entry";
+import { RevisaoRapidaLink } from "@/components/escotista/revisao-rapida-link";
 
 export const Route = createFileRoute("/escotista/escoteiro/$escoteiroId")({
   component: ImpersonationView,
@@ -41,6 +45,10 @@ function ImpersonationContent({
   );
 
   const escoteiro = members.find((m) => m._id === escoteiroId);
+  // Same query the Dashboard below reads (shared cache); it only resolves for
+  // escoteiros this escotista may act on, so the button inherits that rule.
+  const progression = useProgression(escoteiroId);
+  const revisaoCount = countRevisaoDeck(progression);
 
   return (
     <div className="space-y-4">
@@ -73,6 +81,24 @@ function ImpersonationContent({
           />
         )}
       </div>
+
+      {revisaoCount > 0 ? (
+        <RevisaoRapidaLink
+          escoteiroId={escoteiroId}
+          data-testid="revisao-rapida-entry"
+          className="flex w-full items-center justify-center gap-2 rounded-md border-2 border-black bg-yellow-400 px-4 py-2.5 text-sm font-black uppercase shadow-[3px_3px_0px_0px_#000] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0px_0px_#000]"
+        >
+          <span aria-hidden>🃏</span>
+          {revisaoButtonLabel(revisaoCount)}
+        </RevisaoRapidaLink>
+      ) : (
+        <p
+          data-testid="revisao-rapida-em-dia"
+          className="rounded-md border-2 border-dashed border-black/30 px-4 py-2 text-center text-xs font-bold text-muted-foreground"
+        >
+          {revisaoButtonLabel(revisaoCount)}
+        </p>
+      )}
 
       <Dashboard targetUserId={escoteiroId} />
     </div>
