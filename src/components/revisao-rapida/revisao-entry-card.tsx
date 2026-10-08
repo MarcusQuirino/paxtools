@@ -4,6 +4,7 @@ import {
   countRevisaoDeck,
   type RevisaoProgression,
 } from "@/lib/revisao-deck";
+import { acoesCount } from "@/lib/revisao-entry";
 
 /**
  * Escoteiro home entry to Revisão rápida: a yellow card with how many ações
@@ -28,7 +29,7 @@ export function RevisaoEntryCard({
       <span className="flex-1">
         <span className="block font-black uppercase">Revisão rápida</span>
         <span className="block text-sm font-medium">
-          {count} {count === 1 ? "ação" : "ações"} para revisar. Já fez alguma?
+          {acoesCount(count)} para revisar. Já fez alguma?
           Marque arrastando.
         </span>
       </span>

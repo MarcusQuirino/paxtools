@@ -11,10 +11,11 @@ import { encodePlanKey } from "@/lib/plan-keys";
 import { notifyLevelUps } from "@/lib/level-up-toast";
 import { userErrorMessage } from "@/lib/user-error-message";
 import {
+  beginUndo,
+  settleUndo,
   startSession,
   summarize,
   swipe,
-  undo,
   type SwipeKind,
 } from "@/lib/revisao-session";
 import type { DragOutcome } from "@/lib/revisao-gesture";
@@ -81,7 +82,7 @@ export function RevisaoScreen({
   const showSummary = exited || summary.finished;
   const card = deck[session.index];
   const next = deck[session.index + 1];
-  const canUndo = session.history.length > 0;
+  const canUndo = session.history.length > 0 && !session.undoing;
 
   const send = (kind: SwipeKind, c: RevisaoCard): PendingReceipt | null => {
     if (kind === "skip") return null; // left swipes never touch the server
@@ -103,23 +104,42 @@ export function RevisaoScreen({
     });
   };
 
-  const revert = (pending: PendingReceipt | null) => {
-    if (!pending) return;
-    void enqueue(async () => {
+  /**
+   * Revert a swipe on the server; resolves whether it was taken back. A mark
+   * the server won't undo (approved meanwhile) or a failed call keeps it.
+   */
+  const revert = (pending: PendingReceipt): Promise<boolean> =>
+    enqueue(async () => {
       const r = await pending;
       if (r?.kind === "mark") {
         const { created, completionId, status, eventIds } = r.mark;
         if (created && completionId && status) {
-          await undoMarkAction({ completionId, status, eventIds, targetUserId });
+          const { removed } = await undoMarkAction({
+            completionId,
+            status,
+            eventIds,
+            targetUserId,
+          });
+          if (!removed) {
+            toast.info(
+              escotista
+                ? "Essa marcação já mudou — não dá pra desfazer"
+                : "Já aprovada pelo escotista — não dá pra desfazer",
+            );
+            return false;
+          }
         }
       } else if (r?.kind === "plan" && r.added) {
         await removeFromPlan({ itemKey: r.itemKey });
       }
-    }).catch((err: unknown) => toast.error(userErrorMessage(err)));
-  };
+      return true;
+    }).catch((err: unknown) => {
+      toast.error(userErrorMessage(err));
+      return false;
+    });
 
   const commit = (kind: SwipeKind) => {
-    if (leaving || !card || showSummary) return;
+    if (leaving || session.undoing || !card || showSummary) return;
     if (kind === "plan" && !planEnabled) return;
     const receipt = send(kind, card);
     setLeaving(kind);
@@ -130,14 +150,23 @@ export function RevisaoScreen({
     }, FLING_MS);
   };
 
+  // The card only comes back once the server confirms the undo.
   const handleUndo = () => {
     if (leaving) return;
-    const step = undo(session);
+    const step = beginUndo(session);
     if (!step.undone) return;
+    const settle = (confirmed: boolean) => {
+      setSession((s) => settleUndo(s, confirmed));
+      if (confirmed) {
+        setExited(false);
+        setExpanded(false);
+      }
+    };
     setSession(step.session);
-    setExited(false);
-    setExpanded(false);
-    revert(step.undone.receipt);
+    const pending = step.undone.receipt;
+    // A left swipe never touched the server: nothing to wait for.
+    if (!pending) settle(true);
+    else void revert(pending).then(settle);
   };
 
   const handleRelease = (outcome: DragOutcome) => {
@@ -392,7 +421,7 @@ function Summary({
       <Stat testId="revisao-summary-skip" value={summary.skip} color="text-red-600">
         ainda não feitas
       </Stat>
-      {summary.unseen > 0 && (
+      {(!target || summary.unseen > 0) && (
         <Stat testId="revisao-summary-unseen" value={summary.unseen}>
           não vistas — aparecem na próxima revisão
         </Stat>

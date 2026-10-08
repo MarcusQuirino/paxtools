@@ -1,6 +1,6 @@
 /**
- * Escotista entry points to Revisão rápida (painel row + escoteiro page).
- * Pure and browser-free.
+ * Entry points to Revisão rápida (painel row + escoteiro page for escotistas,
+ * home card for the escoteiro). Pure and browser-free.
  */
 
 const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
@@ -34,8 +34,13 @@ export function revisaoEntry(count: number | undefined): RevisaoEntry {
   return { kind: "deck", count };
 }
 
+/** "1 ação" / "N ações" — the count every entry point shows. */
+export function acoesCount(count: number): string {
+  return `${count} ${count === 1 ? "ação" : "ações"}`;
+}
+
 /** The escoteiro page button: "Revisão rápida · N ações" ("em dia" at 0). */
 export function revisaoButtonLabel(count: number): string {
   if (count <= 0) return "Revisão rápida · em dia";
-  return `Revisão rápida · ${count} ${count === 1 ? "ação" : "ações"}`;
+  return `Revisão rápida · ${acoesCount(count)}`;
 }

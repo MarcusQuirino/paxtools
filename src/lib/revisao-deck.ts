@@ -6,7 +6,8 @@
  * 1. Plano ações, in Plano order (non-ação / ineligible entries skipped);
  * 2. the other ações of incomplete blocos, round-robin over eixos in catalog
  *    order, shuffled within each eixo by the injected `random`;
- * 3. variable ações of already-complete blocos, same round-robin.
+ * 3. ações of already-complete blocos (normally just variable ones), same
+ *    round-robin.
  *
  * "Bloco complete" is not redefined here: it is `completedBlockIds` from the
  * progression state (completion-logic via deriveProgression), so ações

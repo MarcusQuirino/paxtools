@@ -157,6 +157,23 @@ describe("buildRevisaoDeck", () => {
     expect(deck.slice(2).every((c) => c.actionType === "variable")).toBe(true);
   });
 
+  it("deals unmarked fixed ações of a bloco counted complete (e.g. via especialidade) last too", () => {
+    // The deck trusts completedBlockIds: whatever is still unmarked in a
+    // complete bloco no longer moves progression, fixed or variable.
+    const catalog = [eixo("a", [bloco("a", "a1", 2, 1), bloco("a", "a2", 1, 0)])];
+    const deck = buildRevisaoDeck({
+      progression: progression(catalog, {}, ["a1"]),
+      planItemKeys: [],
+      random: seeded(4),
+    });
+
+    expect(ids(deck.slice(0, 1))).toEqual(["t:a2:fixed:0"]);
+    expect(new Set(ids(deck.slice(1)))).toEqual(
+      new Set(["t:a1:fixed:0", "t:a1:fixed:1", "t:a1:variable:0"]),
+    );
+    expect(deck.slice(1).every((c) => c.blocoComplete)).toBe(true);
+  });
+
   it("deals Plano ações first, in Plano order, then the rest without repeating them", () => {
     const deck = buildRevisaoDeck({
       progression: progression(uneven),

@@ -25,16 +25,18 @@ export const Route = createFileRoute("/revisao-rapida")({
     // Not getCompletionsForUser: it throws when unauthenticated, and a hard
     // load runs this loader before the session is up. The component fetches
     // it once the auth gate is ready.
-    const queries = deps.escoteiroId
-      ? [convexQuery(api.groups.getGroupMembers, {})]
-      : [
-          convexQuery(api.progression.getMyCompletions, {}),
-          convexQuery(api.plan.getMyPlan, {}),
-        ];
-    await Promise.all(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      queries.map((q) => context.queryClient.ensureQueryData(q as any)),
-    );
+    if (deps.escoteiroId) {
+      await context.queryClient.ensureQueryData(
+        convexQuery(api.groups.getGroupMembers, {}),
+      );
+      return;
+    }
+    await Promise.all([
+      context.queryClient.ensureQueryData(
+        convexQuery(api.progression.getMyCompletions, {}),
+      ),
+      context.queryClient.ensureQueryData(convexQuery(api.plan.getMyPlan, {})),
+    ]);
   },
   component: RevisaoRapidaPage,
 });
