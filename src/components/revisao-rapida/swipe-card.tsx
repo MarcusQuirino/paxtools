@@ -1,5 +1,4 @@
 import { useLayoutEffect, useRef } from "react";
-import { ChevronDown } from "lucide-react";
 import type { RevisaoCard } from "@/lib/revisao-deck";
 import type { SwipeKind } from "@/lib/revisao-session";
 import {
@@ -44,15 +43,12 @@ type SwipeCardProps = {
   canUndo?: boolean;
   /** Set when the card is being swiped away; flies it off with its stamp. */
   leaving?: SwipeKind | null;
-  expanded?: boolean;
-  onExpandedChange?: (expanded: boolean) => void;
   /** A drag released past the threshold. */
   onRelease?: (outcome: DragOutcome) => void;
 };
 
 /**
- * One Revisão rápida card: eixo-colored header, ação text, tags, collapsible
- * "Objetivo do bloco". The top card is dragged with plain pointer events;
+ * One Revisão rápida card: eixo-colored header, ação text and tags. The top card is dragged with plain pointer events;
  * transform/stamps are written straight to the DOM so a drag never re-renders.
  */
 export function SwipeCard({
@@ -62,8 +58,6 @@ export function SwipeCard({
   planEnabled = false,
   canUndo = false,
   leaving = null,
-  expanded = false,
-  onExpandedChange,
   onRelease,
 }: SwipeCardProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -103,8 +97,6 @@ export function SwipeCard({
     if (!interactive || e.button !== 0) return;
     const target = e.target as HTMLElement;
     if (target.closest("[data-no-drag]")) return;
-    // Expanded: the body scrolls, so only the header drags.
-    if (expanded && !target.closest("[data-card-head]")) return;
     drag.current = { x: e.clientX, y: e.clientY, dx: 0, dy: 0 };
     e.currentTarget.setPointerCapture(e.pointerId);
     e.currentTarget.style.transition = "none";
@@ -144,7 +136,6 @@ export function SwipeCard({
       )}
     >
       <div
-        data-card-head
         className="cursor-grab touch-none border-b-2 border-black px-4 py-3 text-white"
         style={{ backgroundColor: card.eixo.color }}
       >
@@ -156,12 +147,7 @@ export function SwipeCard({
         </p>
       </div>
 
-      <div
-        className={cn(
-          "flex-1 overflow-y-auto p-4",
-          expanded ? "touch-pan-y" : "touch-none",
-        )}
-      >
+      <div className="flex-1 touch-none overflow-y-auto p-4">
         <div className="mb-3 flex flex-wrap gap-1.5">
           <Tag>{card.actionType === "fixed" ? "Fixa" : "Variável"}</Tag>
           {showPlanTag && card.inPlano && (
@@ -177,25 +163,6 @@ export function SwipeCard({
         >
           {card.text}
         </p>
-
-        <div className="mt-4 border-t-2 border-dashed border-black/20 pt-2">
-          <button
-            type="button"
-            data-no-drag
-            aria-expanded={expanded}
-            tabIndex={under ? -1 : 0}
-            onClick={() => onExpandedChange?.(!expanded)}
-            className="flex w-full items-center justify-between py-1 text-xs font-black uppercase"
-          >
-            Objetivo do bloco
-            <ChevronDown
-              className={cn("size-4 transition-transform", expanded && "rotate-180")}
-            />
-          </button>
-          {expanded && (
-            <p className="mt-1.5 text-sm">{card.bloco.objective}</p>
-          )}
-        </div>
       </div>
 
       {STAMPS.map((s) => (

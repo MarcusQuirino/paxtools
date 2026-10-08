@@ -61,7 +61,6 @@ export function RevisaoScreen({
     startSession<PendingReceipt | null>(deck.length),
   );
   const [exited, setExited] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const [leaving, setLeaving] = useState<SwipeKind | null>(null);
 
   const markAction = useConvexMutation(api.progression.markAction);
@@ -145,7 +144,6 @@ export function RevisaoScreen({
     setLeaving(kind);
     window.setTimeout(() => {
       setSession((s) => swipe(s, kind, receipt));
-      setExpanded(false);
       setLeaving(null);
     }, FLING_MS);
   };
@@ -159,8 +157,7 @@ export function RevisaoScreen({
       setSession((s) => settleUndo(s, confirmed));
       if (confirmed) {
         setExited(false);
-        setExpanded(false);
-      }
+        }
     };
     setSession(step.session);
     const pending = step.undone.receipt;
@@ -289,8 +286,6 @@ export function RevisaoScreen({
           planEnabled={planEnabled}
           canUndo={canUndo}
           leaving={leaving}
-          expanded={expanded}
-          onExpandedChange={setExpanded}
           onRelease={handleRelease}
         />
       </div>
