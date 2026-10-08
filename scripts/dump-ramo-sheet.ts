@@ -18,7 +18,7 @@ if (!sheet) {
   process.exit(1);
 }
 
-const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+const rows = XLSX.utils.sheet_to_json<(string | number | boolean)[]>(sheet, {
   header: 1,
   defval: "",
   blankrows: true,
