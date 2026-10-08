@@ -6,6 +6,8 @@ import {
   tryResolveRamoViewer,
 } from "./lib/ramoVisibility";
 import { readProgression, type LevelUpToast } from "./lib/progression";
+import type { Id } from "./_generated/dataModel";
+import type { Eixo } from "../src/data/types";
 import { catalogActionCounts } from "../src/lib/progression-state";
 import {
   filterObservableSections,
@@ -197,6 +199,40 @@ export const getGroupStats = query({
       escoteiroStats,
       escotistaStats,
     };
+  },
+});
+
+/** Every ação (fixed + variable) of a ramo's catalog. */
+function catalogActionTotal(eixos: Eixo[]): number {
+  let total = 0;
+  for (const eixo of eixos) {
+    for (const bloco of eixo.blocos) {
+      total += bloco.fixedActions.length + bloco.variableActions.length;
+    }
+  }
+  return total;
+}
+
+/**
+ * Revisão rápida counts for the painel: escoteiroId → ações of the
+ * escoteiro's current ramo catalog with no conclusão (any status). Same
+ * escoteiros as the painel's lista de jovens; equals the deck size.
+ */
+export const getUncheckedActionCounts = query({
+  args: {},
+  returns: v.record(v.id("users"), v.number()),
+  handler: async (ctx) => {
+    const viewer = await tryResolveRamoViewer(ctx);
+    if (!viewer) return {};
+
+    const { escoteiros } = await readObservedEscoteiros(ctx, viewer);
+    const counts: Record<Id<"users">, number> = {};
+    for (const esc of escoteiros) {
+      const { state } = await readProgression(ctx, esc);
+      const { approved, pending } = catalogActionCounts(state);
+      counts[esc._id] = catalogActionTotal(state.eixos) - approved - pending;
+    }
+    return counts;
   },
 });
 
