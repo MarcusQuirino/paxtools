@@ -22,6 +22,7 @@ import { getAuthenticatedUser } from "./authHelpers";
 import { assertCanActOnEscoteiro } from "./ramoVisibility";
 import {
   detectLevelUps,
+  detectLevelUpsLogged,
   snapshotProgression,
   type LevelUpToast,
   type ProgressionSnapshot,
@@ -240,13 +241,36 @@ export async function recordDirectApproval(
   },
   write: () => Promise<boolean>,
 ): Promise<LevelUpToast[]> {
+  return (await recordDirectApprovalLogged(ctx, args, write)).toasts;
+}
+
+/**
+ * recordDirectApproval, also returning the ids of every event it logged (the
+ * approval plus any levelUp/lisDeOuro) so an undo can remove them.
+ */
+export async function recordDirectApprovalLogged(
+  ctx: MutationCtx,
+  args: {
+    actor: Doc<"users">;
+    subject: Doc<"users">;
+    label: ConclusaoLabel;
+    verb?: string;
+  },
+  write: () => Promise<boolean>,
+): Promise<{ toasts: LevelUpToast[]; eventIds: Id<"events">[] }> {
   const before = await snapshotProgression(ctx, args.subject._id);
-  if (!(await write())) return [];
-  await logRamoEvent(ctx, {
+  if (!(await write())) return { toasts: [], eventIds: [] };
+  const approvalId = await logRamoEvent(ctx, {
     type: "approval",
     actor: args.actor,
     subject: args.subject,
     summary: `${args.verb ?? "Aprovou"}: ${describeCompletion(args.subject.ramo, args.label)}`,
   });
-  return detectLevelUps(ctx, args.actor, args.subject, before);
+  const { toasts, eventIds } = await detectLevelUpsLogged(
+    ctx,
+    args.actor,
+    args.subject,
+    before,
+  );
+  return { toasts, eventIds: approvalId ? [approvalId, ...eventIds] : eventIds };
 }

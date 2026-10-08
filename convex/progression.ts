@@ -5,7 +5,7 @@ import { getAuthenticatedUser } from "./lib/authHelpers";
 import { assertCanActOnEscoteiro } from "./lib/ramoVisibility";
 import { readProgression, currentRamo, type LevelUpToast } from "./lib/progression";
 import type { ConclusaoLabel } from "./lib/events";
-import { recordDirectApproval } from "./lib/review";
+import { recordDirectApproval, recordDirectApprovalLogged } from "./lib/review";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
@@ -194,6 +194,124 @@ export const toggleAction = mutation({
         return status === "approved";
       },
     );
+  },
+});
+
+/**
+ * What a Revisão rápida mark did, handed back to `undoMarkAction`. When
+ * `created` is false the ação already had a conclusão and nothing was written.
+ */
+export type MarkReceipt = {
+  created: boolean;
+  completionId: Id<"actionCompletions"> | null;
+  status: CompletionStatus | null;
+  eventIds: Id<"events">[];
+  toasts: LevelUpToast[];
+};
+
+/**
+ * Idempotent mark (Revisão rápida): inserts the conclusão if the ação has
+ * none (any status), otherwise does nothing — a stale or doubled swipe never
+ * un-marks. Status and audit follow toggleAction.
+ */
+export const markAction = mutation({
+  args: {
+    actionId: v.string(),
+    targetUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args): Promise<MarkReceipt> => {
+    const { effectiveUserId, status, approvedBy, caller } =
+      await resolveTargetAndStatus(ctx, args.targetUserId);
+
+    if (!ACTION_ID_PATTERN.test(args.actionId))
+      throw new Error("ID de ação inválido");
+
+    const existing = await ctx.db
+      .query("actionCompletions")
+      .withIndex("by_userId_and_actionId", (q) =>
+        q.eq("userId", effectiveUserId).eq("actionId", args.actionId),
+      )
+      .unique();
+    if (existing) {
+      return { created: false, completionId: null, status: null, eventIds: [], toasts: [] };
+    }
+
+    let completionId: Id<"actionCompletions"> | null = null;
+    const write = async () => {
+      completionId = await ctx.db.insert("actionCompletions", {
+        userId: effectiveUserId,
+        actionId: args.actionId,
+        completedAt: Date.now(),
+        status,
+        approvedBy,
+        approvedAt: approvedBy ? Date.now() : undefined,
+      });
+      return status === "approved";
+    };
+
+    // Same audit semantics as applyMark: only a mark for a target escoteiro is
+    // a direct approval (audited + level-up cascade).
+    const subject = args.targetUserId ? await ctx.db.get(args.targetUserId) : null;
+    const { toasts, eventIds } = subject
+      ? await recordDirectApprovalLogged(
+          ctx,
+          { actor: caller, subject, label: { kind: "action", actionId: args.actionId } },
+          write,
+        )
+      : (await write(), { toasts: [], eventIds: [] });
+
+    return { created: true, completionId, status, eventIds, toasts };
+  },
+});
+
+/**
+ * Undo a Revisão rápida mark, given its receipt. Removes the conclusão only
+ * while it is still the one that mark created (same row, same status, same
+ * approver); otherwise it removes nothing. Undoing an escotista's mark also
+ * deletes the events it logged, so an undone mark leaves no timeline trace.
+ * An escoteiro still can't remove an approved conclusão.
+ */
+export const undoMarkAction = mutation({
+  args: {
+    completionId: v.id("actionCompletions"),
+    status: v.union(v.literal("pending"), v.literal("approved")),
+    eventIds: v.array(v.id("events")),
+    targetUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args): Promise<{ removed: boolean }> => {
+    const { effectiveUserId, status, approvedBy, callerIsEscotista, caller } =
+      await resolveTargetAndStatus(ctx, args.targetUserId);
+
+    const doc = await ctx.db.get(args.completionId);
+    if (!doc) return { removed: false };
+    if (doc.userId !== effectiveUserId) throw new Error("Não encontrado");
+    assertCanRemoveApproved(doc.status, callerIsEscotista);
+
+    const stillOurs =
+      args.status === status &&
+      doc.status === status &&
+      doc.approvedBy === approvedBy;
+    if (!stillOurs) return { removed: false };
+
+    await ctx.db.delete(doc._id);
+    if (callerIsEscotista) {
+      for (const eventId of args.eventIds) {
+        const event = await ctx.db.get(eventId);
+        // Only the mark's own audit lines: logged by this caller, about this
+        // escoteiro, of a kind a direct approval logs.
+        if (
+          event &&
+          event.actorUserId === caller._id &&
+          event.subjectUserId === effectiveUserId &&
+          (event.type === "approval" ||
+            event.type === "levelUp" ||
+            event.type === "lisDeOuro")
+        ) {
+          await ctx.db.delete(eventId);
+        }
+      }
+    }
+    return { removed: true };
   },
 });
 

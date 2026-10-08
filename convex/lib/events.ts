@@ -90,7 +90,8 @@ export function describeCompletion(
  * Insert a ramo-scoped progression event (approval/rejection/levelUp/lisDeOuro).
  * `actor` is the escotista who acted; `subject` is the escoteiro. groupId/ramo
  * are taken from the subject so visibility follows the escoteiro's ramo. Skips
- * silently if the subject has no group (cannot be scoped/shown).
+ * silently if the subject has no group (cannot be scoped/shown). Returns the
+ * inserted event's id, or null when skipped.
  */
 export async function logRamoEvent(
   ctx: MutationCtx,
@@ -102,10 +103,10 @@ export async function logRamoEvent(
     stageId?: string;
     stageName?: string;
   },
-): Promise<void> {
+): Promise<Id<"events"> | null> {
   const groupId = args.subject.groupId ?? args.actor.groupId;
-  if (!groupId) return;
-  await ctx.db.insert("events", {
+  if (!groupId) return null;
+  return await ctx.db.insert("events", {
     type: args.type,
     scope: "ramo",
     groupId,
