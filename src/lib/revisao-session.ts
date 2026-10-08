@@ -24,6 +24,11 @@ export type RevisaoSession<R> = {
   index: number;
   /** Swipes, oldest first. */
   history: SessionEntry<R>[];
+  /**
+   * The last swipe's undo is awaiting the server. Until it settles the swipe
+   * still counts, and further swipes and undos are ignored.
+   */
+  undoing: boolean;
 };
 
 export type SessionSummary = {
@@ -37,7 +42,7 @@ export type SessionSummary = {
 };
 
 export function startSession<R>(total: number): RevisaoSession<R> {
-  return { total, index: 0, history: [] };
+  return { total, index: 0, history: [], undoing: false };
 }
 
 export function swipe<R>(
@@ -45,7 +50,7 @@ export function swipe<R>(
   kind: SwipeKind,
   receipt: R,
 ): RevisaoSession<R> {
-  if (s.index >= s.total) return s;
+  if (s.undoing || s.index >= s.total) return s;
   return {
     ...s,
     index: s.index + 1,
@@ -66,18 +71,35 @@ export function summarize<R>(s: RevisaoSession<R>): SessionSummary {
 }
 
 /**
- * Revert the most recent swipe: its card goes back on top. `undone` is that
- * entry (with its receipt, for reverting the server side), or null when there
- * is nothing left to undo.
+ * Start undoing the most recent swipe. `undone` is that entry (with its
+ * receipt, for reverting the server side), or null when there is nothing to
+ * undo or an undo is already in flight. The swipe keeps counting until
+ * `settleUndo` reports what the server said.
  */
-export function undo<R>(s: RevisaoSession<R>): {
+export function beginUndo<R>(s: RevisaoSession<R>): {
   session: RevisaoSession<R>;
   undone: SessionEntry<R> | null;
 } {
-  const undone = s.history.at(-1) ?? null;
+  const undone = s.undoing ? null : (s.history.at(-1) ?? null);
   if (!undone) return { session: s, undone: null };
+  return { session: { ...s, undoing: true }, undone };
+}
+
+/**
+ * Finish the undo in flight. Confirmed: its card goes back on top. Refused
+ * (e.g. an escotista approved the mark meanwhile): the swipe stays as it was.
+ */
+export function settleUndo<R>(
+  s: RevisaoSession<R>,
+  confirmed: boolean,
+): RevisaoSession<R> {
+  if (!s.undoing) return s;
+  const undone = s.history.at(-1);
+  if (!confirmed || !undone) return { ...s, undoing: false };
   return {
-    session: { ...s, index: undone.index, history: s.history.slice(0, -1) },
-    undone,
+    ...s,
+    undoing: false,
+    index: undone.index,
+    history: s.history.slice(0, -1),
   };
 }

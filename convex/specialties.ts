@@ -330,7 +330,7 @@ export const submitSpecialtyStep = mutation({
     if (existing?.status === "pending") {
       throw new Error("Etapa enviada pelo escoteiro — use Aprovar ou Rejeitar");
     }
-    return recordDirectApproval(
+    const { toasts } = await recordDirectApproval(
       ctx,
       {
         actor: caller,
@@ -343,6 +343,7 @@ export const submitSpecialtyStep = mutation({
         return true;
       },
     );
+    return toasts;
   },
 });
 
@@ -690,7 +691,7 @@ export const setSpecialtyItemApproved = mutation({
     }
     if (existingApproved) return [];
 
-    return recordDirectApproval(
+    const { toasts } = await recordDirectApproval(
       ctx,
       {
         actor: caller,
@@ -724,5 +725,6 @@ export const setSpecialtyItemApproved = mutation({
         return true;
       },
     );
+    return toasts;
   },
 });

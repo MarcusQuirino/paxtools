@@ -41,22 +41,7 @@ export const togglePlanned = mutation({
     itemKey: v.string(),
   },
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUser(ctx);
-
-    if (!ITEM_KEY_PATTERN.test(args.itemKey)) {
-      throw new Error("Chave de item inválida");
-    }
-
-    // All lookups/writes are scoped to the acting user's current ramo (#37).
-    const ramo = currentRamo(user);
-
-    const existing = await ctx.db
-      .query("plannedItems")
-      .withIndex("by_userId_and_ramo_and_itemKey", (q) =>
-        q.eq("userId", user._id).eq("ramo", ramo).eq("itemKey", args.itemKey),
-      )
-      .unique();
-
+    const { user, ramo, existing } = await findOwnPlanned(ctx, args.itemKey);
     if (existing) {
       await ctx.db.delete(existing._id);
       return;
@@ -96,7 +81,10 @@ async function appendPlanned(
   await ctx.db.insert("plannedItems", { userId, ramo, itemKey, position: nextPosition });
 }
 
-/** The caller's Plano row for `itemKey` in their current ramo, validating the key. */
+/**
+ * The caller's Plano row for `itemKey`, validating the key. Lookups and writes
+ * are scoped to the caller's current ramo (#37).
+ */
 async function findOwnPlanned(ctx: MutationCtx, itemKey: string) {
   const user = await getAuthenticatedUser(ctx);
   if (!ITEM_KEY_PATTERN.test(itemKey)) {

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import {
+  acoesCount,
   revisaoButtonLabel,
   revisaoEntry,
   sortByName,
@@ -51,5 +52,12 @@ describe("revisaoButtonLabel (escoteiro page)", () => {
 
   it("reads 'em dia' when nothing is left", () => {
     expect(revisaoButtonLabel(0)).toBe("Revisão rápida · em dia");
+  });
+});
+
+describe("acoesCount", () => {
+  it("counts ações, singular for one", () => {
+    expect(acoesCount(1)).toBe("1 ação");
+    expect(acoesCount(12)).toBe("12 ações");
   });
 });

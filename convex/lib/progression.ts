@@ -222,21 +222,12 @@ async function logLevelUps(
 
 /**
  * Compare `subject`'s progression against a pre-approval snapshot, emit the
- * level-up events, and return toast payloads for the approving escotista. Call
- * AFTER the approving writes land. Returns [] when the subject is not an
- * escoteiro (escotistas have no progression timeline).
+ * level-up events, and return toast payloads for the approving escotista plus
+ * the ids of the events logged (so an undo can remove them). Call AFTER the
+ * approving writes land. Empty when the subject is not an escoteiro
+ * (escotistas have no progression timeline).
  */
 export async function detectLevelUps(
-  ctx: MutationCtx,
-  actor: Doc<"users">,
-  subject: Doc<"users">,
-  before: ProgressionSnapshot,
-): Promise<LevelUpToast[]> {
-  return (await detectLevelUpsLogged(ctx, actor, subject, before)).toasts;
-}
-
-/** detectLevelUps, also returning the ids of the level-up events it logged. */
-export async function detectLevelUpsLogged(
   ctx: MutationCtx,
   actor: Doc<"users">,
   subject: Doc<"users">,

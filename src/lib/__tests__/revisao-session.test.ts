@@ -1,10 +1,18 @@
 import { describe, it, expect } from "bun:test";
 import {
+  beginUndo,
+  settleUndo,
   startSession,
   swipe,
   summarize,
-  undo,
+  type RevisaoSession,
 } from "@/lib/revisao-session";
+
+/** An undo the server confirmed. */
+function undoConfirmed<R>(s: RevisaoSession<R>) {
+  const step = beginUndo(s);
+  return { session: settleUndo(step.session, true), undone: step.undone };
+}
 
 describe("Revisão rápida session", () => {
   it("each swipe moves to the next card and is counted in the summary", () => {
@@ -29,11 +37,11 @@ describe("Revisão rápida session", () => {
     s = swipe(s, "done", "mark-a");
     s = swipe(s, "plan", "plan-b");
 
-    const first = undo(s);
+    const first = undoConfirmed(s);
     expect(first.undone).toEqual({ index: 1, kind: "plan", receipt: "plan-b" });
     expect(first.session.index).toBe(1);
 
-    const second = undo(first.session);
+    const second = undoConfirmed(first.session);
     expect(second.undone).toEqual({ index: 0, kind: "done", receipt: "mark-a" });
     expect(second.session.index).toBe(0);
     expect(summarize(second.session)).toEqual({
@@ -44,9 +52,43 @@ describe("Revisão rápida session", () => {
       finished: false,
     });
 
-    const none = undo(second.session);
+    const none = beginUndo(second.session);
     expect(none.undone).toBeNull();
     expect(none.session).toEqual(second.session);
+  });
+
+  it("an undo the server refuses keeps the card counted as marked", () => {
+    let s = startSession<string>(3);
+    s = swipe(s, "done", "mark-a");
+
+    const step = beginUndo(s);
+    expect(step.undone?.receipt).toBe("mark-a");
+    const refused = settleUndo(step.session, false);
+
+    expect(refused.index).toBe(1);
+    expect(summarize(refused)).toMatchObject({ done: 1, unseen: 2 });
+    // …and it can still be tried again.
+    expect(beginUndo(refused).undone?.receipt).toBe("mark-a");
+  });
+
+  it("while an undo awaits the server, the card stays counted and swipes or further undos are ignored", () => {
+    let s = startSession<string>(3);
+    s = swipe(s, "skip", "a");
+    s = swipe(s, "done", "b");
+
+    const { session: waiting } = beginUndo(s);
+    expect(summarize(waiting)).toMatchObject({ done: 1, skip: 1, unseen: 1 });
+    expect(swipe(waiting, "done", "c")).toEqual(waiting);
+    expect(beginUndo(waiting)).toEqual({ session: waiting, undone: null });
+
+    const settled = settleUndo(waiting, true);
+    expect(settled.index).toBe(1);
+    expect(summarize(settled)).toMatchObject({ done: 0, skip: 1, unseen: 2 });
+  });
+
+  it("settling with no undo in flight changes nothing", () => {
+    const s = swipe(startSession<string>(2), "done", "a");
+    expect(settleUndo(s, true)).toEqual(s);
   });
 
   it("a run that swiped every card is finished, and further swipes are ignored", () => {
@@ -78,7 +120,7 @@ describe("Revisão rápida session", () => {
   it("undo from the end of the deck puts the last card back", () => {
     let s = startSession<string>(1);
     s = swipe(s, "done", "a");
-    const { session, undone } = undo(s);
+    const { session, undone } = undoConfirmed(s);
     expect(undone?.receipt).toBe("a");
     expect(summarize(session).finished).toBe(false);
     expect(session.index).toBe(0);
@@ -89,7 +131,7 @@ describe("Revisão rápida session", () => {
     for (const r of ["a", "b", "c"]) s = swipe(s, "skip", r);
     const receipts: string[] = [];
     for (;;) {
-      const step = undo(s);
+      const step = undoConfirmed(s);
       if (!step.undone) break;
       receipts.push(step.undone.receipt);
       s = step.session;
