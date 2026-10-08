@@ -16,7 +16,7 @@ concurrency:
 jobs:
   e2e:
     name: Playwright vs staging
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       # The staging deploy key pins every `bunx convex run` to the staging
@@ -29,7 +29,12 @@ jobs:
       E2E_TARGET: staging
       TEST_AUTH: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -37,7 +42,7 @@ jobs:
           bun-version: 1.3.14
 
       - name: Cache Bun install
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -55,7 +60,7 @@ jobs:
 
       - name: Upload traces and screenshots
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: test-results/
@@ -63,7 +68,7 @@ jobs:
 
       - name: Upload HTML report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: playwright-report/

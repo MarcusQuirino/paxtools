@@ -1,5 +1,6 @@
 /// <reference types="bun" />
-import { describe, test, expect } from "bun:test";
+import { afterAll, beforeAll, describe, test, expect } from "bun:test";
+import { generateKeyPairSync } from "node:crypto";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -362,5 +363,336 @@ describe("grupo membership", () => {
     const members = await as(t, adminId).query(api.groups.getGroupMembers, {});
     expect(members.find((m) => m._id === userId)?.scoutId).toBe("123456");
     expect(members.find((m) => m._id === adminId)?.scoutId).toBeNull();
+  });
+});
+
+describe("createManagedMember: input rules", () => {
+  test("rejects a blank or over-long name", async () => {
+    const t = newTest();
+    const { adminId } = await seedGrupo(t);
+    const base = { scoutId: "123456", role: "escoteiro" as const, ramo: "escoteiro" as const };
+    await expect(
+      as(t, adminId).action(api.managedAccounts.createManagedMember, { ...base, name: "   " }),
+    ).rejects.toThrow("Informe o nome");
+    await expect(
+      as(t, adminId).action(api.managedAccounts.createManagedMember, {
+        ...base,
+        name: "x".repeat(101),
+      }),
+    ).rejects.toThrow("Nome muito longo");
+  });
+
+  test("an escotista needs at least one ramo", async () => {
+    const t = newTest();
+    const { adminId } = await seedGrupo(t);
+    const base = { name: "Chefe", scoutId: "123456", role: "escotista" as const };
+    await expect(
+      as(t, adminId).action(api.managedAccounts.createManagedMember, base),
+    ).rejects.toThrow("Selecione pelo menos um ramo");
+    await expect(
+      as(t, adminId).action(api.managedAccounts.createManagedMember, {
+        ...base,
+        escotistaRamos: [],
+      }),
+    ).rejects.toThrow("Selecione pelo menos um ramo");
+  });
+
+  test("an escoteiro needs a ramo", async () => {
+    const t = newTest();
+    const { adminId } = await seedGrupo(t);
+    await expect(
+      as(t, adminId).action(api.managedAccounts.createManagedMember, {
+        name: "Joãozinho",
+        scoutId: "123456",
+        role: "escoteiro",
+      }),
+    ).rejects.toThrow("Selecione o ramo do escoteiro");
+  });
+
+  test("an escotista's ramos are deduplicated", async () => {
+    const t = newTest();
+    const { adminId } = await seedGrupo(t);
+    const res = await as(t, adminId).action(api.managedAccounts.createManagedMember, {
+      name: "Chefe",
+      scoutId: "123456",
+      role: "escotista",
+      escotistaRamos: ["escoteiro", "senior", "escoteiro"],
+    });
+    const chefe = await t.run((ctx) => ctx.db.get(res.userId));
+    expect(chefe?.escotistaRamos).toEqual(["escoteiro", "senior"]);
+  });
+
+  test("a registro already on a user doc counts as taken", async () => {
+    const t = newTest();
+    const { groupId, adminId } = await seedGrupo(t);
+    // A member carrying the registro without a managed auth account.
+    const kid = await addEscoteiro(t, groupId);
+    await t.run((ctx) => ctx.db.patch(kid, { scoutId: "123456" }));
+    await expect(createKid(t, adminId, "123456")).rejects.toThrow("já tem acesso");
+  });
+
+  test("logs the join with the creator as actor", async () => {
+    const t = newTest();
+    const { groupId } = await seedGrupo(t);
+    const escotistaId = await addEscotista(t, groupId, ["escoteiro"]);
+    const { userId } = await createKid(t, escotistaId);
+    const events = await t.run((ctx) => ctx.db.query("events").collect());
+    const join = events.filter((e) => e.type === "memberJoin");
+    expect(join).toHaveLength(1);
+    expect(join[0]).toMatchObject({
+      groupId,
+      actorUserId: escotistaId,
+      subjectUserId: userId,
+      subjectName: "Joãozinho",
+      summary: "Entrou no grupo (acesso com registro)",
+    });
+  });
+});
+
+describe("resetManagedPassword: refusals", () => {
+  test("nobody resets their own password here", async () => {
+    const t = newTest();
+    const { adminId } = await seedGrupo(t);
+    await expect(
+      as(t, adminId).action(api.managedAccounts.resetManagedPassword, {
+        userId: adminId,
+      }),
+    ).rejects.toThrow("Use a tela de perfil");
+  });
+
+  test("an escotista of another grupo is out of reach", async () => {
+    const t = newTest();
+    const { adminId } = await seedGrupo(t);
+    const other = await seedGrupo(t, { name: "Outro" });
+    const chefe = await as(t, other.adminId).action(
+      api.managedAccounts.createManagedMember,
+      {
+        name: "Chefe",
+        scoutId: "777777",
+        role: "escotista",
+        escotistaRamos: ["escoteiro"],
+      },
+    );
+    await expect(
+      as(t, adminId).action(api.managedAccounts.resetManagedPassword, {
+        userId: chefe.userId,
+      }),
+    ).rejects.toThrow("Usuário não pertence ao seu grupo");
+  });
+
+  test("a banned escotista is out of reach", async () => {
+    const t = newTest();
+    const { groupId, adminId } = await seedGrupo(t);
+    const chefe = await as(t, adminId).action(api.managedAccounts.createManagedMember, {
+      name: "Chefe",
+      scoutId: "777777",
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+    });
+    // Banned, but still pointing at the grupo — only bannedAt keeps it out.
+    await t.run((ctx) => ctx.db.patch(chefe.userId, { bannedAt: 1, groupId }));
+    await expect(
+      as(t, adminId).action(api.managedAccounts.resetManagedPassword, {
+        userId: chefe.userId,
+      }),
+    ).rejects.toThrow("Usuário não pertence ao seu grupo");
+  });
+
+  test("signs the member out of every session", async () => {
+    const t = newTest();
+    const { adminId } = await seedGrupo(t);
+    const { userId } = await createKid(t, adminId);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("authSessions", { userId, expirationTime: Date.now() + 60_000 });
+      await ctx.db.insert("authSessions", { userId, expirationTime: Date.now() + 60_000 });
+    });
+    await as(t, adminId).action(api.managedAccounts.resetManagedPassword, { userId });
+    const sessions = await t.run((ctx) =>
+      ctx.db
+        .query("authSessions")
+        .withIndex("userId", (q) => q.eq("userId", userId))
+        .collect(),
+    );
+    expect(sessions).toEqual([]);
+  });
+});
+
+describe("changeOwnPassword: refusals and sessions", () => {
+  test("unauthenticated and banned callers are refused", async () => {
+    const t = newTest();
+    const { adminId } = await seedGrupo(t);
+    const { userId } = await createKid(t, adminId);
+    await expect(
+      t.action(api.managedAccounts.changeOwnPassword, { newPassword: "fogueira-77" }),
+    ).rejects.toThrow("Não autenticado");
+    await t.run((ctx) => ctx.db.patch(userId, { bannedAt: 1 }));
+    await expect(
+      as(t, userId).action(api.managedAccounts.changeOwnPassword, {
+        newPassword: "fogueira-77",
+      }),
+    ).rejects.toThrow("banido");
+  });
+
+  test("a rate-limited account gets 'Muitas tentativas', not 'incorreta'", async () => {
+    const t = newTest();
+    const { adminId } = await seedGrupo(t);
+    const { userId } = await createKid(t, adminId);
+    const mine = await chooseOwnPassword(t, userId);
+    await t.run(async (ctx) => {
+      const account = await ctx.db
+        .query("authAccounts")
+        .withIndex("userIdAndProvider", (q) =>
+          q.eq("userId", userId).eq("provider", "managed"),
+        )
+        .unique();
+      await ctx.db.insert("authRateLimits", {
+        identifier: account!._id,
+        attemptsLeft: 0,
+        lastAttemptTime: Date.now(),
+      });
+    });
+    // Even the right password is refused while the limit holds.
+    await expect(
+      as(t, userId).action(api.managedAccounts.changeOwnPassword, {
+        currentPassword: mine,
+        newPassword: "outraSenha1",
+      }),
+    ).rejects.toThrow("Muitas tentativas");
+  });
+
+  test("keeps the current session and signs out the others", async () => {
+    const t = newTest();
+    const { adminId } = await seedGrupo(t);
+    const { userId } = await createKid(t, adminId);
+    const [current, other] = await t.run(async (ctx) => {
+      const expirationTime = Date.now() + 60_000;
+      return [
+        await ctx.db.insert("authSessions", { userId, expirationTime }),
+        await ctx.db.insert("authSessions", { userId, expirationTime }),
+      ];
+    });
+    await t
+      .withIdentity({ subject: `${userId}|${current}` })
+      .action(api.managedAccounts.changeOwnPassword, { newPassword: "fogueira-77" });
+    const left = await t.run((ctx) =>
+      ctx.db
+        .query("authSessions")
+        .withIndex("userId", (q) => q.eq("userId", userId))
+        .collect(),
+    );
+    expect(left.map((s) => s._id)).toEqual([current]);
+    expect(left.map((s) => s._id)).not.toContain(other);
+  });
+});
+
+describe("managed sign-in provider", () => {
+  // Tokens are only minted on a successful sign-in; give @convex-dev/auth the
+  // signing key and issuer it reads from the deployment env.
+  const saved = {
+    JWT_PRIVATE_KEY: process.env.JWT_PRIVATE_KEY,
+    CONVEX_SITE_URL: process.env.CONVEX_SITE_URL,
+  };
+  beforeAll(() => {
+    const { privateKey } = generateKeyPairSync("rsa", {
+      modulusLength: 2048,
+      privateKeyEncoding: { type: "pkcs8", format: "pem" },
+      publicKeyEncoding: { type: "spki", format: "pem" },
+    });
+    process.env.JWT_PRIVATE_KEY = privateKey;
+    process.env.CONVEX_SITE_URL = "https://test.convex.site";
+  });
+  afterAll(() => {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+
+  function signIn(t: TestConvex, params: Record<string, string>) {
+    return t.action(api.auth.signIn, { provider: "managed", params });
+  }
+
+  test("signs in with registro + password", async () => {
+    const t = newTest();
+    const { adminId } = await seedGrupo(t);
+    const { userId, password } = await createKid(t, adminId);
+    const res = await signIn(t, { flow: "signIn", email: "123.456", password });
+    expect(res.tokens?.token).toBeString();
+    const sessions = await t.run((ctx) =>
+      ctx.db
+        .query("authSessions")
+        .withIndex("userId", (q) => q.eq("userId", userId))
+        .collect(),
+    );
+    expect(sessions).toHaveLength(1);
+  });
+
+  test("a wrong password is refused", async () => {
+    const t = newTest();
+    const { adminId } = await seedGrupo(t);
+    await createKid(t, adminId);
+    await expect(
+      signIn(t, { flow: "signIn", email: "123456", password: "chute-errado" }),
+    ).rejects.toThrow("InvalidSecret");
+    const [sessions, limits] = await t.run(async (ctx) => [
+      await ctx.db.query("authSessions").collect(),
+      await ctx.db.query("authRateLimits").collect(),
+    ]);
+    expect(sessions).toEqual([]);
+    // The failed attempt counts towards the per-account limit.
+    expect(limits).toHaveLength(1);
+  });
+
+  test("a malformed registro is refused before any lookup", async () => {
+    const t = newTest();
+    const { adminId } = await seedGrupo(t);
+    const { userId, password } = await createKid(t, adminId);
+    // Plant an account under a seven-digit id with a valid password hash: only
+    // profile()'s registro check stands between the caller and a session.
+    await t.run(async (ctx) => {
+      const account = await ctx.db
+        .query("authAccounts")
+        .withIndex("userIdAndProvider", (q) =>
+          q.eq("userId", userId).eq("provider", "managed"),
+        )
+        .unique();
+      await ctx.db.patch(account!._id, { providerAccountId: "1234567" });
+    });
+    await expect(
+      signIn(t, { flow: "signIn", email: "1234567", password }),
+    ).rejects.toThrow("InvalidAccountId");
+    expect(await t.run((ctx) => ctx.db.query("authSessions").collect())).toEqual([]);
+  });
+
+  test("signUp cannot mint an account", async () => {
+    const t = newTest();
+    // A strong password, so the refusal comes from profile(), not Password's
+    // own length check.
+    await expect(
+      signIn(t, { flow: "signUp", email: "123456", password: "senha-forte-123" }),
+    ).rejects.toThrow("só permite entrar");
+    const [users, accounts] = await t.run(async (ctx) => [
+      await ctx.db.query("users").collect(),
+      await ctx.db.query("authAccounts").collect(),
+    ]);
+    expect(users).toEqual([]);
+    expect(accounts).toEqual([]);
+  });
+
+  test("reset flows cannot take over an existing account", async () => {
+    const t = newTest();
+    const { adminId } = await seedGrupo(t);
+    await createKid(t, adminId);
+    await expect(signIn(t, { flow: "reset", email: "123456" })).rejects.toThrow(
+      "só permite entrar",
+    );
+    await expect(
+      signIn(t, {
+        flow: "reset-verification",
+        email: "123456",
+        code: "000000",
+        newPassword: "senha-forte-123",
+      }),
+    ).rejects.toThrow("só permite entrar");
   });
 });

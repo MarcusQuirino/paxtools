@@ -102,3 +102,86 @@ describe("assertAdmin legacy createdBy fallback", () => {
     expect(group?.name).toBe("Renamed");
   });
 });
+
+describe("getAuthenticatedUser backfills legacy members on mutations", () => {
+  test("any mutation stamps a grouped legacy member approved (and a creator admin)", async () => {
+    const t = newTest();
+    const creatorId = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+    });
+    const groupId = await t.run(async (ctx) =>
+      ctx.db.insert("groups", {
+        name: "G",
+        number: "1",
+        password: "AAAAAA",
+        createdBy: creatorId,
+        createdAt: 1,
+      }),
+    );
+    const memberId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
+    // Pre-membershipStatus / pre-isAdmin rows: groupId set, both flags unset.
+    await t.run(async (ctx) => {
+      await ctx.db.patch(creatorId, { groupId });
+      await ctx.db.patch(memberId, { groupId });
+    });
+
+    // An ordinary mutation, not ensureBackfill.
+    await as(t, creatorId).mutation(api.users.updateName, { name: "Chefe" });
+    await as(t, memberId).mutation(api.users.markTourSeen, {});
+
+    const creator = await t.run(async (ctx) => ctx.db.get(creatorId));
+    expect(creator).toMatchObject({
+      name: "Chefe",
+      membershipStatus: "approved",
+      isAdmin: true,
+    });
+    const member = await t.run(async (ctx) => ctx.db.get(memberId));
+    expect(member?.membershipStatus).toBe("approved");
+    // Not the creator: isAdmin stays unset rather than being stamped false.
+    expect(member?.isAdmin).toBeUndefined();
+  });
+
+  test("a user with no group is left untouched", async () => {
+    const t = newTest();
+    const userId = await insertUser(t, { role: "escoteiro" });
+    await as(t, userId).mutation(api.users.updateName, { name: "Solo" });
+    const user = await t.run(async (ctx) => ctx.db.get(userId));
+    expect(user?.membershipStatus).toBeUndefined();
+    expect(user?.isAdmin).toBeUndefined();
+  });
+});
+
+describe("assertAdmin", () => {
+  test("rejects an escoteiro, even the grupo's creator", async () => {
+    const t = newTest();
+    const userId = await insertUser(t, { role: "escoteiro", ramo: "escoteiro" });
+    const groupId = await t.run(async (ctx) =>
+      ctx.db.insert("groups", {
+        name: "G",
+        number: "1",
+        password: "AAAAAA",
+        createdBy: userId,
+        createdAt: 1,
+      }),
+    );
+    await t.run(async (ctx) =>
+      ctx.db.patch(userId, { groupId, isAdmin: true, membershipStatus: "approved" }),
+    );
+    await expect(
+      as(t, userId).mutation(api.groups.updateGroup, { name: "X" }),
+    ).rejects.toThrow("Apenas administradores podem realizar esta ação");
+  });
+
+  test("rejects an escotista with no grupo", async () => {
+    const t = newTest();
+    const userId = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      isAdmin: true,
+    });
+    await expect(
+      as(t, userId).mutation(api.groups.updateGroup, { name: "X" }),
+    ).rejects.toThrow("Você não está em nenhum grupo");
+  });
+});

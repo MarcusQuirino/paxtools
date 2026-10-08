@@ -9,6 +9,9 @@
     "type": "git",
     "url": "https://github.com/MarcusQuirino/paxtools.git"
   },
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "bunx concurrently --names convex,vite -c cyan,magenta \"bunx convex dev\" \"vite dev\"",
     "dev:frontend": "vite dev",

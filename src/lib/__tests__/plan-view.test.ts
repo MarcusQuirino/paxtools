@@ -278,6 +278,94 @@ describe("resolvePlanItems: catalog especialidades", () => {
   });
 });
 
+describe("resolvePlanItems: ações and ações personalizadas", () => {
+  const blocoWithActions: Bloco = {
+    ...fakeBloco,
+    fixedActions: [{ id: "escoteiro:b1:fixed:0", text: "Fixa", type: "fixed" }],
+    variableActions: [
+      { id: "escoteiro:b1:variable:0", text: "Variável 0", type: "variable" },
+      { id: "escoteiro:b1:variable:1", text: "Variável 1", type: "variable" },
+    ],
+  };
+  const eixo: Eixo = { ...fakeEixo, blocos: [blocoWithActions] };
+  const catalog = buildCatalogIndex([eixo]);
+
+  const row = (itemKey: string, position: number) => ({
+    _id: `p${position}` as Id<"plannedItems">,
+    _creationTime: 0,
+    userId: "u1" as Id<"users">,
+    itemKey,
+    position,
+  });
+  const custom = (id: string, blocoId: string, completed = false) => ({
+    _id: id as Id<"customActions">,
+    blocoId,
+    text: `custom ${id}`,
+    completed,
+  });
+  const input = {
+    catalog,
+    approvedActionIds: new Set(["escoteiro:b1:fixed:0"]),
+    pendingActionIds: new Set(["escoteiro:b1:variable:0"]),
+    actionStatusMap: new Map<string, "pending" | "approved">([
+      ["escoteiro:b1:fixed:0", "approved"],
+      ["escoteiro:b1:variable:0", "pending"],
+    ]),
+    customActions: [custom("c1", "b1", true), custom("c2", "bloco-de-outro-ramo")],
+  };
+
+  it("resolves ações with text/type and checked/status from the approved and pending sets", () => {
+    const resolved = resolvePlanItems(
+      [
+        row("action:escoteiro:b1:variable:1", 2),
+        row("action:escoteiro:b1:fixed:0", 0),
+        row("action:escoteiro:b1:variable:0", 1),
+      ],
+      input,
+    );
+    // Ordered by position, whatever order the rows arrive in.
+    expect(
+      resolved.map((r) =>
+        r.kind === "action"
+          ? [r.actionId, r.text, r.actionType, r.checked, r.status]
+          : null,
+      ),
+    ).toEqual([
+      ["escoteiro:b1:fixed:0", "Fixa", "fixed", true, "approved"],
+      ["escoteiro:b1:variable:0", "Variável 0", "variable", true, "pending"],
+      ["escoteiro:b1:variable:1", "Variável 1", "variable", false, undefined],
+    ]);
+    expect(resolved.every((r) => r.eixo === eixo)).toBe(true);
+    expect(resolved.map(isResolvedComplete)).toEqual([true, false, false]);
+  });
+
+  it("resolves an ação personalizada to its bloco", () => {
+    const [item] = resolvePlanItems([row("custom:c1", 0)], input);
+    if (item?.kind !== "custom") throw new Error("expected a custom item");
+    expect(item.bloco).toBe(blocoWithActions);
+    expect(item.eixo).toBe(eixo);
+    expect(item.customAction).toBe(input.customActions[0]!);
+    expect(isResolvedChecked(item)).toBe(true);
+    expect(isResolvedComplete(item)).toBe(true);
+  });
+
+  it("skips keys that no longer resolve: garbage, ações or blocos missing from this ramo's catalog, deleted or orphaned ações personalizadas", () => {
+    expect(
+      resolvePlanItems(
+        [
+          row("garbage", 0),
+          row("action:escoteiro:b1:fixed:9", 1),
+          row("action:lobinho:b1:fixed:0", 2),
+          row("specialty:bloco-inexistente:Acampamento", 3),
+          row("custom:deleted", 4),
+          row("custom:c2", 5),
+        ],
+        input,
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("plan key codec", () => {
   it("round-trips an action key", () => {
     const key = encodePlanKey({
