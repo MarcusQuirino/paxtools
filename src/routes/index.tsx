@@ -11,6 +11,7 @@ import { OverallProgress } from "@/components/progression/overall-progress";
 import { EixoSection } from "@/components/progression/eixo-section";
 import { RecognitionSection } from "@/components/progression/recognition-section";
 import { EscoteiroShell } from "@/components/progression/escoteiro-shell";
+import { RevisaoEntryCard } from "@/components/revisao-rapida/revisao-entry-card";
 import { notifyLevelUps } from "@/lib/level-up-toast";
 import type { Eixo } from "@/data/types";
 
@@ -132,6 +133,8 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
         pendingBlockCount={pendingBlockCount}
         irrComplete={irrComplete}
       />
+
+      {!targetUserId && <RevisaoEntryCard progression={progression} />}
 
       <OverallProgress
         eixos={eixos}
