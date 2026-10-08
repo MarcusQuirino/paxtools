@@ -3,7 +3,15 @@ import { describe, test, expect } from "bun:test";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { backfillSectionsForGroup } from "./lib/sections";
-import { as, insertUser, newTest, type TestConvex } from "./fixtures.testkit";
+import {
+  addEscoteiro,
+  addEscotista,
+  as,
+  insertUser,
+  newTest,
+  seedGrupo,
+  type TestConvex,
+} from "./fixtures.testkit";
 
 /** Seed a group owned by a fresh admin escotista; returns ids. */
 async function seedGroup(
@@ -1384,5 +1392,315 @@ describe("backfillSectionsForGroup (migration body)", () => {
         .collect();
       expect(sections).toEqual([]);
     });
+  });
+});
+
+/** Group events (accessChange, ramoChange, …) of `type`, oldest first. */
+async function eventsOfType(t: TestConvex, type: string) {
+  const events = await t.run((ctx) => ctx.db.query("events").collect());
+  return events.filter((e) => e.type === type);
+}
+
+describe("setMemberAdmin", () => {
+  test("an admin promotes an escotista and the change is logged", async () => {
+    const t = newTest();
+    const { adminId, groupId } = await seedGroup(t);
+    const chefe = await addEscotista(t, groupId, ["escoteiro"]);
+    await as(t, adminId).mutation(api.groups.setMemberAdmin, {
+      userId: chefe,
+      isAdmin: true,
+    });
+    expect((await t.run((ctx) => ctx.db.get(chefe)))?.isAdmin).toBe(true);
+    const events = await eventsOfType(t, "accessChange");
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      groupId,
+      actorUserId: adminId,
+      subjectUserId: chefe,
+      summary: "Promovido a administrador",
+    });
+  });
+
+  test("an admin demotes another admin", async () => {
+    const t = newTest();
+    const { adminId, groupId } = await seedGroup(t);
+    const other = await addEscotista(t, groupId, ["escoteiro"], { isAdmin: true });
+    await as(t, adminId).mutation(api.groups.setMemberAdmin, {
+      userId: other,
+      isAdmin: false,
+    });
+    expect((await t.run((ctx) => ctx.db.get(other)))?.isAdmin).toBe(false);
+    const events = await eventsOfType(t, "accessChange");
+    expect(events.map((e) => e.summary)).toEqual(["Removido de administrador"]);
+    // The demoted escotista has lost the admin-only actions.
+    const pending = await addEscoteiro(t, groupId, "escoteiro", {
+      membershipStatus: "pending",
+    });
+    await expect(
+      as(t, other).mutation(api.groups.approveMembership, { userId: pending }),
+    ).rejects.toThrow("Apenas administradores");
+  });
+
+  test("an escoteiro cannot be made admin", async () => {
+    const t = newTest();
+    const { adminId, groupId } = await seedGroup(t);
+    const kid = await addEscoteiro(t, groupId);
+    await expect(
+      as(t, adminId).mutation(api.groups.setMemberAdmin, { userId: kid, isAdmin: true }),
+    ).rejects.toThrow("Apenas escotistas podem ser administradores");
+    expect((await t.run((ctx) => ctx.db.get(kid)))?.isAdmin).toBeUndefined();
+  });
+
+  test("the sole admin cannot step down", async () => {
+    const t = newTest();
+    const { adminId } = await seedGroup(t);
+    await expect(
+      as(t, adminId).mutation(api.groups.setMemberAdmin, {
+        userId: adminId,
+        isAdmin: false,
+      }),
+    ).rejects.toThrow("único administrador");
+    expect((await t.run((ctx) => ctx.db.get(adminId)))?.isAdmin).toBe(true);
+    expect(await eventsOfType(t, "accessChange")).toEqual([]);
+  });
+
+  test("an admin may step down while another admin remains", async () => {
+    const t = newTest();
+    const { groupId } = await seedGroup(t);
+    // Not the grupo's creator, so stepping down really removes the power.
+    const chefe = await addEscotista(t, groupId, ["escoteiro"], { isAdmin: true });
+    await as(t, chefe).mutation(api.groups.setMemberAdmin, {
+      userId: chefe,
+      isAdmin: false,
+    });
+    expect((await t.run((ctx) => ctx.db.get(chefe)))?.isAdmin).toBe(false);
+  });
+
+  test("a non-admin caller is rejected", async () => {
+    const t = newTest();
+    const { groupId } = await seedGroup(t);
+    const chefe = await addEscotista(t, groupId, ["escoteiro"]);
+    const peer = await addEscotista(t, groupId, ["escoteiro"]);
+    const kid = await addEscoteiro(t, groupId);
+    for (const caller of [chefe, kid]) {
+      await expect(
+        as(t, caller).mutation(api.groups.setMemberAdmin, { userId: peer, isAdmin: true }),
+      ).rejects.toThrow("Apenas administradores");
+    }
+    await expect(
+      t.mutation(api.groups.setMemberAdmin, { userId: peer, isAdmin: true }),
+    ).rejects.toThrow("Não autenticado");
+    expect((await t.run((ctx) => ctx.db.get(peer)))?.isAdmin).toBe(false);
+  });
+
+  test("an escotista of another grupo is out of reach", async () => {
+    const t = newTest();
+    const { adminId } = await seedGroup(t);
+    const other = await seedGrupo(t, { name: "Outro" });
+    const stranger = await addEscotista(t, other.groupId, ["escoteiro"]);
+    await expect(
+      as(t, adminId).mutation(api.groups.setMemberAdmin, {
+        userId: stranger,
+        isAdmin: true,
+      }),
+    ).rejects.toThrow("Usuário não pertence ao seu grupo");
+  });
+
+  // assertAdmin's legacy fallback ("the creator is an admin even if never
+  // flagged") also fires when the flag was explicitly cleared, so demoting
+  // the grupo's creator logs "Removido de administrador" yet changes nothing.
+  test.failing("demoting the grupo's creator revokes their admin powers", async () => {
+    const t = newTest();
+    const { adminId: creator, groupId } = await seedGroup(t);
+    const chefe = await addEscotista(t, groupId, ["escoteiro"], { isAdmin: true });
+    await as(t, chefe).mutation(api.groups.setMemberAdmin, {
+      userId: creator,
+      isAdmin: false,
+    });
+    const pending = await addEscoteiro(t, groupId, "escoteiro", {
+      membershipStatus: "pending",
+    });
+    await expect(
+      as(t, creator).mutation(api.groups.approveMembership, { userId: pending }),
+    ).rejects.toThrow("Apenas administradores");
+  });
+});
+
+describe("banMember: admins", () => {
+  test("an admin bans another admin while admins remain; the ban is logged", async () => {
+    const t = newTest();
+    const { adminId, groupId } = await seedGroup(t);
+    const other = await addEscotista(t, groupId, ["escoteiro"], { isAdmin: true });
+    await as(t, adminId).mutation(api.groups.banMember, { userId: other });
+    const banned = await t.run((ctx) => ctx.db.get(other));
+    expect(banned?.bannedAt).toBeNumber();
+    expect(banned?.bannedBy).toBe(adminId);
+    expect(banned?.isAdmin).toBe(false);
+    expect(banned?.groupId).toBeUndefined();
+    const events = await eventsOfType(t, "memberBan");
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      groupId,
+      actorUserId: adminId,
+      subjectUserId: other,
+      summary: "Foi removido do grupo",
+    });
+  });
+
+  // The "único administrador" guard needs a caller who passes assertAdmin
+  // without being a flagged admin: only a creator whose flag was cleared.
+  // Any flagged caller is itself the "other admin", and an unflagged
+  // (undefined) creator is backfilled to isAdmin: true first.
+  test("the last flagged admin cannot be banned by a demoted creator", async () => {
+    const t = newTest();
+    const { adminId: creator, groupId } = await seedGroup(t);
+    const chefe = await addEscotista(t, groupId, ["escoteiro"], { isAdmin: true });
+    await t.run((ctx) => ctx.db.patch(creator, { isAdmin: false }));
+    await expect(
+      as(t, creator).mutation(api.groups.banMember, { userId: chefe }),
+    ).rejects.toThrow("único administrador");
+    expect((await t.run((ctx) => ctx.db.get(chefe)))?.bannedAt).toBeUndefined();
+  });
+});
+
+describe("changeMemberRole: rules and audit", () => {
+  test("an admin cannot change their own role here", async () => {
+    const t = newTest();
+    const { adminId } = await seedGroup(t);
+    await expect(
+      as(t, adminId).mutation(api.groups.changeMemberRole, {
+        userId: adminId,
+        role: "escoteiro",
+      }),
+    ).rejects.toThrow("Use a tela de configurações");
+  });
+
+  test("escoteiro → escotista drops the ramo and is logged", async () => {
+    const t = newTest();
+    const { adminId, groupId } = await seedGroup(t);
+    const kid = await addEscoteiro(t, groupId, "senior");
+    await as(t, adminId).mutation(api.groups.changeMemberRole, {
+      userId: kid,
+      role: "escotista",
+    });
+    // Read inside t.run: an unset field must not read as "still set".
+    const after = await t.run(async (ctx) => {
+      const u = await ctx.db.get(kid);
+      return { role: u?.role, ramo: u?.ramo ?? "none", sectionId: u?.sectionId ?? "none" };
+    });
+    expect(after).toEqual({ role: "escotista", ramo: "none", sectionId: "none" });
+    const events = await eventsOfType(t, "accessChange");
+    expect(events.map((e) => e.summary)).toEqual(["Tornou-se escotista"]);
+  });
+
+  test("escotista → escoteiro is logged as such", async () => {
+    const t = newTest();
+    const { adminId, groupId } = await seedGroup(t);
+    const chefe = await addEscotista(t, groupId, ["escoteiro"]);
+    await as(t, adminId).mutation(api.groups.changeMemberRole, {
+      userId: chefe,
+      role: "escoteiro",
+    });
+    const events = await eventsOfType(t, "accessChange");
+    expect(events.map((e) => e.summary)).toEqual(["Tornou-se escoteiro"]);
+  });
+
+  test("saving the current role is a no-op that logs nothing", async () => {
+    const t = newTest();
+    const { adminId, groupId } = await seedGroup(t);
+    const chefe = await addEscotista(t, groupId, ["escoteiro", "senior"]);
+    await as(t, adminId).mutation(api.groups.changeMemberRole, {
+      userId: chefe,
+      role: "escotista",
+    });
+    const after = await t.run((ctx) => ctx.db.get(chefe));
+    expect(after?.escotistaRamos).toEqual(["escoteiro", "senior"]);
+    expect(await eventsOfType(t, "accessChange")).toEqual([]);
+  });
+});
+
+describe("setMemberRamos: rules and audit", () => {
+  test("the same ramos in another order is a no-op that logs nothing", async () => {
+    const t = newTest();
+    const { adminId, groupId } = await seedGroup(t);
+    const chefe = await addEscotista(t, groupId, ["escoteiro", "senior"]);
+    await as(t, adminId).mutation(api.groups.setMemberRamos, {
+      userId: chefe,
+      ramos: ["senior", "escoteiro", "senior"],
+    });
+    expect((await t.run((ctx) => ctx.db.get(chefe)))?.escotistaRamos).toEqual([
+      "escoteiro",
+      "senior",
+    ]);
+    expect(await eventsOfType(t, "ramoChange")).toEqual([]);
+  });
+
+  test("an escoteiro has no ramos to set", async () => {
+    const t = newTest();
+    const { adminId, groupId } = await seedGroup(t);
+    const kid = await addEscoteiro(t, groupId);
+    await expect(
+      as(t, adminId).mutation(api.groups.setMemberRamos, {
+        userId: kid,
+        ramos: ["escoteiro"],
+      }),
+    ).rejects.toThrow("Apenas escotistas têm múltiplos ramos");
+  });
+
+  test("a real change is logged with the new ramos", async () => {
+    const t = newTest();
+    const { adminId, groupId } = await seedGroup(t);
+    const chefe = await addEscotista(t, groupId, ["escoteiro"]);
+    await as(t, adminId).mutation(api.groups.setMemberRamos, {
+      userId: chefe,
+      ramos: ["escoteiro", "pioneiro"],
+    });
+    const events = await eventsOfType(t, "ramoChange");
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      actorUserId: adminId,
+      subjectUserId: chefe,
+      summary: "Ramos atualizados: escoteiro, pioneiro",
+    });
+  });
+});
+
+describe("getPendingMemberships: who may see the queue", () => {
+  async function seedWithPending(t: TestConvex) {
+    const { adminId, groupId } = await seedGroup(t);
+    const pending = await addEscoteiro(t, groupId, "escoteiro", {
+      name: "Pendente",
+      membershipStatus: "pending",
+    });
+    return { adminId, groupId, pending };
+  }
+
+  test("a non-admin escotista gets []", async () => {
+    const t = newTest();
+    const { groupId } = await seedWithPending(t);
+    const chefe = await addEscotista(t, groupId, ["escoteiro"]);
+    expect(await as(t, chefe).query(api.groups.getPendingMemberships, {})).toEqual([]);
+  });
+
+  test("a legacy creator (isAdmin unset) sees the queue", async () => {
+    const t = newTest();
+    const { groupId, pending } = await seedWithPending(t);
+    const creator = await insertUser(t, {
+      role: "escotista",
+      escotistaRamos: ["escoteiro"],
+      groupId,
+      membershipStatus: "approved",
+    });
+    await t.run((ctx) => ctx.db.patch(groupId, { createdBy: creator }));
+    const queue = await as(t, creator).query(api.groups.getPendingMemberships, {});
+    expect(queue.map((p) => p._id)).toEqual([pending]);
+  });
+
+  test("an unauthenticated caller or a member of no grupo gets []", async () => {
+    const t = newTest();
+    await seedWithPending(t);
+    expect(await t.query(api.groups.getPendingMemberships, {})).toEqual([]);
+    const loner = await insertUser(t, { role: "escotista", escotistaRamos: ["escoteiro"] });
+    expect(await as(t, loner).query(api.groups.getPendingMemberships, {})).toEqual([]);
   });
 });

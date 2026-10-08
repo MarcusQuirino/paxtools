@@ -1,6 +1,7 @@
 /// <reference types="bun" />
 import { describe, test, expect } from "bun:test";
 import { api } from "./_generated/api";
+import { shouldAutoStartTour } from "../src/lib/tour";
 import { as, insertUser, newTest, type TestConvex } from "./fixtures.testkit";
 
 /** Seed a group owned by a fresh admin escotista; returns ids. */
@@ -176,5 +177,20 @@ describe("markTourSeen", () => {
   test("rejects an unauthenticated caller", async () => {
     const t = newTest();
     await expect(t.mutation(api.users.markTourSeen, {})).rejects.toThrow();
+  });
+
+  test("viewer reflects it, so the tour stops auto-opening for that member only", async () => {
+    const t = newTest();
+    const member = { role: "escoteiro", ramo: "escoteiro", onboardingComplete: true } as const;
+    const alice = await insertUser(t, { name: "Alice", ...member });
+    const bruno = await insertUser(t, { name: "Bruno", ...member });
+    const autoStarts = async (id: typeof alice) =>
+      shouldAutoStartTour(await as(t, id).query(api.users.viewer, {}), "/");
+
+    expect(await autoStarts(alice)).toBe(true);
+    await as(t, alice).mutation(api.users.markTourSeen, {});
+    expect(await autoStarts(alice)).toBe(false);
+    // Per member: another account in the same grupo still gets the tour.
+    expect(await autoStarts(bruno)).toBe(true);
   });
 });

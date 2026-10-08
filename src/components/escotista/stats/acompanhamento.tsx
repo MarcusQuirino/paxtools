@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 type ScoutRow = {
@@ -12,7 +13,8 @@ type ScoutRow = {
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 export function Acompanhamento({ scouts }: { scouts: ScoutRow[] }) {
-  const now = Date.now();
+  // Captured once per mount so "novo" badges don't flicker across re-renders.
+  const [now] = useState(() => Date.now());
   return (
     <section
       className="space-y-3 rounded-md border-2 border-black bg-card p-4 shadow-[2px_2px_0px_0px_#000]"
