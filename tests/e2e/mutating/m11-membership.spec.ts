@@ -24,20 +24,20 @@
 
 import { testAs, expect } from "../../fixtures/auth";
 import type { Page } from "@playwright/test";
+import { login } from "../../utils/personas";
+import { SCOUT_SIGNIN_ID } from "../../utils/selectors";
+import { submitSignIn } from "../../utils/signin";
 
 const test = testAs("admin--m11");
 
 const IVAN = "Ivan Queiroga";
 const MANU = "Manu Setúbal";
-const ADMIN_EMAIL = "admin@test.paxtools.local";
-const PASSWORD = "paxtools-test-only";
+const ADMIN_ID = login("admin");
 // First paints can be slow under cross-worker/agent contention.
 const LOAD = 45_000;
 
-async function signInForm(page: Page, email: string) {
-  await page.getByTestId("test-signin-email").fill(email);
-  await page.getByTestId("test-signin-password").fill(PASSWORD);
-  await page.getByTestId("test-signin-submit").click();
+async function signInForm(page: Page, scoutId: string) {
+  await submitSignIn(page, scoutId);
   await expect(page).not.toHaveURL(/\/signin/, { timeout: LOAD });
 }
 
@@ -51,10 +51,10 @@ async function signInForm(page: Page, email: string) {
 async function loadReady(
   page: Page,
   url: string,
-  email: string,
+  scoutId: string,
   ready: () => ReturnType<Page["getByRole"]>,
 ) {
-  const signin = page.getByTestId("test-signin-email");
+  const signin = page.getByTestId(SCOUT_SIGNIN_ID);
   for (let attempt = 0; attempt < 4; attempt++) {
     await page.goto(url);
     try {
@@ -63,7 +63,7 @@ async function loadReady(
       continue; // blank/slow load — retry
     }
     if (await signin.isVisible()) {
-      await signInForm(page, email).catch(() => {});
+      await signInForm(page, scoutId).catch(() => {});
       continue;
     }
     await expect(ready()).toBeVisible({ timeout: 20_000 });
@@ -86,7 +86,7 @@ function membersSection(page: Page) {
 
 /** Open the admin page (re-authing if needed) and wait for both lists. */
 async function gotoAdmin(page: Page) {
-  await loadReady(page, "/escotista/admin", ADMIN_EMAIL, () =>
+  await loadReady(page, "/escotista/admin", ADMIN_ID, () =>
     page.getByRole("heading", { name: "Membros" }),
   );
   await expect(

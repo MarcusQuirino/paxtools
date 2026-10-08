@@ -29,47 +29,45 @@
  * that especialidades is back to the younger UI. Idempotent on retry.
  *
  * AUTH: see gotoReady — every navigation self-heals a stale/expired storageState
- * via the test-only signin form (no testing:* calls, no foreign auth writes).
+ * via the registro sign-in form (no testing:* calls, no foreign auth writes).
  *
  * OWNERSHIP: mutates ONLY Gabriela's ramo. Shared admin login as actor; painéis
  * read by NAME presence/absence, never global counts.
  */
 
 import { test, expect, type Page, type Locator } from "@playwright/test";
+import { login } from "../../utils/personas";
+import { SCOUT_SIGNIN_ID } from "../../utils/selectors";
+import { submitSignIn } from "../../utils/signin";
 
-const SUFFIX = "@test.paxtools.local";
-const PW = process.env.TEST_AUTH_PASSWORD ?? "paxtools-test-only";
-
-const ADMIN = { state: "tests/.auth/admin--m19.json", email: `admin${SUFFIX}` };
-const GABRIELA = { state: "tests/.auth/sim-troop-escoteiro-7.json", email: `sim-troop-escoteiro-7${SUFFIX}`, name: "Gabriela Pinto" };
-const RENATA = { state: "tests/.auth/sim-escotista-escoteiro-1--m19.json", email: `sim-escotista-escoteiro-1${SUFFIX}` }; // escoteiro escotista
-const TALITA = { state: "tests/.auth/sim-escotista-senior-1--m19.json", email: `sim-escotista-senior-1${SUFFIX}` }; // sênior escotista
+const ADMIN = { state: "tests/.auth/admin--m19.json", scoutId: login("admin") };
+const GABRIELA = { state: "tests/.auth/sim-troop-escoteiro-7.json", scoutId: login("sim-troop-escoteiro-7"), name: "Gabriela Pinto" };
+const RENATA = { state: "tests/.auth/sim-escotista-escoteiro-1--m19.json", scoutId: login("sim-escotista-escoteiro-1") }; // escoteiro escotista
+const TALITA = { state: "tests/.auth/sim-escotista-senior-1--m19.json", scoutId: login("sim-escotista-senior-1") }; // sênior escotista
 
 const LOCK_TEXT = /Complete todos os 18 blocos para desbloquear o checklist/;
 const ESCOTEIRO_ETAPAS = ["Pista", "Trilha", "Rumo", "Travessia"];
 const OLDER_INTRO = /Cada especialidade é um projeto em três etapas/;
 
-async function gotoReady(page: Page, url: string, ready: Locator, email: string) {
-  const submit = page.getByTestId("test-signin-submit");
+async function gotoReady(page: Page, url: string, ready: Locator, scoutId: string) {
+  const idField = page.getByTestId(SCOUT_SIGNIN_ID);
   for (let attempt = 0; attempt < 6; attempt++) {
     await page.goto(url);
     const outcome = await Promise.race([
       ready.waitFor({ state: "visible", timeout: 10_000 }).then(() => "ready" as const).catch(() => "x" as const),
-      submit.waitFor({ state: "visible", timeout: 10_000 }).then(() => "signin" as const).catch(() => "x" as const),
+      idField.waitFor({ state: "visible", timeout: 10_000 }).then(() => "signin" as const).catch(() => "x" as const),
     ]);
     if (outcome === "ready") return;
     if (outcome === "signin") {
-      await page.getByTestId("test-signin-email").fill(email);
-      await page.getByTestId("test-signin-password").fill(PW);
-      await submit.click();
+      await submitSignIn(page, scoutId);
       await page.waitForURL((u) => !/\/signin/.test(u.pathname), { timeout: 20_000 }).catch(() => {});
     }
   }
   await ready.waitFor({ state: "visible", timeout: 12_000 });
 }
 
-async function gotoPainel(page: Page, email: string) {
-  await gotoReady(page, "/escotista", page.getByPlaceholder("Buscar escoteiro..."), email);
+async function gotoPainel(page: Page, scoutId: string) {
+  await gotoReady(page, "/escotista", page.getByPlaceholder("Buscar escoteiro..."), scoutId);
 }
 
 async function setScoutRamo(admin: Page, scoutName: string, ramoLabel: string) {
@@ -77,7 +75,7 @@ async function setScoutRamo(admin: Page, scoutName: string, ramoLabel: string) {
     admin,
     "/escotista/admin",
     admin.getByRole("heading", { name: "Membros", exact: true }),
-    ADMIN.email,
+    ADMIN.scoutId,
   );
   const row = admin.getByRole("listitem").filter({ hasText: scoutName });
   await expect(row).toBeVisible({ timeout: 15_000 });
@@ -108,7 +106,7 @@ test("M19 admin advances Gabriela escoteiro→sênior: fresh progression, especi
     await setScoutRamo(admin, GABRIELA.name, "Sênior");
 
     // ── Rule 1: dashboard starts FRESH on the sênior ramo (3-etapa shape) ─────
-    await gotoReady(gabriela, "/", gabriela.getByText("Etapa Atual"), GABRIELA.email);
+    await gotoReady(gabriela, "/", gabriela.getByText("Etapa Atual"), GABRIELA.scoutId);
     await expect(
       gabriela.getByRole("heading", { name: "Escalada", exact: true }),
     ).toBeVisible();
@@ -124,7 +122,7 @@ test("M19 admin advances Gabriela escoteiro→sênior: fresh progression, especi
     await expect(gabriela.getByText(/Lis de Ouro/)).toHaveCount(0);
 
     // ── Rule 2: especialidades START FRESH — older UI, no younger signals ─────
-    await gotoReady(gabriela, "/especialidades", gabriela.getByText(OLDER_INTRO), GABRIELA.email);
+    await gotoReady(gabriela, "/especialidades", gabriela.getByText(OLDER_INTRO), GABRIELA.scoutId);
     // The three-etapa project intro means the OLDER catalog is rendered — the
     // page can only reach it when user.ramo is in the older group. Had the cross
     // failed to re-group her, this would be the younger item-checklist page (no
@@ -136,12 +134,12 @@ test("M19 admin advances Gabriela escoteiro→sênior: fresh progression, especi
     await expect(gabriela.getByText(/itens aprovados/)).toHaveCount(0);
 
     // ── Rule 3: visibility flips escoteiro → sênior escotista ─────────────────
-    await gotoPainel(talita, TALITA.email);
+    await gotoPainel(talita, TALITA.scoutId);
     await expect(
       talita.getByText(GABRIELA.name, { exact: true }),
     ).toBeVisible({ timeout: 15_000 });
 
-    await gotoPainel(renata, RENATA.email);
+    await gotoPainel(renata, RENATA.scoutId);
     await expect(
       renata.getByText("Ana Lima", { exact: true }),
     ).toBeVisible({ timeout: 15_000 });
@@ -149,7 +147,7 @@ test("M19 admin advances Gabriela escoteiro→sênior: fresh progression, especi
   } finally {
     // ── Self-clean: restore Gabriela to escoteiro and verify her prior state ──
     await setScoutRamo(admin, GABRIELA.name, "Escoteiro");
-    await gotoReady(gabriela, "/", gabriela.getByText("Etapa Atual"), GABRIELA.email);
+    await gotoReady(gabriela, "/", gabriela.getByText("Etapa Atual"), GABRIELA.scoutId);
     await expect(
       gabriela.getByRole("heading", { name: "Trilha", exact: true }),
     ).toBeVisible();
@@ -159,7 +157,7 @@ test("M19 admin advances Gabriela escoteiro→sênior: fresh progression, especi
       gabriela,
       "/especialidades",
       gabriela.getByRole("heading", { name: "Especialidades", exact: true }),
-      GABRIELA.email,
+      GABRIELA.scoutId,
     );
     await expect(gabriela.getByText(OLDER_INTRO)).toHaveCount(0);
 

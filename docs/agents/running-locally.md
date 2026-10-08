@@ -43,28 +43,30 @@ await page.getByText("BEM-VINDO DE VOLTA").waitFor();
 
 ## Signing in
 
-The app has no local auth bypass; you sign in through the dev-only test
-provider on `/signin`.
+The app has no auth bypass. Test personas are ordinary contas gerenciadas:
+sign in through the same **registro + senha** form real members use on
+`/signin`.
 
-Three things must all hold, or the form fails in a way that looks like a bug:
+The personas must exist first. Seeding is idempotent and safe to re-run:
 
-1. `VITE_TEST_AUTH=1` — otherwise the TEST SIGN-IN block never renders.
-2. The users must exist. Seeding is additive and safe to re-run:
-   ```bash
-   TEST_AUTH=1 bunx convex run testing:seedTestUsers
-   ```
-3. The email must end in `@test.paxtools.local`. The provider rejects anything
-   else with a server error, not a form validation message.
+```bash
+TEST_AUTH=1 bunx convex run testing:seedTestUsers
+TEST_AUTH=1 bunx convex run testing:seedSimulatedTroop   # optional, full troop
+```
 
-Password for every seeded persona: `paxtools-test-only`.
+Password for every seeded persona: `paxtools-test-only` (or the deployment's
+`TEST_AUTH_PASSWORD`, which the seed hashes). A wrong password reads
+"Registro ou senha incorretos", and ten misses in an hour lock the registro.
 
-`progression@test.paxtools.local` is the default persona to reach for — an
+Registro `990006` (`progression`) is the default persona to reach for — an
 approved escoteiro with partial progression, so the home view has real data in
-it. The full persona list with roles, ramos and membership states lives in
-`tests/utils/catalog.ts`; read it there rather than guessing.
+it. Admin is `990001`. Test registros all live in `99xxxx`; the mapping is in
+`convex/lib/testAccounts.ts`, and the full persona list with roles, ramos and
+membership states in `tests/utils/catalog.ts` — read them rather than
+guessing.
 
-Form field test ids: `test-signin-email`, `test-signin-password`,
-`test-signin-submit`.
+Form field test ids: `scout-signin-id`, `scout-signin-password`,
+`scout-signin-submit` (disabled until both fields are filled).
 
 ## Driving it
 

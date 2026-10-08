@@ -28,13 +28,16 @@
 
 import { test, expect } from "@playwright/test";
 import type { Page, Locator } from "@playwright/test";
+import { login } from "../../utils/personas";
+import { SCOUT_SIGNIN_ID } from "../../utils/selectors";
+import { submitSignIn } from "../../utils/signin";
 
 const VERA_SLUG = "sim-escotista-pioneiro-1--m10";
 const DANTE_SLUG = "sim-troop-pioneiro-2";
 const VERA_STATE = `tests/.auth/${VERA_SLUG}.json`;
 const DANTE_STATE = `tests/.auth/${DANTE_SLUG}.json`;
-const VERA_EMAIL = "sim-escotista-pioneiro-1@test.paxtools.local";
-const DANTE_EMAIL = `${DANTE_SLUG}@test.paxtools.local`;
+const VERA_ID = login("sim-escotista-pioneiro-1");
+const DANTE_ID = login(DANTE_SLUG);
 const DANTE_NAME = "Dante Meireles";
 const ACTION_ID = "pioneiro:autonomia-lideranca:fixed:0";
 const BLOCO_TRIGGER = /Autonomia e Liderança/i;
@@ -43,21 +46,21 @@ const BLOCO_TRIGGER = /Autonomia e Liderança/i;
  * Dead storageState guard (PRD #58 hard rule): captured sessions can expire.
  * The auth redirect to /signin is client-side (fires a tick AFTER `goto`
  * resolves), so we race the signin form against a `ready` locator instead of
- * checking immediately. If signin wins, re-login via the dev-only test form and
+ * checking immediately. If signin wins, re-login via the registro sign-in form and
  * refresh this persona's own auth file — no `testing:*` call.
  */
 async function gotoAs(
   page: Page,
   url: string,
-  email: string,
+  scoutId: string,
   slug: string,
   ready: Locator,
 ) {
   await page.goto(url);
-  const emailField = page.getByTestId("test-signin-email");
-  await expect(emailField.or(ready).first()).toBeVisible({ timeout: 25_000 });
-  if (await emailField.isVisible()) {
-    await signInHere(page, email);
+  const idField = page.getByTestId(SCOUT_SIGNIN_ID);
+  await expect(idField.or(ready).first()).toBeVisible({ timeout: 25_000 });
+  if (await idField.isVisible()) {
+    await signInHere(page, scoutId);
     await page.context().storageState({ path: `tests/.auth/${slug}.json` });
     await page.goto(url);
     await expect(ready.first()).toBeVisible({ timeout: 25_000 });
@@ -65,16 +68,14 @@ async function gotoAs(
 }
 
 /**
- * Submit the dev-only test signin form, retry-tolerant: under the parallel
+ * Submit the registro sign-in form, retry-tolerant: under the parallel
  * cold-start storm the first submit can be dropped or the auth round-trip can
  * lag, so re-submit until we leave /signin.
  */
-async function signInHere(page: Page, email: string) {
+async function signInHere(page: Page, scoutId: string) {
   await expect(async () => {
     if (/\/signin/.test(page.url())) {
-      await page.getByTestId("test-signin-email").fill(email);
-      await page.getByTestId("test-signin-password").fill("paxtools-test-only");
-      await page.getByTestId("test-signin-submit").click();
+      await submitSignIn(page, scoutId);
     }
     await expect(page).not.toHaveURL(/\/signin/, { timeout: 10_000 });
   }).toPass({ timeout: 45_000 });
@@ -97,7 +98,7 @@ test("escotista impersonation auto-approves an ação, then removes it", async (
     await gotoAs(
       veraPage,
       "/escotista",
-      VERA_EMAIL,
+      VERA_ID,
       VERA_SLUG,
       veraPage.getByPlaceholder("Buscar escoteiro..."),
     );
@@ -144,7 +145,7 @@ test("escotista impersonation auto-approves an ação, then removes it", async (
     await gotoAs(
       veraPage,
       detailUrl,
-      VERA_EMAIL,
+      VERA_ID,
       VERA_SLUG,
       veraPage.getByText(/Visualizando como escotista/),
     );
@@ -154,7 +155,7 @@ test("escotista impersonation auto-approves an ação, then removes it", async (
     await gotoAs(
       dantePage,
       "/",
-      DANTE_EMAIL,
+      DANTE_ID,
       DANTE_SLUG,
       dantePage.getByRole("button", { name: BLOCO_TRIGGER }).first(),
     );

@@ -1,45 +1,58 @@
 /// <reference types="bun" />
 import { test, expect } from "bun:test";
+import { Scrypt } from "lucia";
 import { api, internal } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel";
 import { snapshotProgression } from "./lib/progression";
 import { getRamoRules } from "../src/data/progression-rules";
 import { newTest } from "./fixtures.testkit";
+import {
+  CANONICAL_SCOUT_IDS,
+  DEFAULT_TEST_PASSWORD,
+  simScoutId,
+  type SimKind,
+} from "./lib/testAccounts";
+import { MANAGED_PROVIDER } from "./lib/managedAccounts";
 
-const TEST_EMAIL = "wipeme@test.paxtools.local";
-const REAL_EMAIL = "real@gmail.com";
 const RAMOS = ["lobinho", "escoteiro", "senior", "pioneiro"] as const;
 
-test("wipeTestData removes only @test.paxtools.local users", async () => {
+/** Is `u` a sim persona of `kind` (any ramo)? */
+function isSim(kind: SimKind) {
+  const ids = new Set(
+    RAMOS.flatMap((r) =>
+      Array.from({ length: 99 }, (_, i) => simScoutId(r, kind, i + 1)),
+    ),
+  );
+  return (u: Doc<"users">) => u.scoutId !== undefined && ids.has(u.scoutId);
+}
+
+test("wipeTestData removes only test users (99xxxx registros + legacy emails)", async () => {
   const prev = process.env.TEST_AUTH;
   process.env.TEST_AUTH = "1";
   try {
     const t = newTest();
 
-    const realId = await t.run(async (ctx) => {
-      const real = await ctx.db.insert("users", {
-        email: REAL_EMAIL,
+    const realIds = await t.run(async (ctx) => {
+      const google = await ctx.db.insert("users", {
+        email: "real@gmail.com",
         name: "Real Developer",
       });
-      await ctx.db.insert("users", {
-        email: TEST_EMAIL,
-        name: "Test User",
+      const managed = await ctx.db.insert("users", {
+        scoutId: "123456",
+        name: "Real Managed",
       });
-      return real;
+      await ctx.db.insert("users", { scoutId: "990123", name: "Test User" });
+      await ctx.db.insert("users", {
+        email: "wipeme@test.paxtools.local",
+        name: "Legacy Test User",
+      });
+      return [google, managed];
     });
 
     await t.action(internal.testing.wipeTestData, {});
 
     const survivors = await t.run(async (ctx) => ctx.db.query("users").collect());
-
-    // Invariant: no surviving user matches the test-email pattern.
-    for (const u of survivors) {
-      expect(u.email?.endsWith("@test.paxtools.local") ?? false).toBe(false);
-    }
-
-    // And the real user is still there.
-    const real = survivors.find((u) => u._id === realId);
-    expect(real).toBeDefined();
-    expect(real?.email).toBe(REAL_EMAIL);
+    expect(survivors.map((u) => u._id).sort()).toEqual([...realIds].sort());
   } finally {
     if (prev === undefined) delete process.env.TEST_AUTH;
     else process.env.TEST_AUTH = prev;
@@ -51,7 +64,7 @@ test("seedSimulatedTroop covers all four ramos: stats, especialidades, IRR, pend
   process.env.TEST_AUTH = "1";
   try {
     const t = newTest();
-    await t.mutation(internal.testing.seedTestUsers, {});
+    await t.action(internal.testing.seedTestUsers, {});
     const res = await t.action(internal.testing.seedSimulatedTroop, {});
 
     const expectedScouts = {
@@ -75,9 +88,7 @@ test("seedSimulatedTroop covers all four ramos: stats, especialidades, IRR, pend
 
     await t.run(async (ctx) => {
       const users = await ctx.db.query("users").collect();
-      const simScouts = users.filter((u) =>
-        u.email?.startsWith("sim-troop-"),
-      );
+      const simScouts = users.filter(isSim("troop"));
 
       for (const ramo of RAMOS) {
         const scouts = simScouts.filter((u) => u.ramo === ramo);
@@ -117,7 +128,7 @@ test("seedSimulatedTroop covers all four ramos: stats, especialidades, IRR, pend
         expect(
           users.some(
             (u) =>
-              u.email?.startsWith(`sim-pending-${ramo}-`) &&
+              u.scoutId === simScoutId(ramo, "pending", 1) &&
               u.membershipStatus === "pending",
           ),
         ).toBe(true);
@@ -147,12 +158,24 @@ test("seedSimulatedTroop covers all four ramos: stats, especialidades, IRR, pend
       // Only pioneiro blocos count — never the ~54 past-ramo ones.
       expect(claraSnap.completedBlockCount).toBeLessThan(10);
 
-      // Every sim persona can authenticate (test auth account exists).
+      // Every persona is a conta gerenciada: a `managed` account keyed by its
+      // registro, holding a hash the provider accepts for the test password.
       const accounts = await ctx.db.query("authAccounts").collect();
-      const withAccount = new Set(accounts.map((a) => a.userId));
-      for (const u of users.filter((x) => x.email?.startsWith("sim-"))) {
-        expect(withAccount.has(u._id)).toBe(true);
+      const accountByUser = new Map(accounts.map((a) => [a.userId, a]));
+      const personas = users.filter((u) => u.scoutId?.startsWith("99"));
+      expect(personas.length).toBeGreaterThan(40);
+      for (const u of personas) {
+        const account = accountByUser.get(u._id);
+        expect(account?.provider).toBe(MANAGED_PROVIDER);
+        expect(account?.providerAccountId).toBe(u.scoutId);
+        expect(u.email).toBeUndefined();
       }
+      const admin = users.find((u) => u.scoutId === CANONICAL_SCOUT_IDS.admin);
+      const adminSecret = admin && accountByUser.get(admin._id)?.secret;
+      if (!adminSecret) throw new Error("admin account missing");
+      expect(await new Scrypt().verify(adminSecret, DEFAULT_TEST_PASSWORD)).toBe(
+        true,
+      );
 
       // Events reference sim scouts per ramo.
       const events = await ctx.db.query("events").collect();
@@ -167,13 +190,13 @@ test("seedSimulatedTroop covers all four ramos: stats, especialidades, IRR, pend
     // Idempotent: reseeding replaces, never accumulates.
     const before = await t.run(async (ctx) =>
       (await ctx.db.query("users").collect()).filter((u) =>
-        u.email?.startsWith("sim-"),
+        u.scoutId?.startsWith("99") && !u.scoutId.startsWith("990"),
       ).length,
     );
     await t.action(internal.testing.seedSimulatedTroop, {});
     const after = await t.run(async (ctx) =>
       (await ctx.db.query("users").collect()).filter((u) =>
-        u.email?.startsWith("sim-"),
+        u.scoutId?.startsWith("99") && !u.scoutId.startsWith("990"),
       ).length,
     );
     expect(after).toBe(before);

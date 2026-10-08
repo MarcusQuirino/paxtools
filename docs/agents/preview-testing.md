@@ -79,7 +79,7 @@ The staging alias is the constant in `tests/utils/target.ts`.
 
 The browser mechanics in `docs/agents/running-locally.md` carry over
 unchanged: hydration wait, semantic `find` → `form_input` → `browser_batch`,
-the `test-signin-*` field ids, and the persona catalogue. What differs on a
+the `scout-signin-*` field ids, and the persona registros. What differs on a
 deployed target:
 
 - The extension is paired with **Helium**, not Chrome. Helium must be open for
@@ -89,7 +89,7 @@ deployed target:
   alias usually opens straight into whichever persona was left signed in — and
   an escotista's view of a scout is not the scout's own view. Screenshot
   first, then sign in as the persona whose role the change affects.
-- PR previews take the **test-login form only**. The Google button renders,
+- PR previews take the **registro sign-in only**. The Google button renders,
   but its redirect URI is registered for the staging alias, not for a random
   preview URL, so it fails there.
 - Both targets read the same staging Convex data.

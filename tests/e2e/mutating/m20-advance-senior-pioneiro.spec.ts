@@ -22,46 +22,44 @@
  * Idempotent on retry.
  *
  * AUTH: see gotoReady — every navigation self-heals a stale/expired storageState
- * via the test-only signin form (no testing:* calls, no foreign auth writes).
+ * via the registro sign-in form (no testing:* calls, no foreign auth writes).
  *
  * OWNERSHIP: mutates ONLY Vitor's ramo. Shared admin login as actor; painéis
  * read by NAME presence/absence, never global counts.
  */
 
 import { test, expect, type Page, type Locator } from "@playwright/test";
+import { login } from "../../utils/personas";
+import { SCOUT_SIGNIN_ID } from "../../utils/selectors";
+import { submitSignIn } from "../../utils/signin";
 
-const SUFFIX = "@test.paxtools.local";
-const PW = process.env.TEST_AUTH_PASSWORD ?? "paxtools-test-only";
-
-const ADMIN = { state: "tests/.auth/admin--m20.json", email: `admin${SUFFIX}` };
-const VITOR = { state: "tests/.auth/sim-troop-senior-7.json", email: `sim-troop-senior-7${SUFFIX}`, name: "Vitor Sampaio" };
-const TALITA = { state: "tests/.auth/sim-escotista-senior-1--m20.json", email: `sim-escotista-senior-1${SUFFIX}` }; // sênior escotista
-const VERA = { state: "tests/.auth/sim-escotista-pioneiro-1--m20.json", email: `sim-escotista-pioneiro-1${SUFFIX}` }; // pioneiro escotista
+const ADMIN = { state: "tests/.auth/admin--m20.json", scoutId: login("admin") };
+const VITOR = { state: "tests/.auth/sim-troop-senior-7.json", scoutId: login("sim-troop-senior-7"), name: "Vitor Sampaio" };
+const TALITA = { state: "tests/.auth/sim-escotista-senior-1--m20.json", scoutId: login("sim-escotista-senior-1") }; // sênior escotista
+const VERA = { state: "tests/.auth/sim-escotista-pioneiro-1--m20.json", scoutId: login("sim-escotista-pioneiro-1") }; // pioneiro escotista
 
 const LOCK_TEXT = /Complete todos os 18 blocos para desbloquear o checklist/;
 const SENIOR_ETAPAS = ["Escalada", "Conquista", "Azimute"];
 
-async function gotoReady(page: Page, url: string, ready: Locator, email: string) {
-  const submit = page.getByTestId("test-signin-submit");
+async function gotoReady(page: Page, url: string, ready: Locator, scoutId: string) {
+  const idField = page.getByTestId(SCOUT_SIGNIN_ID);
   for (let attempt = 0; attempt < 6; attempt++) {
     await page.goto(url);
     const outcome = await Promise.race([
       ready.waitFor({ state: "visible", timeout: 10_000 }).then(() => "ready" as const).catch(() => "x" as const),
-      submit.waitFor({ state: "visible", timeout: 10_000 }).then(() => "signin" as const).catch(() => "x" as const),
+      idField.waitFor({ state: "visible", timeout: 10_000 }).then(() => "signin" as const).catch(() => "x" as const),
     ]);
     if (outcome === "ready") return;
     if (outcome === "signin") {
-      await page.getByTestId("test-signin-email").fill(email);
-      await page.getByTestId("test-signin-password").fill(PW);
-      await submit.click();
+      await submitSignIn(page, scoutId);
       await page.waitForURL((u) => !/\/signin/.test(u.pathname), { timeout: 20_000 }).catch(() => {});
     }
   }
   await ready.waitFor({ state: "visible", timeout: 12_000 });
 }
 
-async function gotoPainel(page: Page, email: string) {
-  await gotoReady(page, "/escotista", page.getByPlaceholder("Buscar escoteiro..."), email);
+async function gotoPainel(page: Page, scoutId: string) {
+  await gotoReady(page, "/escotista", page.getByPlaceholder("Buscar escoteiro..."), scoutId);
 }
 
 async function setScoutRamo(admin: Page, scoutName: string, ramoLabel: string) {
@@ -69,7 +67,7 @@ async function setScoutRamo(admin: Page, scoutName: string, ramoLabel: string) {
     admin,
     "/escotista/admin",
     admin.getByRole("heading", { name: "Membros", exact: true }),
-    ADMIN.email,
+    ADMIN.scoutId,
   );
   const row = admin.getByRole("listitem").filter({ hasText: scoutName });
   await expect(row).toBeVisible({ timeout: 15_000 });
@@ -105,7 +103,7 @@ test("M20 admin advances Vitor sênior→pioneiro: fresh progression, older espe
     await setScoutRamo(admin, VITOR.name, "Pioneiro");
 
     // ── Rule 1: dashboard starts FRESH on the pioneiro ramo ───────────────────
-    await gotoReady(vitor, "/", vitor.getByText("Etapa Atual"), VITOR.email);
+    await gotoReady(vitor, "/", vitor.getByText("Etapa Atual"), VITOR.scoutId);
     await expect(
       vitor.getByRole("heading", { name: "Descoberta", exact: true }),
     ).toBeVisible();
@@ -122,17 +120,17 @@ test("M20 admin advances Vitor sênior→pioneiro: fresh progression, older espe
     // ── Rule 2: older especialidade CARRIES (shared older catalog) ────────────
     // Esportes de Aventura stays Conquistada (3/3 etapas) as a pioneiro.
     const card = olderCard(vitor, "Esportes de Aventura");
-    await gotoReady(vitor, "/especialidades?specialty=esportes-de-aventura", card, VITOR.email);
+    await gotoReady(vitor, "/especialidades?specialty=esportes-de-aventura", card, VITOR.scoutId);
     await expect(card).toContainText("3/3 etapas aprovadas");
     await expect(card).toContainText("Conquistada");
 
     // ── Rule 3: visibility flips sênior → pioneiro escotista ──────────────────
-    await gotoPainel(vera, VERA.email);
+    await gotoPainel(vera, VERA.scoutId);
     await expect(
       vera.getByText(VITOR.name, { exact: true }),
     ).toBeVisible({ timeout: 15_000 });
 
-    await gotoPainel(talita, TALITA.email);
+    await gotoPainel(talita, TALITA.scoutId);
     await expect(
       talita.getByText("Quésia Torres", { exact: true }),
     ).toBeVisible({ timeout: 15_000 });
@@ -140,7 +138,7 @@ test("M20 admin advances Vitor sênior→pioneiro: fresh progression, older espe
   } finally {
     // ── Self-clean: restore Vitor to sênior and verify his prior state ────────
     await setScoutRamo(admin, VITOR.name, "Sênior");
-    await gotoReady(vitor, "/", vitor.getByText("Etapa Atual"), VITOR.email);
+    await gotoReady(vitor, "/", vitor.getByText("Etapa Atual"), VITOR.scoutId);
     await expect(
       vitor.getByRole("heading", { name: "Conquista", exact: true }),
     ).toBeVisible();

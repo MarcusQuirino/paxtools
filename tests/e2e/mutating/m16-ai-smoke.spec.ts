@@ -21,23 +21,26 @@
 
 import { testAs, expect } from "../../fixtures/auth";
 import type { Page, Locator } from "@playwright/test";
+import { login } from "../../utils/personas";
+import { SCOUT_SIGNIN_ID } from "../../utils/selectors";
+import { submitSignIn } from "../../utils/signin";
 
 const SLUG = "sim-escotista-lobinho-1--m16";
-const EMAIL = "sim-escotista-lobinho-1@test.paxtools.local";
+const SCOUT_ID = login("sim-escotista-lobinho-1");
 const test = testAs(SLUG);
 
 /**
  * Dead storageState guard (PRD #58 hard rule): captured sessions can expire.
  * The auth redirect to /signin is client-side (fires after `goto` resolves), so
  * race the signin form against a `ready` locator. If signin wins, re-login via
- * the dev-only test form and refresh THIS persona's auth file — no `testing:*`
+ * the registro sign-in form and refresh THIS persona's auth file — no `testing:*`
  * call.
  */
 async function gotoAs(page: Page, url: string, ready: Locator) {
   await page.goto(url);
-  const emailField = page.getByTestId("test-signin-email");
-  await expect(emailField.or(ready).first()).toBeVisible({ timeout: 25_000 });
-  if (await emailField.isVisible()) {
+  const idField = page.getByTestId(SCOUT_SIGNIN_ID);
+  await expect(idField.or(ready).first()).toBeVisible({ timeout: 25_000 });
+  if (await idField.isVisible()) {
     await signInHere(page);
     await page.context().storageState({ path: `tests/.auth/${SLUG}.json` });
     await page.goto(url);
@@ -46,15 +49,13 @@ async function gotoAs(page: Page, url: string, ready: Locator) {
 }
 
 /**
- * Submit the dev-only test signin form, retry-tolerant: under the parallel
+ * Submit the registro sign-in form, retry-tolerant: under the parallel
  * cold-start storm the first submit can be dropped or the round-trip can lag.
  */
 async function signInHere(page: Page) {
   await expect(async () => {
     if (/\/signin/.test(page.url())) {
-      await page.getByTestId("test-signin-email").fill(EMAIL);
-      await page.getByTestId("test-signin-password").fill("paxtools-test-only");
-      await page.getByTestId("test-signin-submit").click();
+      await submitSignIn(page, SCOUT_ID);
     }
     await expect(page).not.toHaveURL(/\/signin/, { timeout: 10_000 });
   }).toPass({ timeout: 45_000 });

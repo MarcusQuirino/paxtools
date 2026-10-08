@@ -1,11 +1,11 @@
 import {
   internalAction,
   internalMutation,
-  internalQuery,
 } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
+import { Scrypt } from "lucia";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getEixosForRamo } from "../src/data/progression-data";
 import { getRamoRules } from "../src/data/progression-rules";
@@ -26,17 +26,26 @@ import {
   logGroupEvent,
   logRamoEvent,
 } from "./lib/events";
+import { MANAGED_PROVIDER } from "./lib/managedAccounts";
+import {
+  CANONICAL_SCOUT_IDS,
+  DEFAULT_TEST_PASSWORD,
+  isSimScoutId,
+  isTestScoutId,
+  simScoutId,
+  type CanonicalSlug,
+} from "./lib/testAccounts";
 
-const TEST_EMAIL_SUFFIX = "@test.paxtools.local";
+// Test personas used to sign in through a separate `test-password` provider
+// keyed by these emails. Rows from that era are still recognized so a wipe
+// clears them from deployments seeded before the switch to contas gerenciadas.
+const LEGACY_TEST_EMAIL_SUFFIX = "@test.paxtools.local";
+const LEGACY_SIM_EMAIL_PREFIX = "sim-";
 const TEST_GROUP_PREFIX = "__TEST__";
 const TEST_GROUP_NAME = "__TEST__ Grupo QA";
 const TEST_GROUP_NUMBER = "99999";
 const TEST_GROUP_REGIAO = "RS";
 const TEST_GROUP_PASSWORD = "TESTQA";
-const TEST_PROVIDER_ID = "test-password";
-// Seed-side secret; the actual signin secret is verified against
-// TEST_AUTH_PASSWORD in convex/auth.ts via crypto.verifySecret.
-const TEST_AUTH_ACCOUNT_SECRET = "test-secret";
 
 function assertTestEnv(): void {
   if (process.env.TEST_AUTH !== "1") {
@@ -45,7 +54,29 @@ function assertTestEnv(): void {
 }
 
 function isTestUser(u: Doc<"users">): boolean {
-  return typeof u.email === "string" && u.email.endsWith(TEST_EMAIL_SUFFIX);
+  return (
+    isTestScoutId(u.scoutId) ||
+    (u.email?.endsWith(LEGACY_TEST_EMAIL_SUFFIX) ?? false)
+  );
+}
+
+function isSimUser(u: Doc<"users">): boolean {
+  return (
+    isSimScoutId(u.scoutId) ||
+    ((u.email?.endsWith(LEGACY_TEST_EMAIL_SUFFIX) ?? false) &&
+      u.email!.startsWith(LEGACY_SIM_EMAIL_PREFIX))
+  );
+}
+
+/**
+ * Hash the shared test password once per seed, with the same Scrypt the
+ * `managed` provider verifies against (the salt is embedded in the hash, so
+ * every persona can share it). TEST_AUTH_PASSWORD overrides the default.
+ */
+async function hashTestPassword(): Promise<string> {
+  return await new Scrypt().hash(
+    process.env.TEST_AUTH_PASSWORD || DEFAULT_TEST_PASSWORD,
+  );
 }
 
 type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
@@ -53,8 +84,7 @@ type Role = "escoteiro" | "escotista";
 type Membership = "pending" | "approved";
 
 type CatalogEntry = {
-  slug: string;
-  email: string;
+  slug: CanonicalSlug;
   name: string;
   role?: Role;
   ramo?: Ramo;
@@ -69,7 +99,6 @@ type CatalogEntry = {
 const CATALOG: CatalogEntry[] = [
   {
     slug: "admin",
-    email: "admin@test.paxtools.local",
     name: "admin",
     role: "escotista",
     escotistaRamos: ["escoteiro"],
@@ -80,7 +109,6 @@ const CATALOG: CatalogEntry[] = [
   },
   {
     slug: "escotista",
-    email: "escotista@test.paxtools.local",
     name: "escotista",
     role: "escotista",
     escotistaRamos: ["escoteiro", "senior"],
@@ -91,7 +119,6 @@ const CATALOG: CatalogEntry[] = [
   },
   {
     slug: "escotista_pending",
-    email: "escotista-pending@test.paxtools.local",
     name: "escotista-pending",
     role: "escotista",
     escotistaRamos: ["escoteiro"],
@@ -102,7 +129,6 @@ const CATALOG: CatalogEntry[] = [
   },
   {
     slug: "escoteiro_pending",
-    email: "pending@test.paxtools.local",
     name: "pending",
     role: "escoteiro",
     ramo: "escoteiro",
@@ -112,7 +138,6 @@ const CATALOG: CatalogEntry[] = [
   },
   {
     slug: "escoteiro_approved",
-    email: "approved@test.paxtools.local",
     name: "approved",
     role: "escoteiro",
     ramo: "escoteiro",
@@ -122,7 +147,6 @@ const CATALOG: CatalogEntry[] = [
   },
   {
     slug: "escoteiro_with_progression",
-    email: "progression@test.paxtools.local",
     name: "progression",
     role: "escoteiro",
     ramo: "escoteiro",
@@ -132,7 +156,6 @@ const CATALOG: CatalogEntry[] = [
   },
   {
     slug: "escoteiro_lobinho",
-    email: "lobinho@test.paxtools.local",
     name: "lobinho",
     role: "escoteiro",
     ramo: "lobinho",
@@ -142,7 +165,6 @@ const CATALOG: CatalogEntry[] = [
   },
   {
     slug: "escoteiro_onboarding_incomplete",
-    email: "onboarding@test.paxtools.local",
     name: "onboarding",
     onboardingComplete: false,
     inGroup: false,
@@ -152,14 +174,12 @@ const CATALOG: CatalogEntry[] = [
     // "forced into onboarding" persona above is never mutated. Reset back to
     // this state via testing:resetOnboardingUser.
     slug: "onboarding_m13",
-    email: "onboarding-m13@test.paxtools.local",
     name: "onboarding-m13",
     onboardingComplete: false,
     inGroup: false,
   },
   {
     slug: "banned_user",
-    email: "banned@test.paxtools.local",
     name: "banned",
     role: "escoteiro",
     inGroup: false,
@@ -297,7 +317,7 @@ export const wipeTestBatch = internalMutation({
     const allUsers = await ctx.db.query("users").collect();
     const allTestUsers = allUsers.filter(isTestUser);
     const targetUsers = simOnly
-      ? allTestUsers.filter((u) => u.email?.startsWith(SIM_EMAIL_PREFIX))
+      ? allTestUsers.filter(isSimUser)
       : allTestUsers;
     const allTestUserIds = new Set<Id<"users">>(allTestUsers.map((u) => u._id));
     const allGroups = await ctx.db.query("groups").collect();
@@ -349,6 +369,14 @@ export const wipeTestBatch = internalMutation({
         .withIndex("userIdAndProvider", (q) => q.eq("userId", u._id))
         .take(remaining());
       for (const a of accounts) {
+        const limits = await ctx.db
+          .query("authRateLimits")
+          .withIndex("identifier", (q) => q.eq("identifier", a._id))
+          .collect();
+        for (const l of limits) {
+          await ctx.db.delete(l._id);
+          deleted++;
+        }
         await ctx.db.delete(a._id);
         deleted++;
       }
@@ -409,8 +437,8 @@ export const wipeTestData = internalAction({
 });
 
 /**
- * Staging-only: delete every REAL user (any account whose email is not
- * `@test.paxtools.local`) so the Google onboarding flow can be re-tested
+ * Staging-only: delete every REAL user (anyone outside the reserved `99xxxx`
+ * test registros) so the Google onboarding flow can be re-tested
  * from scratch. Seeded test users and the test group are untouched.
  *
  * Cannot run on prod: `assertTestEnv` throws unless TEST_AUTH=1, which prod
@@ -437,49 +465,68 @@ async function ensureUser(
   ctx: { db: import("./_generated/server").MutationCtx["db"] },
   entry: CatalogEntry,
 ): Promise<Id<"users">> {
+  const scoutId = CANONICAL_SCOUT_IDS[entry.slug];
   const existing = await ctx.db
     .query("users")
-    .withIndex("email", (q) => q.eq("email", entry.email))
+    .withIndex("by_scoutId", (q) => q.eq("scoutId", scoutId))
     .unique();
 
   if (existing) {
     return existing._id;
   }
-  return await ctx.db.insert("users", {
-    email: entry.email,
-    name: entry.name,
-  });
+  return await ctx.db.insert("users", { scoutId, name: entry.name });
 }
 
+/**
+ * Give a persona the same `managed` authAccounts row a real conta gerenciada
+ * gets from createManagedMember. `secret` is the pre-hashed test password;
+ * re-applied on every seed so a changed TEST_AUTH_PASSWORD takes effect.
+ */
 async function ensureAuthAccount(
   ctx: { db: import("./_generated/server").MutationCtx["db"] },
   userId: Id<"users">,
-  email: string,
+  scoutId: string,
+  secret: string,
 ): Promise<void> {
   const existing = await ctx.db
     .query("authAccounts")
     .withIndex("providerAndAccountId", (q) =>
-      q.eq("provider", TEST_PROVIDER_ID).eq("providerAccountId", email),
+      q.eq("provider", MANAGED_PROVIDER).eq("providerAccountId", scoutId),
     )
     .unique();
   if (existing) {
-    if (existing.userId !== userId) {
-      await ctx.db.patch(existing._id, { userId });
-    }
+    await ctx.db.patch(existing._id, { userId, secret });
     return;
   }
   await ctx.db.insert("authAccounts", {
     userId,
-    provider: TEST_PROVIDER_ID,
-    providerAccountId: email,
-    secret: TEST_AUTH_ACCOUNT_SECRET,
+    provider: MANAGED_PROVIDER,
+    providerAccountId: scoutId,
+    secret,
   });
 }
 
-export const seedTestUsers = internalMutation({
+/** Seed the canonical catalog personas + test group. The CLI entry point
+ * (`testing:seedTestUsers`); hashes the password outside the mutation. */
+export const seedTestUsers = internalAction({
   args: {},
   handler: async (
     ctx,
+  ): Promise<{
+    users: Record<string, Id<"users">>;
+    groupId: Id<"groups">;
+  }> => {
+    assertTestEnv();
+    const secret = await hashTestPassword();
+    return await ctx.runMutation(internal.testing.seedCatalog, { secret });
+  },
+});
+
+export const seedCatalog = internalMutation({
+  args: { secret: v.string() },
+  handler: async (
+    ctx,
+    { secret },
   ): Promise<{
     users: Record<string, Id<"users">>;
     groupId: Id<"groups">;
@@ -490,7 +537,12 @@ export const seedTestUsers = internalMutation({
     const adminEntry = CATALOG.find((c) => c.slug === "admin");
     if (!adminEntry) throw new Error("admin entry missing from catalog");
     const adminId = await ensureUser(ctx, adminEntry);
-    await ensureAuthAccount(ctx, adminId, adminEntry.email);
+    await ensureAuthAccount(
+      ctx,
+      adminId,
+      CANONICAL_SCOUT_IDS.admin,
+      secret,
+    );
 
     // 2. Ensure the test group exists (by exact name match — group is unique).
     const allGroups = await ctx.db.query("groups").collect();
@@ -529,7 +581,12 @@ export const seedTestUsers = internalMutation({
       const userId =
         entry.slug === "admin" ? adminId : await ensureUser(ctx, entry);
       userIds[entry.slug] = userId;
-      await ensureAuthAccount(ctx, userId, entry.email);
+      await ensureAuthAccount(
+        ctx,
+        userId,
+        CANONICAL_SCOUT_IDS[entry.slug],
+        secret,
+      );
 
       const existingUser = await ctx.db.get(userId);
       const wasBannedBefore =
@@ -545,6 +602,9 @@ export const seedTestUsers = internalMutation({
         membershipStatus: entry.membershipStatus,
         onboardingComplete: entry.onboardingComplete,
         groupId: entry.inGroup ? groupId : undefined,
+        // A spec may have issued a temporary password; the shared one is
+        // back in place, so no forced change.
+        mustChangePassword: undefined,
         // Seeded personas skip the guided tour — it would cover the page in
         // every e2e spec. The tour's own spec replays it from Perfil.
         tourSeenAt: existingUser?.tourSeenAt ?? Date.now(),
@@ -630,26 +690,26 @@ export const seedTestUsers = internalMutation({
  * Reset a dedicated onboarding persona to the not-onboarded state (role,
  * ramo, group and membership cleared, onboardingComplete=false), deleting
  * any join-request side effects. Restricted to the onboarding personas so a
- * bad email can't strip a data-bearing user. Makes the M13 e2e spec
+ * bad registro can't strip a data-bearing user. Makes the M13 e2e spec
  * retry-safe: it calls this before acting.
  */
 export const resetOnboardingUser = internalMutation({
-  args: { email: v.string() },
-  handler: async (ctx, { email }): Promise<void> => {
+  args: { scoutId: v.string() },
+  handler: async (ctx, { scoutId }): Promise<void> => {
     assertTestEnv();
-    const allowed = new Set([
-      "onboarding@test.paxtools.local",
-      "onboarding-m13@test.paxtools.local",
+    const allowed = new Set<string>([
+      CANONICAL_SCOUT_IDS.escoteiro_onboarding_incomplete,
+      CANONICAL_SCOUT_IDS.onboarding_m13,
     ]);
-    if (!allowed.has(email)) {
-      throw new Error(`not an onboarding persona: ${email}`);
+    if (!allowed.has(scoutId)) {
+      throw new Error(`not an onboarding persona: ${scoutId}`);
     }
     const user = await ctx.db
       .query("users")
-      .withIndex("email", (q) => q.eq("email", email))
+      .withIndex("by_scoutId", (q) => q.eq("scoutId", scoutId))
       .unique();
     if (!user) {
-      throw new Error(`onboarding persona missing (seed first): ${email}`);
+      throw new Error(`onboarding persona missing (seed first): ${scoutId}`);
     }
     await ctx.db.patch(user._id, {
       role: undefined,
@@ -671,20 +731,6 @@ export const resetOnboardingUser = internalMutation({
   },
 });
 
-export const getTestUserByEmail = internalQuery({
-  args: { email: v.string() },
-  handler: async (ctx, { email }) => {
-    assertTestEnv();
-    if (!email.endsWith(TEST_EMAIL_SUFFIX)) {
-      throw new Error("not a test email");
-    }
-    return await ctx.db
-      .query("users")
-      .withIndex("email", (q) => q.eq("email", email))
-      .unique();
-  },
-});
-
 // ── Simulated demo troop ─────────────────────────────────────────────────────
 //
 // Seeds all four ramos with a realistic cohort so every feature surface has
@@ -699,13 +745,13 @@ export const getTestUserByEmail = internalQuery({
 //
 // Deterministic on purpose (index arithmetic, no randomness) so re-seeds and
 // Playwright runs see identical data. Idempotent: `sim-*` users are wiped and
-// re-created by the seedSimulatedTroop action. Every sim user gets a test auth
-// account, so e2e can authenticate as any persona. All sim users share
+// re-created by the seedSimulatedTroop action. Every sim user gets a conta
+// gerenciada login (registro from simScoutId), so e2e can authenticate as any
+// persona. All sim users share
 // _creationTime=now, so the acompanhamento "novo membro" hint flags them all —
 // a seeding artifact, not a bug.
 //
 // Requires testing:seedTestUsers first (test group + admin login).
-const SIM_EMAIL_PREFIX = "sim-"; // also matches the legacy "sim-troop-" scheme
 
 const RAMOS = ["lobinho", "escoteiro", "senior", "pioneiro"] as const;
 
@@ -1098,13 +1144,13 @@ export type SimRamoSummary = {
 /** Seed one ramo's slice of the simulated troop. Assumes the sim wipe ran.
  * Split per ramo to stay far from Convex's per-mutation write limits. */
 export const seedSimRamo = internalMutation({
-  args: { ramo: simRamoArg },
-  handler: async (ctx, { ramo }): Promise<SimRamoSummary> => {
+  args: { ramo: simRamoArg, secret: v.string() },
+  handler: async (ctx, { ramo, secret }): Promise<SimRamoSummary> => {
     assertTestEnv();
 
     const admin = await ctx.db
       .query("users")
-      .withIndex("email", (q) => q.eq("email", "admin@test.paxtools.local"))
+      .withIndex("by_scoutId", (q) => q.eq("scoutId", CANONICAL_SCOUT_IDS.admin))
       .unique();
     if (!admin) {
       throw new Error("run testing:seedTestUsers first (admin login missing)");
@@ -1123,16 +1169,16 @@ export const seedSimRamo = internalMutation({
     const now = Date.now();
 
     const createUser = async (
-      email: string,
+      scoutId: string,
       name: string,
       patch: Partial<Doc<"users">>,
     ): Promise<Doc<"users">> => {
       const userId = await ctx.db.insert("users", {
-        email,
+        scoutId,
         name,
         tourSeenAt: now,
       });
-      await ensureAuthAccount(ctx, userId, email);
+      await ensureAuthAccount(ctx, userId, scoutId, secret);
       await ctx.db.patch(userId, patch);
       const doc = await ctx.db.get(userId);
       if (!doc) throw new Error("sim user vanished after insert");
@@ -1144,7 +1190,7 @@ export const seedSimRamo = internalMutation({
     for (let j = 0; j < spec.escotistas.length; j++) {
       escotistas.push(
         await createUser(
-          `sim-escotista-${ramo}-${j + 1}${TEST_EMAIL_SUFFIX}`,
+          simScoutId(ramo, "escotista", j + 1),
           spec.escotistas[j]!,
           {
             role: "escotista",
@@ -1162,7 +1208,7 @@ export const seedSimRamo = internalMutation({
     // 2. Pending join requests (one escoteiro per ramo; escotista where spec'd).
     let pendingRequests = 0;
     await createUser(
-      `sim-pending-${ramo}-1${TEST_EMAIL_SUFFIX}`,
+      simScoutId(ramo, "pending", 1),
       spec.pendingScout,
       {
         role: "escoteiro",
@@ -1175,7 +1221,7 @@ export const seedSimRamo = internalMutation({
     pendingRequests++;
     if (spec.pendingEscotista) {
       await createUser(
-        `sim-pending-escotista-${ramo}-1${TEST_EMAIL_SUFFIX}`,
+        simScoutId(ramo, "pending-escotista", 1),
         spec.pendingEscotista,
         {
           role: "escotista",
@@ -1203,7 +1249,7 @@ export const seedSimRamo = internalMutation({
     for (let i = 0; i < spec.scouts.length; i++) {
       const sc = spec.scouts[i]!;
       const doc = await createUser(
-        `sim-troop-${ramo}-${i + 1}${TEST_EMAIL_SUFFIX}`,
+        simScoutId(ramo, "troop", i + 1),
         sc.name,
         {
           role: "escoteiro",
@@ -1443,10 +1489,12 @@ export const seedSimulatedTroop = internalAction({
       wipedRows += res.deleted;
       if (res.done) break;
     }
+    const secret = await hashTestPassword();
     const perRamo: Record<string, SimRamoSummary> = {};
     for (const ramo of RAMOS) {
       perRamo[ramo] = await ctx.runMutation(internal.testing.seedSimRamo, {
         ramo,
+        secret,
       });
     }
     return { wipedUsers: wipedRows, perRamo };

@@ -34,7 +34,7 @@ Load the Chrome MCP tools via `ToolSearch` (query `mcp__claude-in-chrome__`). Th
    - Click "Sair" (the sign-out item — calls `useAuthActions().signOut()`).
    - Wait for redirect to `/signin`.
    The user has explicitly opted into this — they'll sign back in manually after the QA run finishes.
-4. Navigate to `/signin`. Use the **test-only sign-in form** (rendered when `VITE_TEST_AUTH=1`). The form has these data-testids: `test-signin-email`, `test-signin-password`, `test-signin-submit`. Sign in as the test user appropriate for the surface (catalog in infra-plan section 3 — emails end with `@test.paxtools.local`, the password is whatever `TEST_AUTH_PASSWORD` is set to).
+4. Navigate to `/signin`. Use the **registro sign-in form** — test personas are ordinary contas gerenciadas, there is no test-only login. The form has these data-testids: `scout-signin-id`, `scout-signin-password`, `scout-signin-submit`. Sign in as the persona appropriate for the surface (registros `99xxxx` from `convex/lib/testAccounts.ts`, roles in `tests/utils/catalog.ts`; the password is `TEST_AUTH_PASSWORD`, default `paxtools-test-only`). In specs use `submitSignIn` from `tests/utils/signin.ts`.
 5. Walk the **golden path** of the new feature. Then walk 1–2 edge cases the diff suggests.
 6. Read the console via `mcp__claude-in-chrome__read_console_messages` — surface any errors.
 7. **If the feature is broken at this stage, STOP.** Report what you saw. Do not write a test for a broken feature — that just locks in the bug. The dev fixes first, then re-invoke QA.

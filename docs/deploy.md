@@ -26,8 +26,8 @@ staging auth.
 
 ## What happens on merge to master
 
-1. Vercel builds the frontend with Preview env vars (staging Convex URLs,
-   `VITE_TEST_AUTH=1`) and updates the staging alias.
+1. Vercel builds the frontend with Preview env vars (staging Convex URLs)
+   and updates the staging alias.
 2. `ci.yml`'s `deploy-staging` job (after lint/test/build pass) runs
    `convex deploy` to the staging deployment, then `migrations:runPending`,
    then waits for migrations to settle.
@@ -85,10 +85,12 @@ the frontend ships). Never edit or reorder a migration that has run anywhere.
   (idempotent; run from your machine, affects staging).
 - `bun run staging:wipe-real` — delete all REAL (Google) accounts and their
   data from staging, so onboarding can be re-tested from scratch. Test users
-  survive. Guarded by `TEST_AUTH=1`, so it cannot run on prod.
+  (registros `99xxxx`) survive. Guarded by `TEST_AUTH=1`, so it cannot run
+  on prod.
 - `bun run staging:reset` — wipe + re-seed the test users.
-- Sign in on staging with the test-login form (any seeded
-  `*@test.paxtools.local` user + the shared test password) or with Google.
+- Sign in on staging with the registro form (any seeded `99xxxx` persona —
+  see `convex/lib/testAccounts.ts` — + the shared test password) or with
+  Google.
 
 For a realistic dataset before a scary migration:
 `bunx convex export --prod --path prod.zip && bunx convex import --deployment staging prod.zip`.

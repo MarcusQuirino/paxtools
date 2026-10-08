@@ -6,8 +6,11 @@
  * `tests/fixtures/auth.ts` iterate this list to create storageState files keyed
  * by `slug`.
  *
- * Every `email` MUST end with `@test.paxtools.local`.
+ * Every persona is a conta gerenciada; `scoutId` is its registro in the
+ * reserved test range (`convex/lib/testAccounts.ts`).
  */
+
+import { CANONICAL_SCOUT_IDS } from "../../convex/lib/testAccounts";
 
 export type TestUserRole = "escotista" | "escoteiro" | null;
 export type TestUserRamo = "lobinho" | "escoteiro" | "senior" | "pioneiro" | null;
@@ -16,8 +19,8 @@ export type TestUserMembershipStatus = "pending" | "approved" | null;
 export interface TestUserCatalogEntry {
   /** Stable slug used as the filename for storageState (tests/.auth/<slug>.json). */
   readonly slug: string;
-  /** Must end in `@test.paxtools.local`. */
-  readonly email: string;
+  /** Registro escoteiro the persona signs in with. */
+  readonly scoutId: string;
   readonly role: TestUserRole;
   readonly membershipStatus: TestUserMembershipStatus;
   readonly ramo: TestUserRamo;
@@ -34,7 +37,7 @@ export interface TestUserCatalogEntry {
 export const CATALOG = [
   {
     slug: "admin",
-    email: "admin@test.paxtools.local",
+    scoutId: CANONICAL_SCOUT_IDS.admin,
     role: "escotista",
     membershipStatus: "approved",
     ramo: null,
@@ -46,7 +49,7 @@ export const CATALOG = [
   },
   {
     slug: "escotista",
-    email: "escotista@test.paxtools.local",
+    scoutId: CANONICAL_SCOUT_IDS.escotista,
     role: "escotista",
     membershipStatus: "approved",
     ramo: null,
@@ -58,7 +61,7 @@ export const CATALOG = [
   },
   {
     slug: "escotista-pending",
-    email: "escotista-pending@test.paxtools.local",
+    scoutId: CANONICAL_SCOUT_IDS.escotista_pending,
     role: "escotista",
     membershipStatus: "pending",
     ramo: null,
@@ -70,7 +73,7 @@ export const CATALOG = [
   },
   {
     slug: "escoteiro-pending",
-    email: "pending@test.paxtools.local",
+    scoutId: CANONICAL_SCOUT_IDS.escoteiro_pending,
     role: "escoteiro",
     membershipStatus: "pending",
     ramo: "escoteiro",
@@ -82,7 +85,7 @@ export const CATALOG = [
   },
   {
     slug: "escoteiro-approved",
-    email: "approved@test.paxtools.local",
+    scoutId: CANONICAL_SCOUT_IDS.escoteiro_approved,
     role: "escoteiro",
     membershipStatus: "approved",
     ramo: "escoteiro",
@@ -94,7 +97,7 @@ export const CATALOG = [
   },
   {
     slug: "escoteiro-with-progression",
-    email: "progression@test.paxtools.local",
+    scoutId: CANONICAL_SCOUT_IDS.escoteiro_with_progression,
     role: "escoteiro",
     membershipStatus: "approved",
     ramo: "escoteiro",
@@ -106,7 +109,7 @@ export const CATALOG = [
   },
   {
     slug: "escoteiro-lobinho",
-    email: "lobinho@test.paxtools.local",
+    scoutId: CANONICAL_SCOUT_IDS.escoteiro_lobinho,
     role: "escoteiro",
     membershipStatus: "approved",
     ramo: "lobinho",
@@ -118,7 +121,7 @@ export const CATALOG = [
   },
   {
     slug: "escoteiro-onboarding-incomplete",
-    email: "onboarding@test.paxtools.local",
+    scoutId: CANONICAL_SCOUT_IDS.escoteiro_onboarding_incomplete,
     role: null,
     membershipStatus: null,
     ramo: null,
@@ -130,7 +133,7 @@ export const CATALOG = [
   },
   {
     slug: "banned-user",
-    email: "banned@test.paxtools.local",
+    scoutId: CANONICAL_SCOUT_IDS.banned_user,
     role: "escoteiro",
     membershipStatus: null,
     ramo: null,
@@ -144,7 +147,7 @@ export const CATALOG = [
     // Dedicated persona owned by the M13 onboarding spec (mutating phase);
     // `escoteiro-onboarding-incomplete` above stays readonly-only.
     slug: "onboarding-m13",
-    email: "onboarding-m13@test.paxtools.local",
+    scoutId: CANONICAL_SCOUT_IDS.onboarding_m13,
     role: null,
     membershipStatus: null,
     ramo: null,

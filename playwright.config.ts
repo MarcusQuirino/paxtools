@@ -46,9 +46,6 @@ export default defineConfig({
         timeout: 120_000,
         env: {
           TEST_AUTH: "1",
-          VITE_TEST_AUTH: "1",
-          TEST_AUTH_PASSWORD:
-            process.env.TEST_AUTH_PASSWORD ?? "paxtools-test-only",
           PORT: String(LOCAL_PORT),
         },
         stdout: "pipe",

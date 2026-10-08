@@ -85,6 +85,6 @@ export async function resetTestData(): Promise<void> {
  * Reset a dedicated onboarding persona back to the not-onboarded state.
  * Makes the M13 onboarding spec retry-safe: it calls this before acting.
  */
-export async function resetOnboardingUser(email: string): Promise<void> {
-  await runConvexFn("resetOnboardingUser", { email });
+export async function resetOnboardingUser(scoutId: string): Promise<void> {
+  await runConvexFn("resetOnboardingUser", { scoutId });
 }
