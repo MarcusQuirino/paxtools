@@ -52,7 +52,7 @@ export function SignInWithScoutId() {
     if (submitting) return;
     const id = normalizeScoutId(scoutId);
     if (!id) {
-      setError("O registro tem 6 dígitos");
+      setError("O registro tem 7 dígitos");
       return;
     }
     setSubmitting(true);
@@ -78,8 +78,8 @@ export function SignInWithScoutId() {
         inputMode="numeric"
         autoComplete="username"
         aria-label="Registro escoteiro"
-        placeholder="Registro escoteiro (6 dígitos)"
-        maxLength={9}
+        placeholder="Registro escoteiro (7 dígitos)"
+        maxLength={10}
         value={scoutId}
         onChange={(e) => {
           setScoutId(e.target.value);

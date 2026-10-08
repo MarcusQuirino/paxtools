@@ -4,10 +4,10 @@
  * exercise the production login path. Pure rules shared by `convex/testing.ts`
  * and the Playwright suite — no database access.
  *
- * Every test registro lives in the reserved `99xxxx` range; that prefix is
+ * Every test registro lives in the reserved `99xxxxx` range; that prefix is
  * what marks a user as test data for the wipes.
- *   990NNN   canonical catalog personas
- *   99RKNN   simulated troop — R ramo (1-4), K kind (1-4), NN index (01-99)
+ *   990NNNN  canonical catalog personas
+ *   99RK0NN  simulated troop — R ramo (1-4), K kind (1-4), NN index (01-99)
  */
 
 export const TEST_SCOUT_ID_PREFIX = "99";
@@ -16,16 +16,16 @@ export const TEST_SCOUT_ID_PREFIX = "99";
 export const DEFAULT_TEST_PASSWORD = "paxtools-test-only";
 
 export const CANONICAL_SCOUT_IDS = {
-  admin: "990001",
-  escotista: "990002",
-  escotista_pending: "990003",
-  escoteiro_pending: "990004",
-  escoteiro_approved: "990005",
-  escoteiro_with_progression: "990006",
-  escoteiro_lobinho: "990007",
-  escoteiro_onboarding_incomplete: "990008",
-  onboarding_m13: "990009",
-  banned_user: "990010",
+  admin: "9900001",
+  escotista: "9900002",
+  escotista_pending: "9900003",
+  escoteiro_pending: "9900004",
+  escoteiro_approved: "9900005",
+  escoteiro_with_progression: "9900006",
+  escoteiro_lobinho: "9900007",
+  escoteiro_onboarding_incomplete: "9900008",
+  onboarding_m13: "9900009",
+  banned_user: "9900010",
 } as const;
 
 export type CanonicalSlug = keyof typeof CANONICAL_SCOUT_IDS;
@@ -55,14 +55,24 @@ export function simScoutId(
   if (!Number.isInteger(n) || n < 1 || n > 99) {
     throw new Error(`sim persona index out of range: ${n}`);
   }
-  return `${TEST_SCOUT_ID_PREFIX}${SIM_RAMO_DIGIT[ramo]}${SIM_KIND_DIGIT[kind]}${String(n).padStart(2, "0")}`;
+  return `${TEST_SCOUT_ID_PREFIX}${SIM_RAMO_DIGIT[ramo]}${SIM_KIND_DIGIT[kind]}${String(n).padStart(3, "0")}`;
 }
 
 export function isTestScoutId(scoutId: string | undefined): boolean {
   return scoutId?.startsWith(TEST_SCOUT_ID_PREFIX) ?? false;
 }
 
-/** Sim personas are the test registros outside the canonical `990NNN` block. */
+/** Sim personas are the test registros outside the canonical `990NNNN` block. */
 export function isSimScoutId(scoutId: string | undefined): boolean {
   return isTestScoutId(scoutId) && scoutId![2] !== "0";
+}
+
+/**
+ * The 7-digit form of a pre-hotfix 6-digit test registro: a zero inserted
+ * after the first four digits (990001 → 9900001, 99RKNN → 99RK0NN), matching
+ * the layout above. Used once by `migrations:testRegistrosToSevenDigits`.
+ */
+export function widenLegacyTestScoutId(scoutId: string): string | null {
+  if (!/^99\d{4}$/.test(scoutId)) return null;
+  return `${scoutId.slice(0, 4)}0${scoutId.slice(4)}`;
 }

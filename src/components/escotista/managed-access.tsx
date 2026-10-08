@@ -199,14 +199,14 @@ export function CreateManagedMemberButton({
               </div>
               <div className="space-y-1">
                 <label htmlFor="managed-scout-id-input" className="text-xs font-medium">
-                  Registro escoteiro (6 dígitos)
+                  Registro escoteiro (7 dígitos)
                 </label>
                 <Input
                   id="managed-scout-id-input"
                   inputMode="numeric"
                   value={scoutId}
-                  maxLength={9}
-                  placeholder="000000"
+                  maxLength={10}
+                  placeholder="0000000"
                   className="font-mono tracking-widest"
                   onChange={(e) => {
                     setScoutId(e.target.value);
