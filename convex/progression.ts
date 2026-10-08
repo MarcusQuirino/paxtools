@@ -1,11 +1,12 @@
 import { query, mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { getAuthenticatedUser } from "./lib/authHelpers";
 import { assertCanActOnEscoteiro } from "./lib/ramoVisibility";
 import { readProgression, currentRamo, type LevelUpToast } from "./lib/progression";
 import type { ConclusaoLabel } from "./lib/events";
 import { recordDirectApproval } from "./lib/review";
+import { completionStatusValidator } from "./schema";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
@@ -20,7 +21,7 @@ const VALID_IRR_ITEM_IDS = new Set([
 ]);
 const MAX_CUSTOM_ACTIONS_PER_BLOCO = 20;
 
-type CompletionStatus = "pending" | "approved";
+type CompletionStatus = Infer<typeof completionStatusValidator>;
 
 async function resolveTargetAndStatus(
   ctx: MutationCtx,
@@ -65,8 +66,8 @@ async function resolveTargetAndStatus(
 /**
  * Run a mark's write. When an escotista marks for an escoteiro
  * (`targetUserId`) and an approval lands, it is audited and the level-up
- * cascade runs (lib/review); self-marks and un-marks return no toasts.
- * `write` returns whether an approval landed.
+ * cascade runs (lib/review); self-marks and un-marks log nothing and return
+ * no toasts. `write` returns whether an approval landed.
  */
 async function applyMark(
   ctx: MutationCtx,
@@ -76,13 +77,31 @@ async function applyMark(
     label: ConclusaoLabel;
   },
   write: () => Promise<boolean>,
-): Promise<LevelUpToast[]> {
+): Promise<{ toasts: LevelUpToast[]; eventIds: Id<"events">[] }> {
   const subject = opts.targetUserId ? await ctx.db.get(opts.targetUserId) : null;
   if (!subject) {
     await write();
-    return [];
+    return { toasts: [], eventIds: [] };
   }
   return recordDirectApproval(ctx, { actor: opts.caller, subject, label: opts.label }, write);
+}
+
+/** A new conclusão for an ação, approved when `approvedBy` is set. */
+function insertActionCompletion(
+  ctx: MutationCtx,
+  row: {
+    userId: Id<"users">;
+    actionId: string;
+    status: CompletionStatus;
+    approvedBy: Id<"users"> | undefined;
+  },
+): Promise<Id<"actionCompletions">> {
+  const now = Date.now();
+  return ctx.db.insert("actionCompletions", {
+    ...row,
+    completedAt: now,
+    approvedAt: row.approvedBy ? now : undefined,
+  });
 }
 
 function assertCanRemoveApproved(
@@ -161,7 +180,7 @@ export const toggleAction = mutation({
       )
       .unique();
 
-    return applyMark(
+    const { toasts } = await applyMark(
       ctx,
       {
         targetUserId: args.targetUserId,
@@ -183,17 +202,149 @@ export const toggleAction = mutation({
           await ctx.db.delete(existing._id);
           return false;
         }
-        await ctx.db.insert("actionCompletions", {
+        await insertActionCompletion(ctx, {
           userId: effectiveUserId,
           actionId: args.actionId,
-          completedAt: Date.now(),
           status,
           approvedBy,
-          approvedAt: approvedBy ? Date.now() : undefined,
         });
         return status === "approved";
       },
     );
+    return toasts;
+  },
+});
+
+/**
+ * What a Revisão rápida mark did, handed back to `undoMarkAction`. When
+ * `created` is false the ação already had a conclusão and nothing was written.
+ */
+export type MarkReceipt = {
+  created: boolean;
+  completionId: Id<"actionCompletions"> | null;
+  status: CompletionStatus | null;
+  eventIds: Id<"events">[];
+  toasts: LevelUpToast[];
+};
+
+/**
+ * Idempotent mark (Revisão rápida): inserts the conclusão if the ação has
+ * none (any status), otherwise does nothing — a stale or doubled swipe never
+ * un-marks. Status and audit follow toggleAction.
+ */
+export const markAction = mutation({
+  args: {
+    actionId: v.string(),
+    targetUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args): Promise<MarkReceipt> => {
+    const { effectiveUserId, status, approvedBy, caller } =
+      await resolveTargetAndStatus(ctx, args.targetUserId);
+
+    if (!ACTION_ID_PATTERN.test(args.actionId))
+      throw new Error("ID de ação inválido");
+
+    const existing = await ctx.db
+      .query("actionCompletions")
+      .withIndex("by_userId_and_actionId", (q) =>
+        q.eq("userId", effectiveUserId).eq("actionId", args.actionId),
+      )
+      .unique();
+    if (existing) {
+      return { created: false, completionId: null, status: null, eventIds: [], toasts: [] };
+    }
+
+    let completionId: Id<"actionCompletions"> | null = null;
+    const { toasts, eventIds } = await applyMark(
+      ctx,
+      {
+        targetUserId: args.targetUserId,
+        caller,
+        label: { kind: "action", actionId: args.actionId },
+      },
+      async () => {
+        completionId = await insertActionCompletion(ctx, {
+          userId: effectiveUserId,
+          actionId: args.actionId,
+          status,
+          approvedBy,
+        });
+        return status === "approved";
+      },
+    );
+
+    return { created: true, completionId, status, eventIds, toasts };
+  },
+});
+
+/**
+ * A mark's writes all happen inside one mutation, which can't run longer than
+ * this; events logged outside that window belong to some other write.
+ */
+const MARK_WINDOW_MS = 1000;
+
+/**
+ * Whether `event` is one of the audit lines the mark that created
+ * `completion` logged: by this caller, about this escoteiro, of a kind a
+ * direct approval logs, and written in the same mutation (right after the
+ * conclusão). A stale or forged receipt can't take other events down with it.
+ */
+function loggedByMark(
+  event: Doc<"events">,
+  completion: Doc<"actionCompletions">,
+  callerId: Id<"users">,
+): boolean {
+  const sinceMark = event._creationTime - completion._creationTime;
+  return (
+    event.actorUserId === callerId &&
+    event.subjectUserId === completion.userId &&
+    (event.type === "approval" || event.type === "levelUp" || event.type === "lisDeOuro") &&
+    sinceMark >= 0 &&
+    sinceMark < MARK_WINDOW_MS
+  );
+}
+
+/**
+ * Undo a Revisão rápida mark, given its receipt. Removes the conclusão only
+ * while it is still the one that mark created (same row, same status, same
+ * approver); otherwise it removes nothing. Undoing an escotista's mark also
+ * deletes the events it logged, so an undone mark leaves no timeline trace.
+ * An escoteiro still can't remove an approved conclusão.
+ */
+export const undoMarkAction = mutation({
+  args: {
+    completionId: v.id("actionCompletions"),
+    status: completionStatusValidator,
+    eventIds: v.array(v.id("events")),
+    targetUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args): Promise<{ removed: boolean }> => {
+    const { effectiveUserId, status, approvedBy, callerIsEscotista, caller } =
+      await resolveTargetAndStatus(ctx, args.targetUserId);
+
+    const doc = await ctx.db.get(args.completionId);
+    if (!doc) return { removed: false };
+    if (doc.userId !== effectiveUserId) throw new Error("Não encontrado");
+
+    // Checked before the approved-lock: an escoteiro undoing a mark an
+    // escotista has since approved just finds it no longer theirs.
+    const stillOurs =
+      args.status === status &&
+      doc.status === status &&
+      doc.approvedBy === approvedBy;
+    if (!stillOurs) return { removed: false };
+    assertCanRemoveApproved(doc.status, callerIsEscotista);
+
+    await ctx.db.delete(doc._id);
+    if (callerIsEscotista) {
+      for (const eventId of args.eventIds) {
+        const event = await ctx.db.get(eventId);
+        if (event && loggedByMark(event, doc, caller._id)) {
+          await ctx.db.delete(eventId);
+        }
+      }
+    }
+    return { removed: true };
   },
 });
 
@@ -253,7 +404,7 @@ export const toggleCustomAction = mutation({
     if (!doc || doc.userId !== effectiveUserId)
       throw new Error("Não encontrado");
 
-    return applyMark(
+    const { toasts } = await applyMark(
       ctx,
       {
         targetUserId: args.targetUserId,
@@ -283,6 +434,7 @@ export const toggleCustomAction = mutation({
         return !doc.completed && status === "approved";
       },
     );
+    return toasts;
   },
 });
 
@@ -330,7 +482,7 @@ export const toggleIrrItem = mutation({
       )
       .unique();
 
-    return applyMark(
+    const { toasts } = await applyMark(
       ctx,
       {
         targetUserId: args.targetUserId,
@@ -363,5 +515,6 @@ export const toggleIrrItem = mutation({
         return status === "approved";
       },
     );
+    return toasts;
   },
 });

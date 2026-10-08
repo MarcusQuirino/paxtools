@@ -2,9 +2,14 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
 
-const completionStatus = v.optional(
-  v.union(v.literal("pending"), v.literal("approved")),
+/** A conclusão's review status. */
+export const completionStatusValidator = v.union(
+  v.literal("pending"),
+  v.literal("approved"),
 );
+
+// Legacy rows have no status (they count as approved).
+const completionStatus = v.optional(completionStatusValidator);
 
 export const ramoValidator = v.union(
   v.literal("lobinho"),

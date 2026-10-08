@@ -11,7 +11,14 @@ import { Badge } from "@/components/ui/badge";
 import { formatGroupIdentity } from "@/lib/group-identity";
 import { RegiaoInput } from "@/components/onboarding/regiao-input";
 import { CreateManagedMemberButton } from "@/components/escotista/managed-access";
+import { RevisaoRapidaLink } from "@/components/escotista/revisao-rapida-link";
 import { copyText } from "@/lib/clipboard";
+import {
+  revisaoButtonLabel,
+  revisaoEntry,
+  sortByName,
+  type RevisaoEntry,
+} from "@/lib/revisao-entry";
 import {
   Star,
   Search,
@@ -35,6 +42,10 @@ function EscotistaDashboard() {
   );
   const { data: myGroup } = useSuspenseQuery(
     convexQuery(api.groups.getMyGroup, {}),
+  );
+  // Revisão rápida counts for every row, in one call (no per-row queries).
+  const { data: uncheckedCounts } = useSuspenseQuery(
+    convexQuery(api.approvals.getUncheckedActionCounts, {}),
   );
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -64,7 +75,7 @@ function EscotistaDashboard() {
 
   const favorites = new Set(user?.favoriteEscoteiroIds ?? []);
 
-  const filteredEscoteiros = stats.escoteiroStats.filter((e) => {
+  const filteredEscoteiros = sortByName(stats.escoteiroStats).filter((e) => {
     if (showFavorites && !favorites.has(e._id)) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -262,6 +273,7 @@ function EscotistaDashboard() {
                 // otherwise they read as members of the observed one.
                 showUnplaced={!!observed && !escoteiro.sectionId}
                 isFavorite={favorites.has(escoteiro._id)}
+                revisao={revisaoEntry(uncheckedCounts[escoteiro._id])}
                 onToggleFavorite={() =>
                   toggleFav({ escoteiroId: escoteiro._id })
                 }
@@ -315,6 +327,7 @@ function EscoteiroCard({
   escoteiro,
   showUnplaced,
   isFavorite,
+  revisao,
   onToggleFavorite,
 }: {
   escoteiro: {
@@ -327,6 +340,7 @@ function EscoteiroCard({
   };
   showUnplaced: boolean;
   isFavorite: boolean;
+  revisao: RevisaoEntry;
   onToggleFavorite: () => void;
 }) {
   return (
@@ -367,6 +381,25 @@ function EscoteiroCard({
       </div>
 
       <div className="flex items-center gap-1">
+        {revisao.kind === "deck" && (
+          <RevisaoRapidaLink
+            escoteiroId={escoteiro._id}
+            data-testid="revisao-rapida-entry"
+            className="flex items-center gap-1 rounded-md border-2 border-black bg-yellow-400 px-1.5 py-1 text-xs font-black tabular-nums shadow-[2px_2px_0px_0px_#000] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none"
+            aria-label={revisaoButtonLabel(revisao.count)}
+          >
+            <span aria-hidden>🃏</span>
+            {revisao.count}
+          </RevisaoRapidaLink>
+        )}
+        {revisao.kind === "em-dia" && (
+          <span
+            data-testid="revisao-rapida-em-dia"
+            className="px-1 text-[11px] font-bold text-emerald-700"
+          >
+            em dia
+          </span>
+        )}
         <button
           type="button"
           onClick={onToggleFavorite}

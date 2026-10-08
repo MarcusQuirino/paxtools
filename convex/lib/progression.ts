@@ -187,49 +187,55 @@ function toToasts(subject: Doc<"users">, ups: LevelUp[]): LevelUpToast[] {
   }));
 }
 
-/** Emit a levelUp/lisDeOuro audit event for each crossed boundary. */
+/**
+ * Emit a levelUp/lisDeOuro audit event for each crossed boundary; returns the
+ * ids of the events inserted.
+ */
 async function logLevelUps(
   ctx: MutationCtx,
   actor: Doc<"users">,
   subject: Doc<"users">,
   ups: LevelUp[],
-): Promise<void> {
+): Promise<Id<"events">[]> {
+  const ids: Id<"events">[] = [];
   for (const u of ups) {
-    if (u.kind === "levelUp") {
-      await logRamoEvent(ctx, {
-        type: "levelUp",
-        actor,
-        subject,
-        summary: `Subiu para ${u.stageName}`,
-        stageId: u.stageId,
-        stageName: u.stageName,
-      });
-    } else {
-      await logRamoEvent(ctx, {
-        type: "lisDeOuro",
-        actor,
-        subject,
-        summary: `Conquistou a ${u.irrName}`,
-      });
-    }
+    const id =
+      u.kind === "levelUp"
+        ? await logRamoEvent(ctx, {
+            type: "levelUp",
+            actor,
+            subject,
+            summary: `Subiu para ${u.stageName}`,
+            stageId: u.stageId,
+            stageName: u.stageName,
+          })
+        : await logRamoEvent(ctx, {
+            type: "lisDeOuro",
+            actor,
+            subject,
+            summary: `Conquistou a ${u.irrName}`,
+          });
+    if (id) ids.push(id);
   }
+  return ids;
 }
 
 /**
  * Compare `subject`'s progression against a pre-approval snapshot, emit the
- * level-up events, and return toast payloads for the approving escotista. Call
- * AFTER the approving writes land. Returns [] when the subject is not an
- * escoteiro (escotistas have no progression timeline).
+ * level-up events, and return toast payloads for the approving escotista plus
+ * the ids of the events logged (so an undo can remove them). Call AFTER the
+ * approving writes land. Empty when the subject is not an escoteiro
+ * (escotistas have no progression timeline).
  */
 export async function detectLevelUps(
   ctx: MutationCtx,
   actor: Doc<"users">,
   subject: Doc<"users">,
   before: ProgressionSnapshot,
-): Promise<LevelUpToast[]> {
-  if (subject.role !== "escoteiro") return [];
+): Promise<{ toasts: LevelUpToast[]; eventIds: Id<"events">[] }> {
+  if (subject.role !== "escoteiro") return { toasts: [], eventIds: [] };
   const after = await snapshotProgression(ctx, subject._id);
   const ups = diffProgression(before, after);
-  await logLevelUps(ctx, actor, subject, ups);
-  return toToasts(subject, ups);
+  const eventIds = await logLevelUps(ctx, actor, subject, ups);
+  return { toasts: toToasts(subject, ups), eventIds };
 }

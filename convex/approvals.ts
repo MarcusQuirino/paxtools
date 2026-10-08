@@ -6,7 +6,9 @@ import {
   tryResolveRamoViewer,
 } from "./lib/ramoVisibility";
 import { readProgression, type LevelUpToast } from "./lib/progression";
+import type { Id } from "./_generated/dataModel";
 import { catalogActionCounts } from "../src/lib/progression-state";
+import { countRevisaoDeck } from "../src/lib/revisao-deck";
 import {
   filterObservableSections,
   listSectionsOfGroup,
@@ -197,6 +199,29 @@ export const getGroupStats = query({
       escoteiroStats,
       escotistaStats,
     };
+  },
+});
+
+/**
+ * Revisão rápida counts for the painel: escoteiroId → ações of the
+ * escoteiro's current ramo catalog with no conclusão (any status) — the
+ * deck size, counted by the deck module itself. Same escoteiros as the
+ * painel's lista de jovens.
+ */
+export const getUncheckedActionCounts = query({
+  args: {},
+  returns: v.record(v.id("users"), v.number()),
+  handler: async (ctx) => {
+    const viewer = await tryResolveRamoViewer(ctx);
+    if (!viewer) return {};
+
+    const { escoteiros } = await readObservedEscoteiros(ctx, viewer);
+    const counts: Record<Id<"users">, number> = {};
+    for (const esc of escoteiros) {
+      const { state } = await readProgression(ctx, esc);
+      counts[esc._id] = countRevisaoDeck(state);
+    }
+    return counts;
   },
 });
 

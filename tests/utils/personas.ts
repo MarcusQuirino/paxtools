@@ -153,6 +153,9 @@ export const MANIFEST: readonly ManifestEntry[] = [
     ownedBy: MM("m06-plan-lifecycle.mobile.spec.ts"), notes: "seeded plano" },
   { slug: "sim-troop-lobinho-11", scoutId: login("sim-troop-lobinho-11"), name: "Kaique Neves",
     ownedBy: null, notes: "level2 younger especialidade (R4)" },
+  { slug: "sim-troop-lobinho-12", scoutId: login("sim-troop-lobinho-12"), name: "Lara Fontes",
+    ownedBy: MM("m24-revisao-rapida.mobile.spec.ts"),
+    notes: "11 blocos, empty plano (R5 stats reads bloco count first; one extra ação never completes a bloco)" },
   { slug: "sim-troop-lobinho-15", scoutId: login("sim-troop-lobinho-15"), name: "Otto Vilela",
     ownedBy: null, notes: "18 blocos, IRR full — Cruzeiro do Sul trophy (R2)" },
   { slug: "sim-troop-lobinho-16", scoutId: login("sim-troop-lobinho-16"), name: "Pilar Antunes",
@@ -224,7 +227,7 @@ export const MANIFEST: readonly ManifestEntry[] = [
     slug: `sim-escotista-escoteiro-1--${tag}`, scoutId: login("sim-escotista-escoteiro-1"), name: "Renata Peçanha",
     ownedBy: null, notes: `dedicated Renata session for ${tag}`,
   })),
-  ...(["m02m", "m07", "m09", "m16", "m18"] as const).map((tag) => ({
+  ...(["m02m", "m07", "m09", "m16", "m18", "m24m"] as const).map((tag) => ({
     slug: `sim-escotista-lobinho-1--${tag}`, scoutId: login("sim-escotista-lobinho-1"), name: "Marina Solano",
     ownedBy: null, notes: `dedicated Marina session for ${tag}`,
   })),

@@ -137,7 +137,7 @@ async function approveLoaded(
   }
   const toasts: LevelUpToast[] = [];
   for (const [id, subject] of subjects) {
-    toasts.push(...(await detectLevelUps(ctx, actor, subject, before.get(id)!)));
+    toasts.push(...(await detectLevelUps(ctx, actor, subject, before.get(id)!)).toasts);
   }
   return toasts;
 }
@@ -228,7 +228,9 @@ export async function rejectConclusoes(
  * an especialidade item, registering an etapa on their behalf). `write`
  * performs the change and returns whether an approval landed; only then is it
  * audited (as `verb`, default "Aprovou") and the level-up cascade run against
- * the progression from before the write. Access must already be checked.
+ * the progression from before the write. Returns the level-up toasts and the
+ * ids of every event it logged (the approval plus any levelUp/lisDeOuro), so
+ * an undo can remove them. Access must already be checked.
  */
 export async function recordDirectApproval(
   ctx: MutationCtx,
@@ -239,14 +241,20 @@ export async function recordDirectApproval(
     verb?: string;
   },
   write: () => Promise<boolean>,
-): Promise<LevelUpToast[]> {
+): Promise<{ toasts: LevelUpToast[]; eventIds: Id<"events">[] }> {
   const before = await snapshotProgression(ctx, args.subject._id);
-  if (!(await write())) return [];
-  await logRamoEvent(ctx, {
+  if (!(await write())) return { toasts: [], eventIds: [] };
+  const approvalId = await logRamoEvent(ctx, {
     type: "approval",
     actor: args.actor,
     subject: args.subject,
     summary: `${args.verb ?? "Aprovou"}: ${describeCompletion(args.subject.ramo, args.label)}`,
   });
-  return detectLevelUps(ctx, args.actor, args.subject, before);
+  const { toasts, eventIds } = await detectLevelUps(
+    ctx,
+    args.actor,
+    args.subject,
+    before,
+  );
+  return { toasts, eventIds: approvalId ? [approvalId, ...eventIds] : eventIds };
 }

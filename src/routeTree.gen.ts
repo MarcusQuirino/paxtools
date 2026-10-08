@@ -14,6 +14,7 @@ import { Route as EscotistaRouteRouteImport } from './routes/escotista/route'
 import { Route as EspecialidadesRouteImport } from './routes/especialidades'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as PlanRouteImport } from './routes/plan'
+import { Route as RevisaoRapidaRouteImport } from './routes/revisao-rapida'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as TrocarSenhaRouteImport } from './routes/trocar-senha'
@@ -49,6 +50,11 @@ const OnboardingRoute = OnboardingRouteImport.update({
 const PlanRoute = PlanRouteImport.update({
   id: '/plan',
   path: '/plan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RevisaoRapidaRoute = RevisaoRapidaRouteImport.update({
+  id: '/revisao-rapida',
+  path: '/revisao-rapida',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -116,6 +122,7 @@ export interface FileRoutesByFullPath {
   '/especialidades': typeof EspecialidadesRoute
   '/onboarding': typeof OnboardingRoute
   '/plan': typeof PlanRoute
+  '/revisao-rapida': typeof RevisaoRapidaRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
   '/trocar-senha': typeof TrocarSenhaRoute
@@ -133,6 +140,7 @@ export interface FileRoutesByTo {
   '/especialidades': typeof EspecialidadesRoute
   '/onboarding': typeof OnboardingRoute
   '/plan': typeof PlanRoute
+  '/revisao-rapida': typeof RevisaoRapidaRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
   '/trocar-senha': typeof TrocarSenhaRoute
@@ -152,6 +160,7 @@ export interface FileRoutesById {
   '/especialidades': typeof EspecialidadesRoute
   '/onboarding': typeof OnboardingRoute
   '/plan': typeof PlanRoute
+  '/revisao-rapida': typeof RevisaoRapidaRoute
   '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
   '/trocar-senha': typeof TrocarSenhaRoute
@@ -172,6 +181,7 @@ export interface FileRouteTypes {
     | '/especialidades'
     | '/onboarding'
     | '/plan'
+    | '/revisao-rapida'
     | '/settings'
     | '/signin'
     | '/trocar-senha'
@@ -189,6 +199,7 @@ export interface FileRouteTypes {
     | '/especialidades'
     | '/onboarding'
     | '/plan'
+    | '/revisao-rapida'
     | '/settings'
     | '/signin'
     | '/trocar-senha'
@@ -207,6 +218,7 @@ export interface FileRouteTypes {
     | '/especialidades'
     | '/onboarding'
     | '/plan'
+    | '/revisao-rapida'
     | '/settings'
     | '/signin'
     | '/trocar-senha'
@@ -226,6 +238,7 @@ export interface RootRouteChildren {
   EspecialidadesRoute: typeof EspecialidadesRoute
   OnboardingRoute: typeof OnboardingRoute
   PlanRoute: typeof PlanRoute
+  RevisaoRapidaRoute: typeof RevisaoRapidaRoute
   SettingsRoute: typeof SettingsRoute
   SigninRoute: typeof SigninRoute
   TrocarSenhaRoute: typeof TrocarSenhaRoute
@@ -266,6 +279,13 @@ declare module '@tanstack/react-router' {
       path: '/plan'
       fullPath: '/plan'
       preLoaderRoute: typeof PlanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/revisao-rapida': {
+      id: '/revisao-rapida'
+      path: '/revisao-rapida'
+      fullPath: '/revisao-rapida'
+      preLoaderRoute: typeof RevisaoRapidaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -381,6 +401,7 @@ const rootRouteChildren: RootRouteChildren = {
   EspecialidadesRoute: EspecialidadesRoute,
   OnboardingRoute: OnboardingRoute,
   PlanRoute: PlanRoute,
+  RevisaoRapidaRoute: RevisaoRapidaRoute,
   SettingsRoute: SettingsRoute,
   SigninRoute: SigninRoute,
   TrocarSenhaRoute: TrocarSenhaRoute,
