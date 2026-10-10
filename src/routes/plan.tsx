@@ -26,15 +26,12 @@ import { ActionItem } from "@/components/progression/action-item";
 import { useAuthGate } from "@/hooks/use-auth-gate";
 import { useProgression } from "@/hooks/use-progression";
 import { usePlan } from "@/hooks/use-plan";
+import { useResolvedPlan } from "@/hooks/use-resolved-plan";
 import {
-  buildCatalogIndex,
-  resolvePlanItems,
   isResolvedComplete,
   sortForLinearView,
   type PlanItemResolved,
 } from "@/lib/plan-view";
-import { catalogFor } from "@/data/specialty-data/catalog";
-import { standingsById } from "@/lib/especialidade-standing";
 import { PlanStar } from "@/components/progression/plan-star";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Award, Clock, GripVertical, Sparkles, Trophy } from "lucide-react";
@@ -83,53 +80,12 @@ type ViewMode = "byArea" | "ordered";
 function PlanDashboard() {
   const [viewMode, setViewMode] = useState<ViewMode>("byArea");
   const progression = useProgression();
-  const {
-    eixos,
-    approvedActionIds,
-    pendingActionIds,
-    actionStatusMap,
-    customActions,
-    earnedSpecialtyIds,
-  } = progression;
+  const { eixos } = progression;
   const { items, plannedKeys, togglePlanned, reorderPlan } = usePlan();
-
-  const catalog = useMemo(() => buildCatalogIndex(eixos), [eixos]);
-
-  // Especialidades starred on /especialidades (`especialidade:` keys) resolve
-  // against the current ramo group's catalog, with their standing — the same
-  // progress and "earned" the especialidades page shows.
   const { data: especialidadesRecord } = useSuspenseQuery(
     convexQuery(api.specialties.getMyEspecialidades, {}),
   );
-  const specialtyCatalog = catalogFor(especialidadesRecord.ramoGroup);
-  const especialidades = useMemo(
-    () => standingsById(especialidadesRecord.standings),
-    [especialidadesRecord],
-  );
-  const resolved = useMemo(
-    () =>
-      resolvePlanItems(items, {
-        catalog,
-        approvedActionIds,
-        pendingActionIds,
-        actionStatusMap,
-        earnedSpecialtyIds,
-        customActions,
-        specialtyCatalog,
-        especialidades,
-      }),
-    [
-      items,
-      catalog,
-      approvedActionIds,
-      pendingActionIds,
-      actionStatusMap,
-      earnedSpecialtyIds,
-      customActions,
-      specialtyCatalog,
-      especialidades,
-    ],
-  );
+  const resolved = useResolvedPlan(items, progression, especialidadesRecord);
 
   const toggleActionFn = useConvexMutation(api.progression.toggleAction);
   const { mutate: toggleAction } = useMutation({ mutationFn: toggleActionFn });

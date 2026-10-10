@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { getAuthenticatedUser } from "./lib/authHelpers";
 import { currentRamo } from "./lib/progression";
+import { assertCanActOnEscoteiro } from "./lib/ramoVisibility";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import type { Ramo } from "../src/data/progression-data";
@@ -31,6 +32,24 @@ export const getMyPlan = query({
       .query("plannedItems")
       .withIndex("by_userId_and_ramo_and_position", (q) =>
         q.eq("userId", userId).eq("ramo", currentRamo(user)),
+      )
+      .take(MAX_PLANNED_ITEMS);
+  },
+});
+
+/**
+ * An escoteiro's Plano (current ramo, in their order), read by an escotista
+ * who can see them (visibilidade de ramo). Read-only: only the escoteiro edits
+ * their own Plano.
+ */
+export const getPlanForUser = query({
+  args: { targetUserId: v.id("users") },
+  handler: async (ctx, args) => {
+    const { target } = await assertCanActOnEscoteiro(ctx, args.targetUserId);
+    return await ctx.db
+      .query("plannedItems")
+      .withIndex("by_userId_and_ramo_and_position", (q) =>
+        q.eq("userId", target._id).eq("ramo", currentRamo(target)),
       )
       .take(MAX_PLANNED_ITEMS);
   },
