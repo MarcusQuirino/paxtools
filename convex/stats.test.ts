@@ -552,3 +552,44 @@ describe("getRamoSpecialties", () => {
     expect(esp.pending[0]!.escoteiroId).toBe(scouts[11]!);
   });
 });
+
+describe("getRamoPlanDemand", () => {
+  test("aggregates the ramo cohort's planos; other ramos are denied to non-admins", async () => {
+    const t = newTest();
+    const { escotistaId, groupId, scout } = await seed(t);
+    const other: Id<"users"> = await t.run((ctx) =>
+      ctx.db.insert("users", {
+        name: "T", role: "escoteiro", ramo: "escoteiro", groupId,
+        membershipStatus: "approved",
+      }),
+    );
+    const A_FIX1 = "escoteiro:aprendizagem-continua:fixed:1";
+    await t.run(async (ctx) => {
+      // scout already did A_FIX0 (seed); both plan A_FIX1, only scout plans A_FIX0.
+      for (const [userId, actionId, position] of [
+        [scout, A_FIX0, 0],
+        [scout, A_FIX1, 1],
+        [other, A_FIX1, 0],
+      ] as const) {
+        await ctx.db.insert("plannedItems", {
+          userId, ramo: "escoteiro", itemKey: `action:${actionId}`, position,
+        });
+      }
+    });
+
+    const demand = await as(t, escotistaId).query(api.stats.getRamoPlanDemand, {
+      ramo: "escoteiro",
+    });
+    expect(demand.scoutCount).toBe(2);
+    expect(demand.scoutsWithPlan).toBe(2);
+    const [first, second] = demand.items;
+    expect(first).toMatchObject({ kind: "action", actionId: A_FIX1 });
+    expect(first!.wanting.map((w) => w.name).sort((a, b) => (a ?? "").localeCompare(b ?? ""))).toEqual(["S", "T"]);
+    expect(second).toMatchObject({ kind: "action", actionId: A_FIX0, doneCount: 1 });
+    expect(second!.wanting).toEqual([]);
+
+    await expect(
+      as(t, escotistaId).query(api.stats.getRamoPlanDemand, { ramo: "senior" }),
+    ).rejects.toThrow();
+  });
+});
