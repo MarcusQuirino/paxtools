@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { convexQuery } from "@convex-dev/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
@@ -12,13 +12,20 @@ import { useProgression } from "@/hooks/use-progression";
 import { countRevisaoDeck } from "@/lib/revisao-deck";
 import { revisaoButtonLabel } from "@/lib/revisao-entry";
 import { RevisaoRapidaLink } from "@/components/escotista/revisao-rapida-link";
+import { EscoteiroPlano } from "@/components/escotista/escoteiro-plano";
+
+type EscoteiroView = "progressao" | "plano";
 
 export const Route = createFileRoute("/escotista/escoteiro/$escoteiroId")({
+  validateSearch: (search: Record<string, unknown>): { view?: EscoteiroView } => ({
+    view: search.view === "plano" ? "plano" : undefined,
+  }),
   component: ImpersonationView,
 });
 
 function ImpersonationView() {
   const { escoteiroId } = Route.useParams();
+  const { view = "progressao" } = Route.useSearch();
   const typedId = escoteiroId as Id<"users">;
 
   return (
@@ -30,15 +37,17 @@ function ImpersonationView() {
         </div>
       }
     >
-      <ImpersonationContent escoteiroId={typedId} />
+      <ImpersonationContent escoteiroId={typedId} view={view} />
     </Suspense>
   );
 }
 
 function ImpersonationContent({
   escoteiroId,
+  view,
 }: {
   escoteiroId: Id<"users">;
+  view: EscoteiroView;
 }) {
   const { data: members } = useSuspenseQuery(
     convexQuery(api.groups.getGroupMembers, {}),
@@ -49,6 +58,9 @@ function ImpersonationContent({
   // escoteiros this escotista may act on, so the button inherits that rule.
   const progression = useProgression(escoteiroId);
   const revisaoCount = countRevisaoDeck(progression);
+  const { data: planItems } = useSuspenseQuery(
+    convexQuery(api.plan.getPlanForUser, { targetUserId: escoteiroId }),
+  );
 
   return (
     <div className="space-y-4">
@@ -100,7 +112,58 @@ function ImpersonationContent({
         </p>
       )}
 
-      <Dashboard targetUserId={escoteiroId} />
+      <ViewToggle view={view} planCount={planItems.length} />
+
+      {view === "plano" ? (
+        <EscoteiroPlano
+          escoteiroId={escoteiroId}
+          name={escoteiro?.name ?? "Escoteiro"}
+        />
+      ) : (
+        <Dashboard targetUserId={escoteiroId} />
+      )}
+    </div>
+  );
+}
+
+/** Progressão ↔ Plano, kept in the URL so a reload stays on the same view. */
+function ViewToggle({
+  view,
+  planCount,
+}: {
+  view: EscoteiroView;
+  planCount: number;
+}) {
+  const base =
+    "flex-1 flex items-center justify-center gap-1.5 text-sm h-9 rounded-md font-bold transition-all";
+  const active =
+    "bg-primary text-white border-2 border-black shadow-[2px_2px_0px_0px_#000]";
+  const inactive =
+    "text-foreground border-2 border-transparent hover:border-black hover:bg-white";
+  return (
+    <div
+      className="flex gap-1 p-1 bg-muted rounded-md border-2 border-black"
+      data-testid="escoteiro-view-toggle"
+    >
+      <Link
+        from={Route.fullPath}
+        search={{}}
+        className={`${base} ${view === "progressao" ? active : inactive}`}
+      >
+        Progressão
+      </Link>
+      <Link
+        from={Route.fullPath}
+        search={{ view: "plano" }}
+        className={`${base} ${view === "plano" ? active : inactive}`}
+      >
+        Plano
+        {planCount > 0 && (
+          <span className="rounded-sm border-2 border-black bg-yellow-400 px-1 text-[10px] font-black leading-tight text-black">
+            {planCount}
+          </span>
+        )}
+      </Link>
     </div>
   );
 }

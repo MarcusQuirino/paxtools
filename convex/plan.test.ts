@@ -2,7 +2,16 @@
 import { describe, test, expect } from "bun:test";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { as, insertUser, newTest, type Ramo, type TestConvex } from "./fixtures.testkit";
+import {
+  addEscotista,
+  addEscoteiro,
+  as,
+  insertUser,
+  newTest,
+  seedGrupo,
+  type Ramo,
+  type TestConvex,
+} from "./fixtures.testkit";
 
 /**
  * Directly insert a plannedItem row, bypassing validation/positioning logic.
@@ -334,5 +343,46 @@ describe("ramo-scoped plano (#37)", () => {
     expect(rows).toHaveLength(2);
     const byRamo = Object.fromEntries(rows.map((r) => [r.ramo, r.itemKey]));
     expect(byRamo).toEqual({ escoteiro: "custom:shared", lobinho: "custom:shared" });
+  });
+});
+
+describe("getPlanForUser", () => {
+  test("escotista of the escoteiro's ramo reads their current-ramo plan in order", async () => {
+    const t = newTest();
+    const { groupId } = await seedGrupo(t);
+    const escotista = await addEscotista(t, groupId, ["escoteiro"]);
+    const escoteiro = await addEscoteiro(t, groupId, "escoteiro");
+    await insertPlanned(t, escoteiro, "custom:b", 1);
+    await insertPlanned(t, escoteiro, "custom:a", 0);
+    await insertPlanned(t, escoteiro, "custom:old", 0, "lobinho");
+
+    const plan = await as(t, escotista).query(api.plan.getPlanForUser, {
+      targetUserId: escoteiro,
+    });
+    expect(plan.map((p) => p.itemKey)).toEqual(["custom:a", "custom:b"]);
+  });
+
+  test("escotista of another ramo is denied (visibilidade de ramo)", async () => {
+    const t = newTest();
+    const { groupId } = await seedGrupo(t);
+    const escotista = await addEscotista(t, groupId, ["senior"]);
+    const escoteiro = await addEscoteiro(t, groupId, "escoteiro");
+    await insertPlanned(t, escoteiro, "custom:a", 0);
+
+    await expect(
+      as(t, escotista).query(api.plan.getPlanForUser, { targetUserId: escoteiro }),
+    ).rejects.toThrow();
+  });
+
+  test("an escoteiro cannot read another escoteiro's plan", async () => {
+    const t = newTest();
+    const { groupId } = await seedGrupo(t);
+    const peer = await addEscoteiro(t, groupId, "escoteiro");
+    const escoteiro = await addEscoteiro(t, groupId, "escoteiro");
+    await insertPlanned(t, escoteiro, "custom:a", 0);
+
+    await expect(
+      as(t, peer).query(api.plan.getPlanForUser, { targetUserId: escoteiro }),
+    ).rejects.toThrow();
   });
 });

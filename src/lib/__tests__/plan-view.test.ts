@@ -7,6 +7,7 @@ import {
   isResolvedComplete,
   buildCatalogIndex,
   resolvePlanItems,
+  planItemState,
   type PlanItemResolved,
 } from "@/lib/plan-view";
 import { encodePlanKey, decodePlanKey } from "@/lib/plan-keys";
@@ -152,6 +153,17 @@ describe("isResolvedChecked vs isResolvedComplete", () => {
 
     expect(isResolvedChecked(untouched)).toBe(false);
     expect(isResolvedComplete(untouched)).toBe(false);
+  });
+});
+
+describe("planItemState", () => {
+  it("open until ticked, pending until approved, then done", () => {
+    expect(planItemState(actionItem("0", 0, false))).toBe("open");
+    expect(planItemState(actionItem("1", 1, true, "pending"))).toBe("pending");
+    expect(planItemState(actionItem("2", 2, true, "approved"))).toBe("done");
+    expect(planItemState(customItem("c0", 3, false))).toBe("open");
+    expect(planItemState(customItem("c1", 4, true, "pending"))).toBe("pending");
+    expect(planItemState(customItem("c2", 5, true, "approved"))).toBe("done");
   });
 });
 
