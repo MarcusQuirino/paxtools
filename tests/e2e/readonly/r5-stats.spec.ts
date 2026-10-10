@@ -80,14 +80,12 @@ marinaTest(
     await expect(
       page.getByTestId("stats-eixo-bars").getByRole("meter").first(),
     ).toBeVisible();
-    await expect(page.getByTestId("stats-most-done")).toBeVisible();
+    // Atividades explorer: every ação, default "Menos feitas", with meters.
+    await expect(page.getByTestId("stats-explorer")).toBeVisible();
     await expect(
-      page.getByTestId("stats-most-done").getByRole("meter").first(),
+      page.getByTestId("stats-explorer-list").getByRole("meter").first(),
     ).toBeVisible();
-    await expect(page.getByTestId("stats-gap-list")).toBeVisible();
-    // Seeded scouts leave real gaps → the "variáveis pouco exploradas" block
-    // (neglectedVariable) is populated in the default (all/all) filter.
-    await expect(page.getByTestId("stats-gap-variable")).toBeVisible();
+    await expect(page.getByTestId("stats-planos")).toBeVisible();
     await expect(page.getByTestId("stats-acompanhamento")).toBeVisible();
     // Acompanhamento lists every in-ramo scout by name (spot-check one).
     await expect(

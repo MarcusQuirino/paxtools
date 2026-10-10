@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { convexQuery } from "@convex-dev/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -6,8 +6,8 @@ import { api } from "../../../convex/_generated/api";
 import { useAuthGate } from "@/hooks/use-auth-gate";
 import { CoverageBars } from "@/components/escotista/stats/coverage-bars";
 import { StageDistribution } from "@/components/escotista/stats/stage-distribution";
-import { MostDone } from "@/components/escotista/stats/most-done";
-import { GapList } from "@/components/escotista/stats/gap-list";
+import { ActivityExplorer } from "@/components/escotista/stats/activity-explorer";
+import { PlanosDaTropa } from "@/components/escotista/stats/planos-da-tropa";
 import { Acompanhamento } from "@/components/escotista/stats/acompanhamento";
 import { EspecialidadesSummary } from "@/components/escotista/stats/especialidades-summary";
 import { AiSuggestionsCard } from "@/components/escotista/ai-suggestions-card";
@@ -115,8 +115,20 @@ function StatsBody({ ramo }: { ramo: Ramo }) {
   const { data: scouts } = useSuspenseQuery(
     convexQuery(api.stats.getRamoScouts, { ramo }),
   );
-  const [eixoFilter, setEixoFilter] = useState<string>("all");
-  const [typeFilter, setTypeFilter] = useState<"all" | "fixed" | "variable">("all");
+  const { data: planDemand } = useSuspenseQuery(
+    convexQuery(api.stats.getRamoPlanDemand, { ramo }),
+  );
+  const plannedByAction = useMemo(
+    () =>
+      new Map(
+        planDemand.items.flatMap((d) =>
+          d.kind === "action"
+            ? [[d.actionId, d.wanting.length + d.pendingCount + d.doneCount] as const]
+            : [],
+        ),
+      ),
+    [planDemand],
+  );
 
   if (coverage.scoutCount === 0) {
     return (
@@ -125,13 +137,6 @@ function StatsBody({ ramo }: { ramo: Ramo }) {
       </p>
     );
   }
-
-  const chipClass = (active: boolean) =>
-    `rounded-md px-2 py-1.5 text-sm font-bold transition-all ${
-      active
-        ? "border-2 border-black bg-primary text-white shadow-[2px_2px_0px_0px_#000]"
-        : "text-muted-foreground hover:bg-white/50"
-    }`;
 
   return (
     <div className="space-y-6" data-testid="stats-sections">
@@ -142,54 +147,14 @@ function StatsBody({ ramo }: { ramo: Ramo }) {
       </p>
       <CoverageBars eixos={coverage.eixos} />
       <StageDistribution ramo={ramo} distribution={coverage.stageDistribution} scoutCount={coverage.scoutCount} />
-      <EspecialidadesSummary ramo={ramo} />
-      <MostDone activities={coverage.mostDone} scoutCount={coverage.scoutCount} />
-      <div className="space-y-2" data-testid="stats-filters">
-        <div className="flex flex-wrap gap-1 rounded-md border-2 border-black bg-muted p-1">
-          <button
-            type="button"
-            onClick={() => setEixoFilter("all")}
-            className={chipClass(eixoFilter === "all")}
-          >
-            Todas as áreas
-          </button>
-          {coverage.eixos.map((e) => (
-            <button
-              key={e.eixoId}
-              type="button"
-              onClick={() => setEixoFilter(e.eixoId)}
-              className={chipClass(eixoFilter === e.eixoId)}
-            >
-              {e.eixoName}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-1 rounded-md border-2 border-black bg-muted p-1">
-          {(
-            [
-              ["all", "Todas"],
-              ["fixed", "Fixas"],
-              ["variable", "Variáveis"],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setTypeFilter(value)}
-              className={chipClass(typeFilter === value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <GapList
-        topGapsFixed={coverage.topGapsFixed}
-        neglectedVariable={coverage.neglectedVariable}
+      <PlanosDaTropa ramo={ramo} demand={planDemand} />
+      <ActivityExplorer
+        ramo={ramo}
+        activities={coverage.activities}
         scoutCount={coverage.scoutCount}
-        eixoFilter={eixoFilter}
-        typeFilter={typeFilter}
+        plannedByAction={plannedByAction}
       />
+      <EspecialidadesSummary ramo={ramo} />
       <Acompanhamento scouts={scouts} />
       <AiSuggestionsCard ramo={ramo} />
     </div>

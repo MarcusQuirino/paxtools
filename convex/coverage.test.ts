@@ -76,6 +76,7 @@ describe("computeRamoCoverage (Task 2)", () => {
     expect(byId.get(A_FIX0)!.completedCount).toBe(2);
     expect(byId.get(A_FIX1)!.completedCount).toBe(1);
     expect(byId.get(A_VAR0)!.completedCount).toBe(0); // pending not counted
+    expect(byId.get(A_VAR0)!.pendingCount).toBe(1);
     expect(byId.get(A_FIX0)!.type).toBe("fixed");
     expect(byId.get(A_VAR0)!.type).toBe("variable");
     expect(byId.get(A_FIX0)!.eixoId).toBe("habilidades-para-a-vida");

@@ -17,6 +17,8 @@ export type ActivityCoverage = {
   type: "fixed" | "variable";
   text: string;
   completedCount: number;
+  /** Escoteiros whose conclusão awaits an escotista (not in completedCount). */
+  pendingCount: number;
 };
 
 export type EixoCoverage = {
@@ -78,6 +80,7 @@ export async function computeRamoCoverage(
   // the same progression state the escoteiro's own view derives. One read per
   // scout; <=28 scouts/ramo in practice.
   const approvedByAction = new Map<string, number>();
+  const pendingByAction = new Map<string, number>();
   const stageDistribution: Record<string, number> = {};
   for (const s of getRamoRules(ramo).etapas) stageDistribution[s.id] = 0;
 
@@ -86,6 +89,10 @@ export async function computeRamoCoverage(
     for (const actionId of state.approvedActionIds) {
       if (!catalog.actionsById.has(actionId)) continue; // drop stale/foreign
       approvedByAction.set(actionId, (approvedByAction.get(actionId) ?? 0) + 1);
+    }
+    for (const actionId of state.pendingActionIds) {
+      if (!catalog.actionsById.has(actionId)) continue;
+      pendingByAction.set(actionId, (pendingByAction.get(actionId) ?? 0) + 1);
     }
     stageDistribution[state.stage.id] = (stageDistribution[state.stage.id] ?? 0) + 1;
   }
@@ -107,6 +114,7 @@ export async function computeRamoCoverage(
           type,
           text,
           completedCount: approvedByAction.get(actionId) ?? 0,
+          pendingCount: pendingByAction.get(actionId) ?? 0,
         });
       for (const a of bloco.fixedActions) push(a.id, a.text, "fixed");
       for (const a of bloco.variableActions) push(a.id, a.text, "variable");

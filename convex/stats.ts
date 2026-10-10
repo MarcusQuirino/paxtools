@@ -1,9 +1,15 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { computeRamoCoverage } from "./lib/coverage";
-import { ramoGroupForRamo, snapshotProgression } from "./lib/progression";
+import {
+  ramoGroupForRamo,
+  readProgression,
+  snapshotProgression,
+} from "./lib/progression";
 import { resolveStatsCohort } from "./lib/statsCohort";
 import { readStandings } from "./lib/especialidades";
+import { aggregatePlanDemand, type RamoPlanDemand } from "./lib/planDemand";
+import { buildCatalogIndex } from "../src/lib/plan-view";
 import { getEixosForRamo } from "../src/data/progression-data";
 import { getEarnedSpecialtyBlocoIds } from "../src/lib/completion-logic";
 import { decodePlanKey } from "../src/lib/plan-keys";
@@ -272,6 +278,47 @@ export const getRamoSpecialties = query({
       blocosViaEspecialidade,
       demand,
     };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Plano demand on Stats: what the cohort's escoteiros put in their Plano for
+// this ramo, and who still wants each item — the overlap that points to a
+// group activity. Same cohort as coverage.
+// ---------------------------------------------------------------------------
+
+export const getRamoPlanDemand = query({
+  args: { ramo: ramoArg },
+  handler: async (ctx, args): Promise<RamoPlanDemand> => {
+    const { ramo, scouts } = await resolveStatsCohort(ctx, args.ramo);
+    const ramoGroup = ramoGroupForRamo(ramo);
+    const catalog = buildCatalogIndex(getEixosForRamo(ramo));
+
+    const plans = [];
+    for (const scout of scouts) {
+      const [{ state }, planned] = await Promise.all([
+        readProgression(ctx, scout),
+        ctx.db
+          .query("plannedItems")
+          .withIndex("by_userId_and_ramo_and_position", (q) =>
+            q.eq("userId", scout._id).eq("ramo", ramo),
+          )
+          .take(500),
+      ]);
+      plans.push({
+        scoutId: scout._id,
+        name: scout.name ?? null,
+        itemKeys: planned.map((p) => p.itemKey),
+        approvedActionIds: state.approvedActionIds,
+        pendingActionIds: state.pendingActionIds,
+        earnedSpecialtyIds: state.earnedSpecialtyIds,
+      });
+    }
+
+    return aggregatePlanDemand(plans, {
+      action: (actionId) => catalog.actionsById.has(actionId),
+      especialidade: (specialtyId) => specialtyExists(ramoGroup, specialtyId),
+    });
   },
 });
 
