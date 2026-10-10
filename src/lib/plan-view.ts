@@ -255,3 +255,11 @@ export function sortForLinearView(
   }
   return [...open, ...done];
 }
+
+/** Where a Plano item stands: not started, awaiting an escotista, or done. */
+export type PlanItemState = "open" | "pending" | "done";
+
+export function planItemState(item: PlanItemResolved): PlanItemState {
+  if (isResolvedComplete(item)) return "done";
+  return isResolvedChecked(item) ? "pending" : "open";
+}

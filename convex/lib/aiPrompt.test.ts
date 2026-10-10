@@ -27,6 +27,7 @@ function activity(eixoId: string, eixoName: string, text: string, count: number)
     type: "variable" as const,
     text,
     completedCount: count,
+    pendingCount: 0,
   };
 }
 
