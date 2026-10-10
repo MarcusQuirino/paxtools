@@ -3,15 +3,18 @@
  * insígnia de interesse especial of their current ramo.
  *
  * Unlike an especialidade there are no levels: a badge is earned only when
- * EVERY requirement is approved. An earned badge satisfies the variable
- * section of every bloco that names it, like an earned especialidade.
+ * EVERY requirement group is satisfied — enough of its items approved (a group
+ * may ask for only some, "pelo menos duas"), including its mandatory ones.
+ * An earned badge satisfies the variable section of every bloco that names
+ * it, like an earned especialidade.
  *
  * Pure, browser-free and path-alias-free: Convex imports it too.
  */
 import type { Ramo } from "../data/progression-data";
 import {
   SPECIAL_INTEREST_BADGES,
-  badgeRequirementsFor,
+  badgeGroupsFor,
+  type RequirementGroup,
 } from "../data/badge-data";
 
 type Status = "pending" | "approved";
@@ -23,15 +26,33 @@ export type BadgeRequirementRow = {
   status?: string;
 };
 
+/** Where an escoteiro stands on one requirement group. */
+export type GroupStanding = {
+  /** Flat requirementIndex of the group's first item. */
+  offset: number;
+  size: number;
+  /** Approved items needed (the group's `required`, else all). */
+  needed: number;
+  approvedCount: number;
+  pendingCount: number;
+  /** Enough approved, mandatory ones included. */
+  satisfied: boolean;
+};
+
 export type BadgeStanding = {
   badgeId: string;
-  /** Requirement count in this ramo. */
+  /** Requirement count (all items of all groups) in this ramo. */
   total: number;
+  /** Approved items that count toward the badge: Σ min(approved, needed). */
+  progress: number;
+  /** Approved items the badge needs in all: Σ needed. */
+  needed: number;
+  groups: GroupStanding[];
   /** requirementIndex → status; missing = not marked. */
   requirementStatus: Map<number, Status>;
   approvedCount: number;
   pendingCount: number;
-  /** Every requirement approved. */
+  /** Every group satisfied. */
   earned: boolean;
 };
 
@@ -46,11 +67,15 @@ export function computeBadgeStandings(
 ): Map<string, BadgeStanding> {
   const standings = new Map<string, BadgeStanding>();
   for (const badge of SPECIAL_INTEREST_BADGES) {
-    const total = badgeRequirementsFor(badge.id, ramo).length;
+    const groups = badgeGroupsFor(badge.id, ramo);
+    const total = groups.reduce((n, g) => n + g.items.length, 0);
     if (total === 0) continue;
     standings.set(badge.id, {
       badgeId: badge.id,
       total,
+      progress: 0,
+      needed: 0,
+      groups: [],
       requirementStatus: new Map(),
       approvedCount: 0,
       pendingCount: 0,
@@ -72,9 +97,44 @@ export function computeBadgeStandings(
       if (status === "approved") s.approvedCount++;
       else s.pendingCount++;
     }
-    s.earned = s.approvedCount === s.total;
+    let offset = 0;
+    for (const g of badgeGroupsFor(s.badgeId, ramo)) {
+      const gs = groupStanding(g, offset, s.requirementStatus);
+      s.groups.push(gs);
+      s.progress += Math.min(gs.approvedCount, gs.needed);
+      s.needed += gs.needed;
+      offset += g.items.length;
+    }
+    s.earned = s.groups.every((g) => g.satisfied);
   }
   return standings;
+}
+
+function groupStanding(
+  group: RequirementGroup,
+  offset: number,
+  statusOf: Map<number, Status>,
+): GroupStanding {
+  const size = group.items.length;
+  const needed = Math.min(group.required ?? size, size);
+  let approvedCount = 0;
+  let pendingCount = 0;
+  for (let i = 0; i < size; i++) {
+    const status = statusOf.get(offset + i);
+    if (status === "approved") approvedCount++;
+    else if (status === "pending") pendingCount++;
+  }
+  const mandatoryDone = (group.mandatory ?? []).every(
+    (i) => statusOf.get(offset + i) === "approved",
+  );
+  return {
+    offset,
+    size,
+    needed,
+    approvedCount,
+    pendingCount,
+    satisfied: mandatoryDone && approvedCount >= needed,
+  };
 }
 
 /** The ids of every earned badge. */
