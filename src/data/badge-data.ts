@@ -10,8 +10,8 @@
  * badges by display name and resolves them by that slug. Requirements may
  * differ per ramo and come in groups that may ask for only some of their
  * items ("pelo menos duas", "sendo obrigatória a primeira", "Opção 1 ou 2");
- * `requirements.all` applies to every ramo without its own list. A badge with no requirements for a ramo is listed but not trackable
- * there.
+ * `requirements.all` applies to every ramo without its own list. A badge
+ * with no requirements for a ramo is listed but not trackable there.
  *
  * Aprender, Cone Sul, Lusofonia, Desafio Comunitário and Boa Ação are
  * verbatim from escoteiros.org.br/insignias-do-ramo-*; the project-style
