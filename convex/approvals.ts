@@ -87,7 +87,16 @@ export const getPendingForGroup = query({
         )
         .take(200);
 
+      // Insígnia de interesse especial requirements; grouped per badge in the UI.
+      const pendingBadgeRequirements = await ctx.db
+        .query("badgeRequirementCompletions")
+        .withIndex("by_userId_and_status", (q) =>
+          q.eq("userId", escoteiro._id).eq("status", "pending"),
+        )
+        .take(200);
+
       const totalPending =
+        pendingBadgeRequirements.length +
         pendingActions.length +
         pendingIrrItems.length +
         pendingCustomActions.length +
@@ -107,6 +116,7 @@ export const getPendingForGroup = query({
           pendingCustomActions,
           pendingSpecialtyItems,
           pendingSpecialtyReports,
+          pendingBadgeRequirements,
           totalPending,
         });
       }
@@ -246,6 +256,18 @@ export const approveCustomAction = mutation({
     approveConclusao(ctx, { kind: "custom", id: args.completionId }),
 });
 
+export const approveBadgeRequirement = mutation({
+  args: { completionId: v.id("badgeRequirementCompletions") },
+  handler: async (ctx, args): Promise<LevelUpToast[]> =>
+    approveConclusao(ctx, { kind: "badgeRequirement", id: args.completionId }),
+});
+
+export const rejectBadgeRequirement = mutation({
+  args: { completionId: v.id("badgeRequirementCompletions") },
+  handler: async (ctx, args) =>
+    rejectConclusao(ctx, { kind: "badgeRequirement", id: args.completionId }),
+});
+
 export const rejectAction = mutation({
   args: { completionId: v.id("actionCompletions") },
   handler: async (ctx, args) =>
@@ -265,7 +287,8 @@ export const rejectCustomAction = mutation({
 });
 
 /**
- * Approve or reject a selection of ações, IRR items and ações personalizadas,
+ * Approve or reject a selection of ações, IRR items, ações personalizadas and
+ * insígnia requirements,
  * possibly across several escoteiros. Rows no longer pending are skipped.
  */
 export const bulkAction = mutation({
@@ -274,12 +297,17 @@ export const bulkAction = mutation({
     actionIds: v.array(v.id("actionCompletions")),
     irrIds: v.array(v.id("irrCompletions")),
     customActionIds: v.optional(v.array(v.id("customActions"))),
+    badgeRequirementIds: v.optional(v.array(v.id("badgeRequirementCompletions"))),
   },
   handler: async (ctx, args): Promise<LevelUpToast[]> => {
     const refs: ConclusaoRef[] = [
       ...args.actionIds.map((id) => ({ kind: "action" as const, id })),
       ...args.irrIds.map((id) => ({ kind: "irr" as const, id })),
       ...(args.customActionIds ?? []).map((id) => ({ kind: "custom" as const, id })),
+      ...(args.badgeRequirementIds ?? []).map((id) => ({
+        kind: "badgeRequirement" as const,
+        id,
+      })),
     ];
     if (args.action === "approve") return approveConclusoes(ctx, refs);
     await rejectConclusoes(ctx, refs);

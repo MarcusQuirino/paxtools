@@ -290,12 +290,21 @@ describe("getEarnedSpecialtyBlocoIds", () => {
     expect(getEarnedSpecialtyBlocoIds(eixos, new Set()).size).toBe(0);
   });
 
-  it("ignores insignia-type alternatives", () => {
+  it("does not match an insígnia against earned especialidades", () => {
     const result = getEarnedSpecialtyBlocoIds(
       eixos,
       new Set([toSpecialtySlug("Insígnia do Aprender")]),
     );
     expect(result.size).toBe(0);
+  });
+
+  it("maps an earned insígnia (by badge id) to its bloco", () => {
+    const result = getEarnedSpecialtyBlocoIds(
+      eixos,
+      new Set(),
+      new Set(["insignia-do-aprender"]),
+    );
+    expect(result).toEqual(new Set(["bloco-with-specialty"]));
   });
 
   it("does not touch blocos without alternativeCompletions", () => {

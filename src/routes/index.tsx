@@ -102,6 +102,18 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
     onSuccess: notifyLevelUps,
   });
 
+  const toggleBadgeRequirementFn = useConvexMutation(
+    api.progression.toggleBadgeRequirement,
+  );
+  const { mutate: toggleBadgeRequirement } = useMutation({
+    mutationFn: toggleBadgeRequirementFn,
+    onSuccess: notifyLevelUps,
+  });
+
+  const handleToggleBadgeRequirement = (badgeId: string, requirementIndex: number) => {
+    toggleBadgeRequirement({ badgeId, requirementIndex, targetUserId });
+  };
+
   const handleToggleAction = (actionId: string) => {
     toggleAction({ actionId, targetUserId });
   };
@@ -150,6 +162,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
           onAddCustom={handleAddCustom}
           onToggleCustom={handleToggleCustom}
           onDeleteCustom={handleDeleteCustom}
+          onToggleBadgeRequirement={handleToggleBadgeRequirement}
           lockApproved={lockApproved}
         />
       ) : (
@@ -164,6 +177,7 @@ export function Dashboard({ targetUserId }: { targetUserId?: Id<"users"> }) {
             onDeleteCustom={handleDeleteCustom}
             lockApproved={lockApproved}
             escoteiroId={targetUserId}
+            onToggleBadgeRequirement={handleToggleBadgeRequirement}
           />
         ))
       )}
@@ -188,6 +202,7 @@ type DashboardEixosWithPlanProps = {
   onAddCustom: (blocoId: string, text: string) => void;
   onToggleCustom: (id: Id<"customActions">) => void;
   onDeleteCustom: (id: Id<"customActions">) => void;
+  onToggleBadgeRequirement: (badgeId: string, requirementIndex: number) => void;
   lockApproved?: boolean;
 };
 

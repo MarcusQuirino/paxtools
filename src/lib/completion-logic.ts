@@ -136,31 +136,34 @@ export function getSpecialtyLevel(
 }
 
 /**
- * Map a set of earned specialtyId slugs to the set of blocoIds whose
- * `alternativeCompletions` (of type "especialidade") name one of those
- * specialties. A bloco's variable section is satisfied when any of its linked
- * specialties is earned.
+ * Map earned especialidades and badges to the set of blocoIds whose
+ * `alternativeCompletions` name one of them. A bloco's variable section is
+ * satisfied when any of its linked especialidades or insígnias is earned.
  *
- * The catalog stores alternative-completion entries as specialty *display
- * names*; earned specialties are keyed by *catalog id*. Names resolve via
- * `toCanonicalSpecialtyId` — the same resolver the migration and deep-links
- * use, so legacy renames (e.g. "Ciências da Terra" → geologia) still match.
+ * The catalog stores alternative-completion entries as *display names*;
+ * earned especialidades are keyed by *catalog id*. Especialidade names resolve
+ * via `toCanonicalSpecialtyId` — the same resolver the migration and
+ * deep-links use, so legacy renames (e.g. "Ciências da Terra" → geologia)
+ * still match. Insígnia names resolve to badge ids via `toSpecialtySlug`
+ * (src/data/badge-data).
  */
 export function getEarnedSpecialtyBlocoIds(
   eixos: Eixo[],
   earnedSpecialtyIds: Set<string>,
+  earnedBadgeIds: Set<string> = new Set(),
 ): Set<string> {
   const blocoIds = new Set<string>();
-  if (earnedSpecialtyIds.size === 0) return blocoIds;
+  if (earnedSpecialtyIds.size === 0 && earnedBadgeIds.size === 0) return blocoIds;
 
   for (const eixo of eixos) {
     for (const bloco of eixo.blocos) {
       for (const alt of bloco.alternativeCompletions) {
-        if (alt.type !== "especialidade") continue;
         for (const name of alt.items) {
-          if (earnedSpecialtyIds.has(toCanonicalSpecialtyId(name))) {
-            blocoIds.add(bloco.id);
-          }
+          const earned =
+            alt.type === "especialidade"
+              ? earnedSpecialtyIds.has(toCanonicalSpecialtyId(name))
+              : earnedBadgeIds.has(toSpecialtySlug(name));
+          if (earned) blocoIds.add(bloco.id);
         }
       }
     }

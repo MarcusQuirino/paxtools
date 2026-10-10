@@ -24,6 +24,7 @@ type EixoSectionProps = {
   /** Target scout in the escotista impersonation view (#53) — threads to the
    * specialty "ver" deep-link. */
   escoteiroId?: Id<"users">;
+  onToggleBadgeRequirement?: (badgeId: string, requirementIndex: number) => void;
 };
 
 export function EixoSection({
@@ -40,6 +41,7 @@ export function EixoSection({
   lockApproved,
   escoteiroId,
   footer,
+  onToggleBadgeRequirement,
 }: EixoSectionProps) {
   const visibleBlocos = blocoFilter
     ? eixo.blocos.filter((b) => blocoFilter(b.id))
@@ -93,6 +95,7 @@ export function EixoSection({
             planOnly={planOnly}
             lockApproved={lockApproved}
             escoteiroId={escoteiroId}
+            onToggleBadgeRequirement={onToggleBadgeRequirement}
           />
         ))}
       </Accordion>

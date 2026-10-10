@@ -5,6 +5,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Users } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { formatGroupIdentity } from "@/lib/group-identity";
+import { CatalogSwitch } from "@/components/progression/catalog-switch";
+import { InsigniasTropa } from "@/components/escotista/insignias-tropa";
 import {
   AvatarStack,
   ChipRow,
@@ -31,6 +33,10 @@ type CatalogSearch = {
   q?: string;
   /** "ativas" (com atividade na tropa) or an eixoId. */
   f?: string;
+  /** "insignias" shows the insígnias de interesse especial. */
+  aba?: "insignias";
+  /** With aba=insignias: the insígnia whose roster is open. */
+  insignia?: string;
 };
 
 export const Route = createFileRoute("/escotista/especialidades/")({
@@ -41,6 +47,11 @@ export const Route = createFileRoute("/escotista/especialidades/")({
         : undefined,
     q: typeof search.q === "string" && search.q ? search.q : undefined,
     f: typeof search.f === "string" && search.f ? search.f : undefined,
+    aba: search.aba === "insignias" ? "insignias" : undefined,
+    insignia:
+      typeof search.insignia === "string" && search.insignia
+        ? search.insignia
+        : undefined,
   }),
   component: EspecialidadesCatalog,
 });
@@ -59,10 +70,65 @@ const NA_TROPA_PREVIEW = 4;
 function EspecialidadesCatalog() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  const { data: user } = useSuspenseQuery(convexQuery(api.users.viewer, {}));
+  const setSearch = (patch: Partial<CatalogSearch>) =>
+    void navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true });
+  return (
+    <div className="text-[#141414]">
+      <CatalogHeader />
+      <CatalogSwitch
+        value={search.aba ?? "especialidades"}
+        onChange={(tab) =>
+          setSearch({
+            aba: tab === "insignias" ? "insignias" : undefined,
+            insignia: undefined,
+          })
+        }
+      />
+      {search.aba === "insignias" ? (
+        <InsigniasTropa
+          badgeId={search.insignia}
+          onSelect={(insignia) => setSearch({ insignia })}
+        />
+      ) : (
+        <EspecialidadesTab />
+      )}
+    </div>
+  );
+}
+
+/** Eyebrow (seção · grupo) and the tab title, shared by both catalogs. */
+function CatalogHeader() {
   const { data: myGroup } = useSuspenseQuery(
     convexQuery(api.groups.getMyGroup, {}),
   );
+  const { data: user } = useSuspenseQuery(convexQuery(api.users.viewer, {}));
+  const search = Route.useSearch();
+  const grupo = search.grupo ?? defaultRamoGroup(user);
+  const { data: summary } = useSuspenseQuery(
+    convexQuery(api.specialties.getGroupSpecialtySummary, { ramoGroup: grupo }),
+  );
+  const identity = formatGroupIdentity(myGroup?.number, myGroup?.regiao);
+  const eyebrow = [summary?.observedSectionName ?? myGroup?.name ?? null, identity]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <header className="mb-3">
+      {eyebrow && (
+        <p className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-[#8A887F]">
+          {eyebrow}
+        </p>
+      )}
+      <h1 className="text-[28px] font-black leading-[1.05] tracking-[-0.02em]">
+        Especialidades
+      </h1>
+    </header>
+  );
+}
+
+function EspecialidadesTab() {
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const { data: user } = useSuspenseQuery(convexQuery(api.users.viewer, {}));
   const grupo = search.grupo ?? defaultRamoGroup(user);
   const { data: summary } = useSuspenseQuery(
     convexQuery(api.specialties.getGroupSpecialtySummary, { ramoGroup: grupo }),
@@ -109,26 +175,8 @@ function EspecialidadesCatalog() {
   const withActivity = (summary?.specialties ?? []).filter((s) =>
     byId.has(s.specialtyId),
   );
-  const identity = formatGroupIdentity(myGroup?.number, myGroup?.regiao);
-  const eyebrow = [
-    summary?.observedSectionName ?? myGroup?.name ?? null,
-    identity,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
   return (
-    <div className="text-[#141414]">
-      <header className="mb-3">
-        {eyebrow && (
-          <p className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-[#8A887F]">
-            {eyebrow}
-          </p>
-        )}
-        <h1 className="text-[28px] font-black leading-[1.05] tracking-[-0.02em]">
-          Especialidades
-        </h1>
-      </header>
+    <div>
 
       {summary && summary.ramoGroups.length > 1 && (
         <div

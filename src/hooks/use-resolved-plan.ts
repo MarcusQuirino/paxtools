@@ -29,6 +29,7 @@ export function useResolvedPlan(
     actionStatusMap,
     customActions,
     earnedSpecialtyIds,
+    earnedBadgeIds,
   } = progression;
   const catalog = useMemo(() => buildCatalogIndex(eixos), [eixos]);
   const especialidades = useMemo(
@@ -43,6 +44,7 @@ export function useResolvedPlan(
         pendingActionIds,
         actionStatusMap,
         earnedSpecialtyIds,
+        earnedBadgeIds,
         customActions,
         specialtyCatalog: catalogFor(especialidadesRecord.ramoGroup),
         especialidades,
@@ -54,6 +56,7 @@ export function useResolvedPlan(
       pendingActionIds,
       actionStatusMap,
       earnedSpecialtyIds,
+      earnedBadgeIds,
       customActions,
       especialidadesRecord.ramoGroup,
       especialidades,

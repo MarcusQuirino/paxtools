@@ -8,6 +8,7 @@ import type { ConclusaoLabel } from "./lib/events";
 import { recordDirectApproval } from "./lib/review";
 import { completionStatusValidator } from "./schema";
 import type { Doc, Id } from "./_generated/dataModel";
+import { badgeRequirementsFor } from "../src/data/badge-data";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 const ACTION_ID_PATTERN = /^(lobinho|escoteiro|senior|pioneiro):[a-z0-9-]+:(fixed|variable):\d+$/;
@@ -120,6 +121,7 @@ const EMPTY_COMPLETIONS = {
   actions: [],
   customActions: [],
   irrItems: [],
+  badgeRequirements: [],
   earnedSpecialtyBlocoIds: [] as string[],
   earnedSpecialtyIds: [] as string[],
 };
@@ -136,6 +138,7 @@ async function completionsOf(ctx: QueryCtx, user: Doc<"users">) {
     actions: rows.actions,
     customActions: rows.customActions,
     irrItems: rows.irrItems,
+    badgeRequirements: rows.badgeRequirements,
     earnedSpecialtyBlocoIds: [...state.earnedSpecialtyBlocoIds],
     earnedSpecialtyIds: [...state.earnedSpecialtyIds],
   };
@@ -507,6 +510,76 @@ export const toggleIrrItem = mutation({
           userId: effectiveUserId,
           ramo,
           itemId: args.itemId,
+          completedAt: Date.now(),
+          status,
+          approvedBy,
+          approvedAt: approvedBy ? Date.now() : undefined,
+        });
+        return status === "approved";
+      },
+    );
+    return toasts;
+  },
+});
+
+/**
+ * Check or uncheck one requirement of an insígnia de interesse especial, in
+ * the escoteiro's current ramo. Same rules as toggleAction: the escoteiro's
+ * own mark is pending; an escotista (`targetUserId`) marks it approved or
+ * approves a pending one; only an escotista can undo an approval.
+ */
+export const toggleBadgeRequirement = mutation({
+  args: {
+    badgeId: v.string(),
+    requirementIndex: v.number(),
+    targetUserId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, args): Promise<LevelUpToast[]> => {
+    const { effectiveUserId, status, approvedBy, callerIsEscotista, caller } =
+      await resolveTargetAndStatus(ctx, args.targetUserId);
+
+    const ramo = currentRamo(await ctx.db.get(effectiveUserId));
+    const total = badgeRequirementsFor(args.badgeId, ramo).length;
+    if (total === 0) throw new Error("Insígnia não encontrada");
+    const i = args.requirementIndex;
+    if (!Number.isInteger(i) || i < 0 || i >= total) {
+      throw new Error("Requisito inválido");
+    }
+
+    const rows = await ctx.db
+      .query("badgeRequirementCompletions")
+      .withIndex("by_userId_and_ramo_and_badgeId", (q) =>
+        q.eq("userId", effectiveUserId).eq("ramo", ramo).eq("badgeId", args.badgeId),
+      )
+      .take(100);
+    const existing = rows.find((r) => r.requirementIndex === i) ?? null;
+
+    const { toasts } = await applyMark(
+      ctx,
+      {
+        targetUserId: args.targetUserId,
+        caller,
+        label: { kind: "badgeRequirement", badgeId: args.badgeId, requirementIndex: i },
+      },
+      async () => {
+        if (existing) {
+          if (existing.status === "pending" && status === "approved") {
+            await ctx.db.patch(existing._id, {
+              status: "approved",
+              approvedBy,
+              approvedAt: Date.now(),
+            });
+            return true;
+          }
+          assertCanRemoveApproved(existing.status, callerIsEscotista);
+          await ctx.db.delete(existing._id);
+          return false;
+        }
+        await ctx.db.insert("badgeRequirementCompletions", {
+          userId: effectiveUserId,
+          ramo,
+          badgeId: args.badgeId,
+          requirementIndex: i,
           completedAt: Date.now(),
           status,
           approvedBy,

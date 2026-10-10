@@ -1,10 +1,20 @@
+import { useState } from "react";
+import type { RequirementGroup } from "@/data/badge-data";
 import type { AlternativeCompletion } from "@/data/types";
+import type { Ramo } from "@/data/progression-data";
+import { badgeGroupsFor } from "@/data/badge-data";
+import type { BadgeStanding } from "@/lib/badge-standing";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Award, ArrowRight } from "lucide-react";
+import { Award, ArrowRight, ChevronDown } from "lucide-react";
+import { BadgeChecklist, badgeNeeded } from "./badge-checklist";
 import { Link } from "@tanstack/react-router";
 import { PlanStar } from "./plan-star";
 import { encodePlanKey } from "@/lib/plan-keys";
-import { isSpecialtyEarned, toCanonicalSpecialtyId } from "@/lib/completion-logic";
+import {
+  isSpecialtyEarned,
+  toCanonicalSpecialtyId,
+  toSpecialtySlug,
+} from "@/lib/completion-logic";
 import type { Id } from "../../../convex/_generated/dataModel";
 
 /**
@@ -12,6 +22,11 @@ import type { Id } from "../../../convex/_generated/dataModel";
  * read-only "ou" alternative. Since #47 a box is checked only when the
  * especialidade is earned via its items/steps — the legacy manual toggle is
  * gone, so the escoteiro marks work on /especialidades (the "ver" link).
+ *
+ * Insígnias de interesse especial are tracked right here: tapping one opens
+ * its requirements as a checklist, grouped like the official list. No levels —
+ * the box checks (and the bloco's variable section is satisfied) once every
+ * group is satisfied; a group may ask for only some of its items.
  */
 type SpecialtySectionProps = {
   blocoId: string;
@@ -27,6 +42,13 @@ type SpecialtySectionProps = {
    * instead of bouncing the escotista.
    */
   escoteiroId?: Id<"users">;
+  /** The escoteiro's ramo — insígnia requirements differ per ramo. */
+  ramo?: Ramo | null;
+  /** badgeId → standing (progression state). */
+  badges?: Map<string, BadgeStanding>;
+  onToggleBadgeRequirement?: (badgeId: string, requirementIndex: number) => void;
+  color?: string;
+  lockApproved?: boolean;
 };
 
 export function SpecialtySection({
@@ -37,6 +59,11 @@ export function SpecialtySection({
   onTogglePlanned,
   planOnly,
   escoteiroId,
+  ramo,
+  badges,
+  onToggleBadgeRequirement,
+  color,
+  lockApproved,
 }: SpecialtySectionProps) {
   if (alternatives.length === 0) return null;
 
@@ -74,13 +101,38 @@ export function SpecialtySection({
               blocoId,
               specialtyName: item,
             });
+            const badgeId = toSpecialtySlug(item);
+            const groups =
+              alt.type === "insignia" ? badgeGroupsFor(badgeId, ramo) : [];
+            if (groups.length > 0) {
+              return (
+                <BadgeRow
+                  key={item}
+                  name={item}
+                  badgeId={badgeId}
+                  groups={groups}
+                  standing={badges?.get(badgeId)}
+                  onToggle={onToggleBadgeRequirement}
+                  color={color}
+                  lockApproved={lockApproved}
+                  planStar={
+                    onTogglePlanned && (
+                      <PlanStar
+                        planned={!!plannedKeys?.has(planKey)}
+                        onToggle={() => onTogglePlanned(planKey)}
+                      />
+                    )
+                  }
+                />
+              );
+            }
             return (
               <div
                 key={item}
                 className="flex items-center gap-3 min-h-[44px] px-1"
               >
-                {/* Insígnias have no catalog and are not tracked (#47), so only
-                    especialidades get a (read-only) earned box. */}
+                {/* An insígnia without requirements in our catalog can't be
+                    tracked, so only especialidades get a (read-only) box. */}
                 {alt.type === "especialidade" && (
                   <Checkbox
                     checked={isSpecialtyEarned(item, earned)}
@@ -116,6 +168,76 @@ export function SpecialtySection({
           })}
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * One insígnia de interesse especial: an earned box (read-only — it checks when
+ * every group is satisfied), its progress, and a toggle that opens the
+ * requirement checklist.
+ */
+function BadgeRow({
+  name,
+  badgeId,
+  groups,
+  standing,
+  onToggle,
+  color,
+  lockApproved,
+  planStar,
+}: {
+  name: string;
+  badgeId: string;
+  groups: RequirementGroup[];
+  standing: BadgeStanding | undefined;
+  onToggle?: (badgeId: string, requirementIndex: number) => void;
+  color?: string;
+  lockApproved?: boolean;
+  planStar?: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const pending = standing?.pendingCount ?? 0;
+
+  return (
+    <div className="rounded-md">
+      <div className="flex items-center gap-3 min-h-[44px] px-1">
+        <Checkbox
+          checked={!!standing?.earned}
+          disabled
+          aria-label={`${name} conquistada`}
+          className="size-5"
+        />
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-label={`requisitos ${name}`}
+          className="flex flex-1 items-center gap-2 text-left text-sm"
+        >
+          <span className="flex-1">{name}</span>
+          <span className="text-xs font-semibold text-muted-foreground shrink-0">
+            {standing?.progress ?? 0}/{badgeNeeded(groups, standing)}
+            {pending > 0 && ` (+${pending})`}
+          </span>
+          <ChevronDown
+            className={`size-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+        {planStar}
+      </div>
+      {open && (
+        <div className="ml-2 mt-1">
+          <BadgeChecklist
+            badgeId={badgeId}
+            groups={groups}
+            standing={standing}
+            onToggle={onToggle}
+            color={color}
+            lockApproved={lockApproved}
+          />
+        </div>
+      )}
     </div>
   );
 }

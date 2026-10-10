@@ -163,6 +163,24 @@ export default defineSchema({
     ])
     .index("by_userId_and_status", ["userId", "status"]),
 
+  // ── Insígnias de interesse especial (special interest badges) ────────────
+  // Requirement-level tracking. Identity: (userId, ramo, badgeId,
+  // requirementIndex) — ramo-scoped (ADR 0001) since requirements differ per
+  // ramo. No levels: a badge is earned when every requirement of its ramo is
+  // approved (src/lib/badge-standing), computed on read.
+  badgeRequirementCompletions: defineTable({
+    userId: v.id("users"),
+    ramo: ramoValidator,
+    badgeId: v.string(),
+    requirementIndex: v.number(),
+    completedAt: v.number(),
+    status: completionStatus,
+    approvedBy: v.optional(v.id("users")),
+    approvedAt: v.optional(v.number()),
+  })
+    .index("by_userId_and_ramo_and_badgeId", ["userId", "ramo", "badgeId"])
+    .index("by_userId_and_status", ["userId", "status"]),
+
   // ── Legacy specialty system (purged, awaiting table drop) ──────────────────
   // DEPRECATED (#41), code purged (#47): replaced by specialtyItemCompletions /
   // specialtyProjectReports. NOTHING reads or writes this table anymore —

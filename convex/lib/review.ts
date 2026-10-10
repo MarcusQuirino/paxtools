@@ -1,7 +1,7 @@
 /**
  * Conclusão review — the one module behind every escotista approval and
  * rejection, of every kind of conclusão (ação, ação personalizada, IRR item,
- * especialidade item, etapa de especialidade).
+ * especialidade item, etapa de especialidade, requisito de insígnia).
  *
  * It owns what each approve/reject mutation used to hand-write:
  * - access: every reviewed row is checked with assertCanActOnEscoteiro
@@ -34,6 +34,7 @@ type Tables = {
   custom: "customActions";
   specialtyItem: "specialtyItemCompletions";
   specialtyStep: "specialtyProjectReports";
+  badgeRequirement: "badgeRequirementCompletions";
 };
 export type ConclusaoKind = keyof Tables;
 
@@ -76,6 +77,14 @@ export function labelOf(ref: ConclusaoRef, doc: ConclusaoDoc): ConclusaoLabel {
     case "specialtyStep": {
       const d = doc as Doc<"specialtyProjectReports">;
       return { kind: "specialtyStep", specialtyId: d.specialtyId, step: d.step };
+    }
+    case "badgeRequirement": {
+      const d = doc as Doc<"badgeRequirementCompletions">;
+      return {
+        kind: "badgeRequirement",
+        badgeId: d.badgeId,
+        requirementIndex: d.requirementIndex,
+      };
     }
   }
 }
