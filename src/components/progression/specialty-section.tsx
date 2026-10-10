@@ -1,11 +1,12 @@
 import { useState } from "react";
+import type { RequirementGroup } from "@/data/badge-data";
 import type { AlternativeCompletion } from "@/data/types";
 import type { Ramo } from "@/data/progression-data";
-import { badgeGroupsFor, type RequirementGroup } from "@/data/badge-data";
+import { badgeGroupsFor } from "@/data/badge-data";
 import type { BadgeStanding } from "@/lib/badge-standing";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Award, ArrowRight, ChevronDown } from "lucide-react";
-import { ActionItem } from "./action-item";
+import { BadgeChecklist, badgeNeeded } from "./badge-checklist";
 import { Link } from "@tanstack/react-router";
 import { PlanStar } from "./plan-star";
 import { encodePlanKey } from "@/lib/plan-keys";
@@ -174,7 +175,7 @@ export function SpecialtySection({
 /**
  * One insígnia de interesse especial: an earned box (read-only — it checks when
  * every group is satisfied), its progress, and a toggle that opens the
- * requirement checklist, grouped with each group's official rule.
+ * requirement checklist.
  */
 function BadgeRow({
   name,
@@ -196,23 +197,13 @@ function BadgeRow({
   planStar?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const earned = !!standing?.earned;
-  const needed =
-    standing?.needed ??
-    groups.reduce((n, g) => n + Math.min(g.required ?? g.items.length, g.items.length), 0);
   const pending = standing?.pendingCount ?? 0;
-
-  const sections = groups.map((group, gi) => ({
-    group,
-    start: groups.slice(0, gi).reduce((n, g) => n + g.items.length, 0),
-    gs: standing?.groups[gi],
-  }));
 
   return (
     <div className="rounded-md">
       <div className="flex items-center gap-3 min-h-[44px] px-1">
         <Checkbox
-          checked={earned}
+          checked={!!standing?.earned}
           disabled
           aria-label={`${name} conquistada`}
           className="size-5"
@@ -226,7 +217,7 @@ function BadgeRow({
         >
           <span className="flex-1">{name}</span>
           <span className="text-xs font-semibold text-muted-foreground shrink-0">
-            {standing?.progress ?? 0}/{needed}
+            {standing?.progress ?? 0}/{badgeNeeded(groups, standing)}
             {pending > 0 && ` (+${pending})`}
           </span>
           <ChevronDown
@@ -236,57 +227,15 @@ function BadgeRow({
         {planStar}
       </div>
       {open && (
-        <div className="ml-2 mt-1 space-y-3">
-          <p className="px-1 text-xs text-muted-foreground">
-            Sem níveis: cumpra todos os grupos de requisitos para conquistar a
-            insígnia.
-          </p>
-          {sections.map(({ group, start, gs }) => (
-            <div
-              key={start}
-              className="border-2 border-black rounded-md divide-y-2 divide-black/20"
-            >
-              {(group.title || group.rule) && (
-                <div className="px-3 py-2 flex items-start gap-2">
-                  <div className="flex-1">
-                    {group.title && (
-                      <p className="text-xs font-black uppercase tracking-wider">
-                        {group.title}
-                      </p>
-                    )}
-                    {group.rule && (
-                      <p className="text-xs text-muted-foreground">{group.rule}</p>
-                    )}
-                  </div>
-                  <span
-                    className={`text-xs font-bold shrink-0 ${gs?.satisfied ? "text-emerald-700" : "text-muted-foreground"}`}
-                  >
-                    {gs?.satisfied ? "✓ " : ""}
-                    {Math.min(gs?.approvedCount ?? 0, gs?.needed ?? 0)}/
-                    {gs?.needed ?? group.required ?? group.items.length}
-                  </span>
-                </div>
-              )}
-              {group.items.map((text, i) => {
-                const index = start + i;
-                const status = standing?.requirementStatus.get(index);
-                const mandatory =
-                  group.required !== undefined && group.mandatory?.includes(i);
-                return (
-                  <ActionItem
-                    key={index}
-                    id={`badge:${badgeId}:${index}`}
-                    text={mandatory ? `${text} (obrigatória)` : text}
-                    checked={!!status}
-                    status={status}
-                    onToggle={() => onToggle?.(badgeId, index)}
-                    color={color}
-                    lockApproved={lockApproved || !onToggle}
-                  />
-                );
-              })}
-            </div>
-          ))}
+        <div className="ml-2 mt-1">
+          <BadgeChecklist
+            badgeId={badgeId}
+            groups={groups}
+            standing={standing}
+            onToggle={onToggle}
+            color={color}
+            lockApproved={lockApproved}
+          />
         </div>
       )}
     </div>

@@ -12,6 +12,7 @@ import {
   type ProgressionState,
 } from "../../src/lib/progression-state";
 import { readStandings } from "./especialidades";
+import { readBadgeRequirements } from "./badges";
 import { logRamoEvent } from "./events";
 
 // The ramo → ramo group rule lives in src/lib/especialidade-standing.
@@ -76,12 +77,7 @@ export async function readProgressionRows(
       )
       .take(10),
     readStandings(ctx, user._id, ramoGroupForRamo(user.ramo)),
-    ctx.db
-      .query("badgeRequirementCompletions")
-      .withIndex("by_userId_and_ramo_and_badgeId", (q) =>
-        q.eq("userId", user._id).eq("ramo", ramo),
-      )
-      .take(1000),
+    readBadgeRequirements(ctx, user._id, ramo),
   ]);
   return {
     ramo: user.ramo ?? null,

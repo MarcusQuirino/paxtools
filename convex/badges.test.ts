@@ -136,3 +136,44 @@ describe("toggleBadgeRequirement", () => {
     expect(rows[0]!.approvedBy).toBe(escotista);
   });
 });
+
+describe("getGroupBadgeSummary", () => {
+  test("counts who conquistou / is em andamento / waits, closest first", async () => {
+    const t = newTest();
+    const { escotista, escoteiro } = await seed(t);
+    const groupId = (await t.run((ctx) => ctx.db.get(escoteiro)))!.groupId!;
+    const other = await insertUser(t, {
+      role: "escoteiro",
+      ramo: "escoteiro",
+      groupId,
+      membershipStatus: "approved",
+      onboardingComplete: true,
+    });
+    // escoteiro: everything approved (by the escotista); other: one pending.
+    for (let i = 0; i < TOTAL; i++) {
+      await as(t, escotista).mutation(api.progression.toggleBadgeRequirement, {
+        badgeId: APRENDER,
+        requirementIndex: i,
+        targetUserId: escoteiro,
+      });
+    }
+    await as(t, other).mutation(api.progression.toggleBadgeRequirement, {
+      badgeId: APRENDER,
+      requirementIndex: 0,
+    });
+
+    const summary = await as(t, escotista).query(api.badges.getGroupBadgeSummary, {});
+    expect(summary!.totals).toEqual({ earned: 1, inProgress: 1, pending: 1 });
+    const entry = summary!.badges.find((b) => b.badgeId === APRENDER)!;
+    expect(entry.earnedCount).toBe(1);
+    expect(entry.inProgressCount).toBe(1);
+    expect(entry.people.map((p) => p._id)).toEqual([escoteiro, other]);
+    expect(entry.people[0]!.progress).toBe(entry.people[0]!.needed);
+  });
+
+  test("null for an escoteiro", async () => {
+    const t = newTest();
+    const { escoteiro } = await seed(t);
+    expect(await as(t, escoteiro).query(api.badges.getGroupBadgeSummary, {})).toBeNull();
+  });
+});

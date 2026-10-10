@@ -47,6 +47,8 @@ import { usePlan } from "@/hooks/use-plan";
 import { encodePlanKey } from "@/lib/plan-keys";
 import { PlanStar } from "@/components/progression/plan-star";
 import { EscotistaFicha } from "@/components/escotista/especialidades/ficha";
+import { CatalogSwitch } from "@/components/progression/catalog-switch";
+import { InsigniasView } from "@/components/progression/insignias-view";
 import {
   catalogFor,
   ChipRow,
@@ -95,6 +97,8 @@ type EspecialidadesSearch = {
   escoteiroId?: string;
   q?: string;
   f?: string;
+  /** "insignias" shows the insígnias de interesse especial. */
+  aba?: "insignias";
 };
 
 export const Route = createFileRoute("/especialidades")({
@@ -114,6 +118,7 @@ export const Route = createFileRoute("/especialidades")({
       typeof search.escoteiroId === "string" ? search.escoteiroId : undefined,
     q: typeof search.q === "string" && search.q ? search.q : undefined,
     f: typeof search.f === "string" && search.f ? search.f : undefined,
+    aba: search.aba === "insignias" ? "insignias" : undefined,
   }),
   loaderDeps: ({ search: { escoteiroId } }) => ({ escoteiroId }),
   loader: async ({ context, deps }) => {
@@ -146,7 +151,25 @@ export const Route = createFileRoute("/especialidades")({
 // ---------------------------------------------------------------------------
 
 function EspecialidadesFrame({ children }: { children: ReactNode }) {
-  return <EscoteiroShell title="Especialidades">{children}</EscoteiroShell>;
+  const { aba } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  return (
+    <EscoteiroShell title="Especialidades">
+      <CatalogSwitch
+        value={aba ?? "especialidades"}
+        onChange={(next) =>
+          void navigate({
+            search: (prev) => ({
+              ...prev,
+              aba: next === "insignias" ? "insignias" : undefined,
+            }),
+            replace: true,
+          })
+        }
+      />
+      {children}
+    </EscoteiroShell>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -631,6 +654,19 @@ function EspecialidadesPage() {
     return <EscotistaFicha escoteiroId={escoteiroId} specialtyId={highlightId} />;
   }
 
+  return <OwnCatalog highlightId={highlightId} />;
+}
+
+/** The escoteiro's Especialidades tab: especialidades or insígnias. */
+function OwnCatalog({ highlightId }: { highlightId?: string }) {
+  const { aba } = Route.useSearch();
+  if (aba === "insignias") {
+    return (
+      <EspecialidadesFrame>
+        <InsigniasView />
+      </EspecialidadesFrame>
+    );
+  }
   return (
     <CatalogPlanProvider>
       <OwnEspecialidades highlightId={highlightId} />

@@ -20,6 +20,7 @@ export const modules = {
   "./_generated/server.js": () => import("./_generated/server.js"),
   "./aiHelpers.ts": () => import("./aiHelpers"),
   "./approvals.ts": () => import("./approvals"),
+  "./badges.ts": () => import("./badges"),
   "./auth.config.ts": () => import("./auth.config"),
   "./auth.ts": () => import("./auth"),
   "./events.ts": () => import("./events"),
