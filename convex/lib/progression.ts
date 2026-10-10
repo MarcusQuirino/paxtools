@@ -38,6 +38,7 @@ const MAX_ACTION_ROWS = 500;
 export type StoredProgressionRows = ProgressionRows<Doc<"customActions">> & {
   actions: Doc<"actionCompletions">[];
   irrItems: Doc<"irrCompletions">[];
+  badgeRequirements: Doc<"badgeRequirementCompletions">[];
 };
 
 /**
@@ -48,14 +49,16 @@ export type StoredProgressionRows = ProgressionRows<Doc<"customActions">> & {
  * - ações personalizadas and IRR conclusões are keyed by shared blocoIds /
  *   item ids, so they are read for the current ramo only (ADR 0001) — a past
  *   ramo's rows never bleed in;
- * - earned especialidades come from the current ramo group's standing.
+ * - earned especialidades come from the current ramo group's standing;
+ * - insígnia requirement conclusões are read for the current ramo only.
  */
 export async function readProgressionRows(
   ctx: QueryCtx | MutationCtx,
   user: Doc<"users">,
 ): Promise<StoredProgressionRows> {
   const ramo = currentRamo(user);
-  const [actions, customActions, irrItems, standings] = await Promise.all([
+  const [actions, customActions, irrItems, standings, badgeRequirements] =
+    await Promise.all([
     ctx.db
       .query("actionCompletions")
       .withIndex("by_userId", (q) => q.eq("userId", user._id))
@@ -73,6 +76,12 @@ export async function readProgressionRows(
       )
       .take(10),
     readStandings(ctx, user._id, ramoGroupForRamo(user.ramo)),
+    ctx.db
+      .query("badgeRequirementCompletions")
+      .withIndex("by_userId_and_ramo_and_badgeId", (q) =>
+        q.eq("userId", user._id).eq("ramo", ramo),
+      )
+      .take(1000),
   ]);
   return {
     ramo: user.ramo ?? null,
@@ -80,6 +89,7 @@ export async function readProgressionRows(
     customActions,
     irrItems,
     earnedSpecialtyIds: earnedSpecialtyIds(standings),
+    badgeRequirements,
   };
 }
 

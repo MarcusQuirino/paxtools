@@ -1,7 +1,7 @@
 import type { Bloco, CustomAction, Eixo } from "../data/types";
 import type { Doc } from "../../convex/_generated/dataModel";
 import { decodePlanKey } from "./plan-keys";
-import { isSpecialtyEarned } from "./completion-logic";
+import { isSpecialtyEarned, toSpecialtySlug } from "./completion-logic";
 import type { Standing } from "./especialidade-standing";
 
 export type PlanItemResolved =
@@ -118,6 +118,8 @@ export type ResolverInput = {
   actionStatusMap: Map<string, "pending" | "approved">;
   /** Canonical ids of specialties earned via items (#44) — always approved. */
   earnedSpecialtyIds?: Set<string>;
+  /** Ids of earned insígnias de interesse especial (src/lib/badge-standing). */
+  earnedBadgeIds?: Set<string>;
   customActions: CustomAction[];
   /** Current ramoGroup's especialidade catalog, for `especialidade:` keys. */
   specialtyCatalog?: SpecialtyCatalogEntry[];
@@ -169,10 +171,12 @@ export function resolvePlanItems(
     } else if (decoded.kind === "specialty") {
       const hit = input.catalog.blocosById.get(decoded.blocoId);
       if (!hit) continue;
-      const earned = isSpecialtyEarned(
-        decoded.specialtyName,
-        input.earnedSpecialtyIds ?? new Set(),
-      );
+      // The bloco's "ou" list names especialidades and insígnias alike.
+      const earned =
+        isSpecialtyEarned(
+          decoded.specialtyName,
+          input.earnedSpecialtyIds ?? new Set(),
+        ) || !!input.earnedBadgeIds?.has(toSpecialtySlug(decoded.specialtyName));
       resolved.push({
         itemKey: p.itemKey,
         position: p.position,

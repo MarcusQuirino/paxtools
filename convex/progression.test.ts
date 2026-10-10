@@ -604,6 +604,7 @@ describe("getMyCompletions", () => {
       actions: [],
       customActions: [],
       irrItems: [],
+      badgeRequirements: [],
       earnedSpecialtyBlocoIds: [],
       earnedSpecialtyIds: [],
     });

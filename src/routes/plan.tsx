@@ -90,6 +90,7 @@ function PlanDashboard() {
     actionStatusMap,
     customActions,
     earnedSpecialtyIds,
+    earnedBadgeIds,
   } = progression;
   const { items, plannedKeys, togglePlanned, reorderPlan } = usePlan();
 
@@ -114,6 +115,7 @@ function PlanDashboard() {
         pendingActionIds,
         actionStatusMap,
         earnedSpecialtyIds,
+        earnedBadgeIds,
         customActions,
         specialtyCatalog,
         especialidades,
@@ -125,6 +127,7 @@ function PlanDashboard() {
       pendingActionIds,
       actionStatusMap,
       earnedSpecialtyIds,
+      earnedBadgeIds,
       customActions,
       specialtyCatalog,
       especialidades,

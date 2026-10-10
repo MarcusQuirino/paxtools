@@ -29,6 +29,7 @@ type BlocoCardProps = {
   /** Target scout in the escotista impersonation view (#53) — threads to the
    * specialty "ver" deep-link. */
   escoteiroId?: Id<"users">;
+  onToggleBadgeRequirement?: (badgeId: string, requirementIndex: number) => void;
 };
 
 export function BlocoCard({
@@ -45,6 +46,7 @@ export function BlocoCard({
   planOnly,
   lockApproved,
   escoteiroId,
+  onToggleBadgeRequirement,
 }: BlocoCardProps) {
   const progress = progression.blocos.get(bloco.id)!;
   const { approvedActionIds, pendingActionIds, actionStatusMap, customActions } =
@@ -123,6 +125,11 @@ export function BlocoCard({
           onTogglePlanned={onTogglePlanned}
           planOnly={planOnly}
           escoteiroId={escoteiroId}
+          ramo={progression.ramo}
+          badges={progression.badges}
+          onToggleBadgeRequirement={onToggleBadgeRequirement}
+          color={color}
+          lockApproved={lockApproved}
         />
       </AccordionContent>
     </AccordionItem>

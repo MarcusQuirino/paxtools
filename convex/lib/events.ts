@@ -12,6 +12,7 @@ import {
   PROJECT_STEP_LABELS,
   type ProjectStep,
 } from "../../src/data/specialty-data/older";
+import { SPECIAL_INTEREST_BADGE_BY_ID } from "../../src/data/badge-data";
 
 /**
  * The thing an approval/rejection audit line is about — every kind of
@@ -22,7 +23,8 @@ export type ConclusaoLabel =
   | { kind: "custom"; text: string }
   | { kind: "irr"; itemId: string }
   | { kind: "specialtyItem"; specialtyId: string; itemIndex: number }
-  | { kind: "specialtyStep"; specialtyId: string; step: ProjectStep };
+  | { kind: "specialtyStep"; specialtyId: string; step: ProjectStep }
+  | { kind: "badgeRequirement"; badgeId: string; requirementIndex: number };
 
 // Short audit labels for escoteiro's IRR items, kept byte-identical to preserve
 // existing escoteiro timeline lines. Non-escoteiro ramos fall back to their
@@ -83,6 +85,10 @@ export function describeCompletion(
       return `${specialtyName(label.specialtyId)} — item ${label.itemIndex + 1}`;
     case "specialtyStep":
       return `${specialtyName(label.specialtyId)} — etapa ${PROJECT_STEP_LABELS[label.step]}`;
+    case "badgeRequirement": {
+      const name = SPECIAL_INTEREST_BADGE_BY_ID.get(label.badgeId)?.name ?? label.badgeId;
+      return `${name} — requisito ${label.requirementIndex + 1}`;
+    }
   }
 }
 

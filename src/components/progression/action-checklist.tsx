@@ -112,7 +112,7 @@ export function ActionChecklist({
           <span>Ações Variáveis</span>
           <span className="text-xs font-bold">
             {hasSpecialtyAlternative
-              ? "✓ substituída por especialidade"
+              ? "✓ substituída por especialidade/insígnia"
               : `${totalVariableDone}/${bloco.variableRequired} necessárias`}
           </span>
         </div>

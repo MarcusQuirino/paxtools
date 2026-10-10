@@ -13,8 +13,9 @@
  *   ramo's ações never count (their ids carry the ramo);
  * - an ação personalizada counts toward its bloco's variable section once
  *   completed;
- * - an earned especialidade satisfies the variable section of every bloco
- *   that names it (see especialidade-standing for "earned").
+ * - an earned especialidade or insígnia de interesse especial satisfies the
+ *   variable section of every bloco that names it (see especialidade-standing
+ *   and badge-standing for "earned").
  *
  * Pure, browser-free and path-alias-free: Convex imports it too.
  */
@@ -31,6 +32,12 @@ import {
   allBlocksCompleted,
   type BlocoProgress,
 } from "./completion-logic";
+import {
+  computeBadgeStandings,
+  earnedBadgeIds as earnedBadgeIdsOf,
+  type BadgeRequirementRow,
+  type BadgeStanding,
+} from "./badge-standing";
 
 type Status = "pending" | "approved";
 
@@ -51,12 +58,14 @@ export type ProgressionRows<
   irrItems: { itemId: string; status?: string }[];
   /** Especialidades earned in the current ramo group. */
   earnedSpecialtyIds: Iterable<string>;
+  /** Insígnia de interesse especial requirement conclusões of the current ramo. */
+  badgeRequirements?: BadgeRequirementRow[];
 };
 
 /** One bloco's progress plus the numbers its progress bar draws. */
 export type BlocoView = BlocoProgress & {
   bloco: Bloco;
-  /** The variable section is satisfied by an earned especialidade. */
+  /** The variable section is satisfied by an earned especialidade or insígnia. */
   earnedViaSpecialty: boolean;
   /** Fixed ações + required variable ações. */
   totalActions: number;
@@ -76,6 +85,9 @@ export type ProgressionState<C> = {
   customActions: (C & { status: Status | undefined })[];
   earnedSpecialtyIds: Set<string>;
   earnedSpecialtyBlocoIds: Set<string>;
+  /** badgeId → standing, for every badge trackable in the current ramo. */
+  badges: Map<string, BadgeStanding>;
+  earnedBadgeIds: Set<string>;
   blocos: Map<string, BlocoView>;
   completedBlockIds: Set<string>;
   pendingBlockIds: Set<string>;
@@ -153,7 +165,13 @@ export function deriveProgression<
   }
 
   const earnedSpecialtyIds = new Set(rows.earnedSpecialtyIds);
-  const earnedSpecialtyBlocoIds = getEarnedSpecialtyBlocoIds(eixos, earnedSpecialtyIds);
+  const badges = computeBadgeStandings(ramo, rows.badgeRequirements ?? []);
+  const earnedBadgeIds = earnedBadgeIdsOf(badges);
+  const earnedSpecialtyBlocoIds = getEarnedSpecialtyBlocoIds(
+    eixos,
+    earnedSpecialtyIds,
+    earnedBadgeIds,
+  );
 
   const blocos = new Map<string, BlocoView>();
   const completedBlockIds = new Set<string>();
@@ -193,6 +211,8 @@ export function deriveProgression<
     customActions,
     earnedSpecialtyIds,
     earnedSpecialtyBlocoIds,
+    badges,
+    earnedBadgeIds,
     blocos,
     completedBlockIds,
     pendingBlockIds,

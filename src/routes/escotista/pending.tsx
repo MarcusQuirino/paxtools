@@ -27,6 +27,10 @@ import {
   PROJECT_STEP_LABELS,
   type ProjectStep,
 } from "@/data/specialty-data/older";
+import {
+  SPECIAL_INTEREST_BADGE_BY_ID,
+  badgeRequirementsFor,
+} from "@/data/badge-data";
 
 export const Route = createFileRoute("/escotista/pending")({
   component: PendingApprovalsPage,
@@ -70,11 +74,13 @@ function getEixoForBloco(blocoId: string, ramo: Ramo | null) {
 
 type PendingItem = {
   key: string;
-  type: "action" | "irr" | "custom";
+  type: "action" | "irr" | "custom" | "badge";
   id: string;
   text: string;
   blocoId?: string;
   eixoColor?: string;
+  /** Badge requirements: the insígnia they belong to. */
+  badgeId?: string;
 };
 
 function PendingApprovalsPage() {
@@ -148,6 +154,12 @@ type PendingEntry = {
     step: ProjectStep;
     text: string;
     ramoGroup: "younger" | "older";
+  }[];
+  /** Insígnia de interesse especial requirements. One row per requirement. */
+  pendingBadgeRequirements?: {
+    _id: Id<"badgeRequirementCompletions">;
+    badgeId: string;
+    requirementIndex: number;
   }[];
   totalPending: number;
 };
@@ -303,6 +315,7 @@ function EscoteiroPendingCard({
     actionIds: Id<"actionCompletions">[];
     irrIds: Id<"irrCompletions">[];
     customActionIds: Id<"customActions">[];
+    badgeRequirementIds: Id<"badgeRequirementCompletions">[];
   }) => void;
   isBulkPending: boolean;
 }) {
@@ -348,6 +361,18 @@ function EscoteiroPendingCard({
       });
     }
 
+    for (const b of entry.pendingBadgeRequirements ?? []) {
+      items.push({
+        key: `badge:${b._id}`,
+        type: "badge",
+        id: b._id,
+        text:
+          badgeRequirementsFor(b.badgeId, ramo)[b.requirementIndex] ??
+          `Requisito ${b.requirementIndex + 1}`,
+        badgeId: b.badgeId,
+      });
+    }
+
     return items;
   }, [entry, ramo, irr]);
 
@@ -382,6 +407,7 @@ function EscoteiroPendingCard({
     const actionIds: Id<"actionCompletions">[] = [];
     const irrIds: Id<"irrCompletions">[] = [];
     const customActionIds: Id<"customActions">[] = [];
+    const badgeRequirementIds: Id<"badgeRequirementCompletions">[] = [];
 
     for (const item of allItems) {
       if (deselected.has(item.key)) continue;
@@ -391,9 +417,11 @@ function EscoteiroPendingCard({
         irrIds.push(item.id as Id<"irrCompletions">);
       else if (item.type === "custom")
         customActionIds.push(item.id as Id<"customActions">);
+      else if (item.type === "badge")
+        badgeRequirementIds.push(item.id as Id<"badgeRequirementCompletions">);
     }
 
-    return { actionIds, irrIds, customActionIds };
+    return { actionIds, irrIds, customActionIds, badgeRequirementIds };
   }, [allItems, deselected]);
 
   const handleBulk = useCallback(
@@ -424,6 +452,15 @@ function EscoteiroPendingCard({
   }, [allItems]);
 
   const irrItems = allItems.filter((i) => i.type === "irr");
+
+  const badgeGroups = useMemo(() => {
+    const map = new Map<string, PendingItem[]>();
+    for (const item of allItems) {
+      if (item.type !== "badge" || !item.badgeId) continue;
+      map.set(item.badgeId, [...(map.get(item.badgeId) ?? []), item]);
+    }
+    return map;
+  }, [allItems]);
 
   // New specialty items grouped by (ramoGroup, specialtyId)
   const specialtyItemGroups = useMemo(() => {
@@ -522,6 +559,23 @@ function EscoteiroPendingCard({
               </div>
             )}
 
+            {/* Insígnia de interesse especial requirements — in the bulk flow */}
+            {Array.from(badgeGroups.entries()).map(([badgeId, items]) => (
+              <div key={badgeId} className="space-y-0.5">
+                <p className="text-xs font-black uppercase tracking-widest text-primary">
+                  {SPECIAL_INTEREST_BADGE_BY_ID.get(badgeId)?.name ?? badgeId}
+                </p>
+                {items.map((item) => (
+                  <SelectableItem
+                    key={item.key}
+                    text={item.text}
+                    selected={!deselected.has(item.key)}
+                    onToggle={() => toggleItem(item.key)}
+                  />
+                ))}
+              </div>
+            ))}
+
             {/* New specialty item completions (#42) — separate from bulk flow */}
             {specialtyItemGroups.length > 0 && (
               <div className="space-y-2">
@@ -558,7 +612,7 @@ function EscoteiroPendingCard({
               </div>
             )}
 
-            {/* Bulk action buttons — ações, IRR and ações personalizadas */}
+            {/* Bulk action buttons — ações, IRR, ações personalizadas, insígnias */}
             <div className="pt-2 border-t-2 border-black flex gap-2">
               <Button
                 variant="outline"

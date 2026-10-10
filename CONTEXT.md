@@ -68,6 +68,10 @@ _Avoid_: custom action (in prose)
 A specialty an escoteiro can complete as a bloco's alternative path. How it is earned differs by ramo group: a **younger** especialidade (lobinho/escoteiro) is earned by completing enough of its checklist items and can reach multiple levels; an **older** especialidade (sênior/pioneiro) is a single three-[[etapa-de-especialidade]] project and is earned *binarily* — all three reports approved, or not earned. Earning one completes any bloco that names it as an alternative completion, regardless of ramo group. Unlike progression, especialidades **carry over** when an escoteiro advances ramo *within* the same ramo group (lobinho→escoteiro, sênior→pioneiro — the group shares one catalog); crossing the group boundary (escoteiro→sênior) starts especialidades fresh — the younger record is retained but never shown in, or merged into, the older group.
 _Avoid_: badge, skill
 
+**Insígnia de interesse especial**:
+A badge an escoteiro can earn as a bloco's alternative path, like an [[especialidade]] but with **no levels**: it is earned only when *every* requirement of the escoteiro's current ramo is approved. Requirements differ per ramo, so its record is ramo-scoped. Earning one completes the variable section of any bloco that names it. In code: **special interest badge** (`badge`).
+_Avoid_: insígnia (alone — the [[irr-insignia-de-reconhecimento-de-ramo]] is also an insígnia), especialidade, level
+
 **Etapa de especialidade**:
 One of the three areas of an older especialidade project — **conhecer → fazer → compartilhar**. Each is reported and approved independently, in any order; the ordering is presentational guidance, not a gate. The especialidade is earned only once all three are approved. Distinct from [[etapa]] (a progression stage).
 _Avoid_: step, passo, fase, project step
