@@ -1,5 +1,14 @@
 # paxtools
 
+## 1.10.0
+
+### Minor Changes
+
+- a524f84: Escotistas veem o Plano de cada escoteiro: aba Progressão | Plano na página do escoteiro, somente leitura, na ordem de prioridade do escoteiro (próximos passos, aguardando aprovação, concluídos).
+- 177f19c: Especialidades tab gets an "Especialidades | Insígnias" switch. Escoteiros see their ramo's insígnias with progress and the requirement checklist. Escotistas see tropa stats per insígnia (conquistadas, em andamento, pendentes) and a roster ordered by closest to earning, plus the requirements.
+- 177f19c: Insígnias de interesse especial (special interest badges): tapping an insígnia in a bloco opens its requirement checklist, grouped like the official UEB list. Groups can ask for only some items ("pelo menos duas", "sendo obrigatória a primeira", "Opção 1 ou 2"). Once every group is satisfied the insígnia is earned and substitutes the bloco's ações variáveis. Requirements go through the escotista's Pendentes queue.
+- f22c5cf: Estatísticas: nova lista "Atividades" com busca e filtros (ordenar, área, tipo) que substitui Mais realizadas e Lacunas, mostrando feitas, aguardando e no plano; e nova seção "Planos da tropa" com o que vários escoteiros querem fazer (ações e especialidades em listas separadas, com busca e nomes de quem quer). Textos longos expandem ao tocar.
+
 ## 1.9.1
 
 ### Patch Changes
