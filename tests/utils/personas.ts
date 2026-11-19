@@ -74,6 +74,7 @@ const CANONICAL_LOGINS: Record<string, CanonicalSlug> = {
   onboarding: "escoteiro_onboarding_incomplete",
   "onboarding-m13": "onboarding_m13",
   banned: "banned_user",
+  "pending-creator": "escotista_pending_creator",
 };
 
 const SIM_LOGIN =
@@ -109,6 +110,8 @@ export const MANIFEST: readonly ManifestEntry[] = [
   { slug: "escoteiro-onboarding-incomplete", scoutId: login("onboarding"), name: "onboarding", ownedBy: null,
     notes: "R1 forced-to-onboarding persona (readonly)" },
   { slug: "banned-user", scoutId: login("banned"), name: "banned", ownedBy: null },
+  { slug: "escotista-pending-creator", scoutId: login("pending-creator"), name: "pending-creator", ownedBy: null,
+    notes: "pending escotista who created '__TEST__ Grupo Criador Pendente' (createdBy) — creator-is-admin fallback must not apply (#107)" },
   { slug: "onboarding-m13", scoutId: login("onboarding-m13"), name: "onboarding-m13",
     ownedBy: M("m13-onboarding.spec.ts"),
     notes: "dedicated M13 persona; spec resets it via testing:resetOnboardingUser" },

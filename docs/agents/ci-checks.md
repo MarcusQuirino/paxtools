@@ -14,6 +14,28 @@ with the same command, so run it before pushing.
 | `Coverage floor (convex/)` | `guardrails.yml` | `bun run test:coverage` | convex/ line or function coverage below the floor, or a convex/ module no test loads |
 | `Independent review` | `review.yml` | see `docs/agents/review-gate.md` | a fresh reviewer agent finds blocking issues (intent not delivered, bug, missing auth/test, weakened check, security/data-loss risk), or produced no verdict |
 
+`bun run lint` is oxlint with type-aware rules **and full TypeScript type
+checking** (`.oxlintrc.json` `options.typeCheck`, via tsgolint) over every
+`.ts/.tsx` in the repo — a type error fails it, so there is no separate
+`typecheck` script. `bun run build` additionally catches bundling/SSR errors.
+
+## Waiting for CI
+
+```bash
+bun scripts/pr-checks.ts wait               # every required check on the current head, incl. a fresh review
+bun scripts/pr-checks.ts wait --no-review   # draft: just CI/E2E (before driving the preview)
+```
+
+Foreground, polls every 20 s, follows the head if you push again; exit 0 =
+all green, 1 = something failed (links printed). Prefer it to
+`gh pr checks --watch`: marking a draft ready re-runs Guardrails on the
+*same* commit and the review starts only after that (~1–2 min), so until
+then the head still shows the draft's failed review (titled "Review job
+failed") and `--watch` returns at once on that stale result. The script only
+counts a review that started after the head's latest Guardrails run created
+since the PR's last `ready_for_review` event (the new run appears a few
+seconds after the flip, so "latest run" alone races).
+
 The local `check:changeset` / `check:migrations` compare your **committed**
 HEAD against `origin/master` (`git fetch` first; `BASE_REF=` overrides).
 Every failure prints a "How to fix" block — read it before changing anything.

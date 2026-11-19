@@ -48,6 +48,10 @@ const TEST_GROUP_NAME = "__TEST__ Grupo QA";
 const TEST_GROUP_NUMBER = "99999";
 const TEST_GROUP_REGIAO = "RS";
 const TEST_GROUP_PASSWORD = "TESTQA";
+// Second test grupo, created by the pending-creator persona (see CATALOG).
+const CREATOR_GROUP_NAME = "__TEST__ Grupo Criador Pendente";
+const CREATOR_GROUP_NUMBER = "99998";
+const CREATOR_GROUP_PASSWORD = "TESTPC";
 
 function assertTestEnv(): void {
   assertTestAuthAllowed(process.env);
@@ -93,6 +97,8 @@ type CatalogEntry = {
   onboardingComplete?: boolean;
   inGroup: boolean; // whether to patch groupId to the test group
   banned?: boolean;
+  /** Member (and `createdBy`) of the second test grupo instead of the main one. */
+  createsOwnGroup?: boolean;
 };
 
 const CATALOG: CatalogEntry[] = [
@@ -183,6 +189,23 @@ const CATALOG: CatalogEntry[] = [
     role: "escoteiro",
     inGroup: false,
     banned: true,
+  },
+  {
+    // A grupo creator whose membership is pending — the state of a creator
+    // who left and rejoined with the senha. Lives in its own grupo
+    // (CREATOR_GROUP_NAME, createdBy = this user) so the main grupo's
+    // creator/admin stays `admin`. Proves the legacy "creator is admin"
+    // fallback ignores pending members (#107): must see only the waiting
+    // screen, no admin powers.
+    slug: "escotista_pending_creator",
+    name: "pending-creator",
+    role: "escotista",
+    escotistaRamos: ["escoteiro"],
+    isAdmin: false,
+    membershipStatus: "pending",
+    onboardingComplete: true,
+    inGroup: false,
+    createsOwnGroup: true,
   },
 ];
 
@@ -622,6 +645,37 @@ export const seedCatalog = internalMutation({
       }
 
       await ctx.db.patch(userId, patch);
+    }
+
+    // 3b. The pending creator's own grupo (createdBy = them, same as onboarding
+    // "criar grupo" leaves it), re-applied every seed like the main one.
+    for (const entry of CATALOG.filter((c) => c.createsOwnGroup)) {
+      const creatorId = userIds[entry.slug]!;
+      const fields = {
+        number: CREATOR_GROUP_NUMBER,
+        regiao: TEST_GROUP_REGIAO,
+        password: CREATOR_GROUP_PASSWORD,
+        createdBy: creatorId,
+        deletedAt: undefined,
+        ramoNames: {},
+      };
+      // Match on creator too: never patch some other grupo that happens to
+      // share the name.
+      const existing = allGroups.find(
+        (g) => g.name === CREATOR_GROUP_NAME && g.createdBy === creatorId,
+      );
+      let creatorGroupId: Id<"groups">;
+      if (existing) {
+        await ctx.db.patch(existing._id, fields);
+        creatorGroupId = existing._id;
+      } else {
+        creatorGroupId = await ctx.db.insert("groups", {
+          name: CREATOR_GROUP_NAME,
+          createdAt: Date.now(),
+          ...fields,
+        });
+      }
+      await ctx.db.patch(creatorId, { groupId: creatorGroupId });
     }
 
     // 4. Progression rows for escoteiro_with_progression.

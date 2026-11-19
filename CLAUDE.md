@@ -17,18 +17,32 @@ Always use the `gh` CLI to interface with GitHub (PRs, issues, releases, etc.). 
 
 ## Branching & Commits
 
-**Never commit directly to `master` unless explicitly asked.** When you have changes to commit:
+**Never commit directly to `master` unless explicitly asked.** New checkout or
+worktree? `bun run setup` first (deps, `.env.local`, Playwright browser).
+
+The order matters — verification needs a pushed preview, and the review reads
+the evidence when it starts, so publish before the PR goes ready:
+
 1. Create a new branch with a descriptive name.
-2. Commit the changes to that branch.
-3. Open a PR targeting `master` using `gh pr create`.
+2. Run the Quality Checks below, add a changeset, commit to that branch, push.
+3. Open the PR **as a draft**: `gh pr create --draft` (drafts don't spend a
+   review). Docs/CI/test/agent-config-only PR with nothing to verify → write
+   `Exempt — <why>` under `## Verification` and open it ready instead.
 4. **Verify on the running app** (user-facing changes) — `docs/agents/verify.md`
-   (skill `verify`): `bun scripts/verify.ts affected` maps the diff to
+   (skill `verify`): `bun scripts/pr-checks.ts wait --no-review` (E2E done →
+   preview seeded), then `bun scripts/verify.ts affected` maps the diff to
    features via `docs/agents/feature-map.yaml`; drive the PR's Vercel
    preview (its **own Convex preview backend**, test personas seeded) as
    every affected persona; publish screenshots + log with
-   `bun scripts/verify.ts publish` into the PR's `## Verification` section.
-   `Independent review` blocks user-facing PRs without it.
-5. Watch CI until green. `master` requires `Lint, Test, Build`,
+   `bun scripts/verify.ts publish` into the PR's `## Verification` section
+   (`gh pr edit --body-file`). `Independent review` blocks user-facing PRs
+   without it.
+5. `gh pr ready` — this starts the review. Then wait in the foreground with
+   `bun scripts/pr-checks.ts wait` (not `gh pr checks --watch`, which returns
+   early on the draft's stale review failure). A code fix later:
+   `gh pr ready --undo`, push, re-verify + publish, `gh pr ready` again — a
+   push to a ready PR is reviewed at once, against stale evidence.
+6. Watch CI until green. `master` requires `Lint, Test, Build`,
    `E2E (Playwright)` (full suite against the PR's own backend) and the
    guardrails: `Changeset`, `Migration registry append-only`,
    `Convex codegen in sync`, `Coverage floor (convex/)`, plus
@@ -42,11 +56,18 @@ Always use the `gh` CLI to interface with GitHub (PRs, issues, releases, etc.). 
 
 ## Quality Checks
 
-After any code changes, always run:
-1. `bun test` — run the test suite
-2. `bun run lint` — check for lint errors
+After any code changes, always run (before committing; running-app
+verification comes later, on the pushed preview — Branching step 4):
+1. `bun run test` — unit tests (plain `bun test` is equivalent; bunfig keeps
+   the Playwright specs out of both)
+2. `bun run lint` — oxlint **and full TypeScript type checking** (type-aware
+   tsgolint, `.oxlintrc.json` `typeCheck`) across src/, convex/, scripts/,
+   tests/ — there is no separate `tsc` step. `bun run build` (also in CI)
+   catches bundling/SSR errors on top.
 3. For UI/flow/backend changes: `bun run test:e2e` (local Playwright) — CI runs
-   the same suite as a required merge gate (`docs/agents/e2e.md`)
+   the same suite as a required merge gate (`docs/agents/e2e.md`). It picks a
+   free port, reads `TEST_AUTH_PASSWORD` from `.env.local` and sizes workers
+   to the machine on its own.
 4. Touched `convex/`: `bun run test:coverage` (convex/ coverage floor) and
    `bun run check:codegen` (commit `convex/_generated`); touched migrations:
    `bun run check:migrations`

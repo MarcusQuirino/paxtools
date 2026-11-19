@@ -157,6 +157,22 @@ export const CATALOG = [
     hasGroup: false,
     bannedAt: false,
   },
+  {
+    // Pending member who CREATED their grupo (a second `__TEST__` grupo, not
+    // the canonical one) — the "creator left and rejoined" state (#107).
+    slug: "escotista-pending-creator",
+    scoutId: CANONICAL_SCOUT_IDS.escotista_pending_creator,
+    role: "escotista",
+    membershipStatus: "pending",
+    ramo: null,
+    isAdmin: false,
+    escotistaRamos: ["escoteiro"],
+    onboardingComplete: true,
+    // false: hasGroup means the canonical grupo; this persona's groupId is its
+    // own "__TEST__ Grupo Criador Pendente".
+    hasGroup: false,
+    bannedAt: false,
+  },
 ] as const satisfies readonly TestUserCatalogEntry[];
 
 export type CatalogSlug = (typeof CATALOG)[number]["slug"];

@@ -77,6 +77,7 @@ export const CANONICAL_SCOUT_IDS = {
   escoteiro_onboarding_incomplete: "9900008",
   onboarding_m13: "9900009",
   banned_user: "9900010",
+  escotista_pending_creator: "9900011",
 } as const;
 
 export type CanonicalSlug = keyof typeof CANONICAL_SCOUT_IDS;

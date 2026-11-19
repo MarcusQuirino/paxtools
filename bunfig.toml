@@ -1,3 +1,10 @@
 [serve.static]
 plugins = ["bun-plugin-tailwind"]
 env = "BUN_PUBLIC_*"
+
+# Plain `bun test` must never load the Playwright suite (tests/e2e/**/*.spec.ts):
+# bun's runner would execute those files and fail them ("Playwright Test did
+# not expect test() to be called here"). Playwright runs them via
+# `bun run test:e2e`. See issue #130.
+[test]
+pathIgnorePatterns = ["tests/e2e/**", "node_modules/**", ".output/**"]

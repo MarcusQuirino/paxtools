@@ -13,6 +13,7 @@
     "node": "24.x"
   },
   "scripts": {
+    "setup": "bun scripts/setup-worktree.ts",
     "dev": "bunx concurrently --names convex,vite -c cyan,magenta \"bunx convex dev\" \"vite dev\"",
     "dev:frontend": "vite dev",
     "dev:backend": "bunx convex dev",

@@ -21,8 +21,14 @@ The rules agents most often break (all detailed in `CLAUDE.md`):
   done: `docs/agents/verify.md` (skill `verify`) — feature map → PR preview
   as test personas → screenshots + log published to the PR's
   `## Verification` section. The review blocks without it.
-- Before committing: `bun test` and `bun run lint` pass, and a changeset is
-  added in `.changeset/` (`bunx changeset --empty` if nothing user-facing).
+- New worktree: `bun run setup` (deps + `.env.local` + browser). Before
+  committing: `bun run test` and `bun run lint` (lint includes type checking)
+  pass, and a changeset is added in `.changeset/` (`bunx changeset --empty`
+  if nothing user-facing).
+- PR order: push → `gh pr create --draft` → `bun scripts/pr-checks.ts wait
+  --no-review` → verify + `verify.ts publish` into the body → `gh pr ready` →
+  `bun scripts/pr-checks.ts wait`. Running-app verification happens after the
+  push (it needs the preview), never as a pre-commit step.
 - Convex work: read `convex/_generated/ai/guidelines.md` first. Migrations are
   append-only (CI-enforced). Commit regenerated `convex/_generated`. Keep
   convex/ coverage at or above the floor — add tests, never lower it.
