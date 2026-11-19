@@ -18,6 +18,7 @@
     "dev:backend": "bunx convex dev",
     "build": "vite build",
     "test": "bun test src convex scripts",
+    "test:coverage": "bun scripts/check-coverage.ts",
     "test:e2e": "TEST_AUTH=1 playwright test",
     "test:e2e:ui": "TEST_AUTH=1 playwright test --ui",
     "test:e2e:staging": "E2E_TARGET=staging TEST_AUTH=1 playwright test",
@@ -31,6 +32,9 @@
     "staging:reset": "bunx convex run --deployment staging testing:wipeTestData && bun run staging:seed",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
+    "check:changeset": "bun scripts/check-changeset.ts",
+    "check:migrations": "bun scripts/check-migration-registry.ts",
+    "check:codegen": "bun scripts/check-codegen.ts",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "changeset publish"

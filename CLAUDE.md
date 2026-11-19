@@ -9,7 +9,7 @@ be concise and sacrifice grammar for the sake of concision
 
 Merging to master auto-deploys **staging only** (Vercel preview alias + staging Convex via `ci.yml`). Full environment/release/migration runbook: `docs/deploy.md`.
 
-Migrations use `@convex-dev/migrations`: define, append to `REGISTRY` in `convex/migrations.ts`, never edit or reorder one that has run anywhere.
+Migrations use `@convex-dev/migrations`: define, append to `REGISTRY` in `convex/migrations.ts`, never edit or reorder one that has run anywhere. CI fails a PR that removes, reorders or edits existing entries (`Migration registry append-only`).
 
 ## GitHub
 
@@ -24,9 +24,12 @@ Always use the `gh` CLI to interface with GitHub (PRs, issues, releases, etc.). 
 4. Verify the change on the PR's Vercel preview — `docs/agents/preview-testing.md`.
    Each PR has its **own Convex preview backend** (branch's `convex/` deployed,
    test personas seeded), so backend changes are live on the preview too.
-5. Watch CI until green. `master` requires both `Lint, Test, Build` and
-   `E2E (Playwright)` (full suite against the PR's own backend). A red or flaky
-   e2e run is yours to fix — never skip/weaken a test to get green. Details,
+5. Watch CI until green. `master` requires `Lint, Test, Build`,
+   `E2E (Playwright)` (full suite against the PR's own backend) and the
+   guardrails: `Changeset`, `Migration registry append-only`,
+   `Convex codegen in sync`, `Coverage floor (convex/)`. A red or flaky run is
+   yours to fix — never skip/weaken a test or check to get green. What each
+   check enforces and how to fix it: `docs/agents/ci-checks.md`; e2e details,
    artifacts and local repro: `docs/agents/e2e.md`.
 
 ## Quality Checks
@@ -36,6 +39,9 @@ After any code changes, always run:
 2. `bun run lint` — check for lint errors
 3. For UI/flow/backend changes: `bun run test:e2e` (local Playwright) — CI runs
    the same suite as a required merge gate (`docs/agents/e2e.md`)
+4. Touched `convex/`: `bun run test:coverage` (convex/ coverage floor) and
+   `bun run check:codegen` (commit `convex/_generated`); touched migrations:
+   `bun run check:migrations`
 
 Fix any failures before considering the task done.
 
@@ -47,7 +53,7 @@ To launch, sign in as a test persona, or drive the app in a browser locally: `do
 
 This project uses [Changesets](https://github.com/changesets/changesets) for versioning and changelog management. It is not published to npm, so never use `bun run release`.
 
-**IMPORTANT: Always create a changeset before committing any feature, fix, or meaningful change.** Do not commit without one.
+**IMPORTANT: Always create a changeset before committing any feature, fix, or meaningful change.** Do not commit without one. CI enforces it (`Changeset` check): shipped code without a changeset fails; for a change with nothing to announce, add an empty one with `bunx changeset --empty` (`docs/agents/ci-checks.md`).
 
 Workflow:
 1. After completing a feature or fix, create a changeset file in `.changeset/` (choose `patch`, `minor`, or `major` and write a short description).
