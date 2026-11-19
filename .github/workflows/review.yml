@@ -26,7 +26,7 @@ on:
 
 # One review per branch at a time; a newer commit cancels the stale review.
 concurrency:
-  group: independent-review-${{ github.event.workflow_run.head_branch }}
+  group: independent-review-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
 permissions:
@@ -86,7 +86,8 @@ jobs:
 
       # Fresh session, subscription auth. --safe-mode: no CLAUDE.md/hooks/MCP/
       # skills/settings from any directory (the PR's .claude/ can't run code).
-      # Only read tools. `env -i`: the reviewer process sees no GitHub token.
+      # Only read tools, pre-approved only inside review/ (dontAsk denies the
+      # rest, e.g. /proc/self/environ). `env -i`: the reviewer process sees no GitHub token.
       - name: Review
         working-directory: review
         env:
@@ -99,7 +100,7 @@ jobs:
             timeout 25m claude -p \
               "Review PR #$PR_NUMBER (head $HEAD_SHA) following your instructions. Start with context/pr.md, then context/files.txt and context/pr.diff." \
               --safe-mode --strict-mcp-config \
-              --tools "Read,Grep,Glob" --allowedTools "Read,Grep,Glob" \
+              --tools "Read,Grep,Glob" --allowedTools "Read(./**)" "Grep(./**)" "Glob(./**)" \
               --permission-mode dontAsk \
               --model opus --effort high \
               --no-session-persistence \

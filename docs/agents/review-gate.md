@@ -81,10 +81,11 @@ Reproduce a review locally (same prompt, your subscription): see the
   by GitHub Apps (a PAT / `gh` token gets 403), and a commit status posted
   with a PAT doesn't satisfy an app-pinned check.
 - **The reviewer can't be turned against the repo.** It runs with only
-  Read/Grep/Glob, no GitHub token in its environment (`env -i`), no network
+  Read/Grep/Glob, pre-approved only inside its working directory (so no
+  `/proc/self/environ`), no GitHub token in its environment (`env -i`), no network
   tools, and nothing from the PR is executed. PR text is declared untrusted;
   attempts to steer the reviewer are blocking findings. Output is scanned for
-  secrets before posting.
+  secrets before posting, and rendered without newlines or live @mentions.
 
 ## Remaining gaps (honest list)
 

@@ -232,6 +232,10 @@ function finalize(outputPath: string) {
 
   // The reviewer saw untrusted text; never let it echo a secret into a public comment.
   if (leaksSecret(body, [process.env.CLAUDE_CODE_OAUTH_TOKEN, process.env.GH_TOKEN])) {
+    // Replace the old verdict so the PR never shows a stale ✅ for this commit.
+    const withheld = renderError("output withheld: it contained a secret (rotate the token)", ctx);
+    upsertComment(withheld);
+    completeCheck("failure", "No verdict", withheld);
     console.error("::error::Reviewer output contains a secret — not posting it. Rotate the token.");
     process.exit(1);
   }

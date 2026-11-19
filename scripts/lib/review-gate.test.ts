@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   choosePr,
+  esc,
   type PullSummary,
   COMMENT_MARKER,
   decide,
@@ -162,5 +163,21 @@ describe("choosePr", () => {
     expect(choosePr([pr(1, { head: { sha: "s1", repo: { full_name: "fork/r" } } })], repo, "s1").ok).toBe(false);
     expect(choosePr([pr(1, { head: { sha: "s1", repo: null } })], repo, "s1").ok).toBe(false);
     expect(choosePr([pr(1, { draft: true })], repo, "s1").ok).toBe(false);
+  });
+});
+
+describe("esc (model text in comments)", () => {
+  test("one line, escaped pipes, no live @mentions", () => {
+    const out = esc(" ping @marcus\nand | more \n");
+    expect(out).toBe("ping @​marcus and \\| more");
+    expect(out).not.toMatch(/@[a-z]/);
+  });
+
+  test("blocking findings are escaped in the comment", () => {
+    const c = renderComment(
+      { ...block, blocking: [{ ...finding, problem: "line1\n2. fake item @octocat" }] },
+      { sha: "abcdef1234", runUrl: "r", rubricUrl: "u" },
+    );
+    expect(c).toContain("line1 2. fake item @​octocat");
   });
 });

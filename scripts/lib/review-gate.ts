@@ -169,7 +169,16 @@ export function leaksSecret(text: string, secrets: (string | undefined)[]): bool
   return secrets.some((s) => !!s && s.length >= 8 && text.includes(s));
 }
 
-const esc = (s: string) => s.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+/**
+ * Model text → one safe markdown line: no table breaks, no newlines, and no
+ * live @mentions (the reviewer read untrusted text; it must not ping people).
+ */
+export const esc = (s: string) =>
+  s
+    .trim()
+    .replace(/\|/g, "\\|")
+    .replace(/\r?\n+/g, " ")
+    .replace(/@(?=[A-Za-z0-9-])/g, "@\u200b");
 
 export type CommentCtx = {
   sha: string;
@@ -192,14 +201,14 @@ export function renderComment(v: Verdict, ctx: CommentCtx): string {
       ctx.meta ? ` · ${Math.round(ctx.meta.durationMs / 1000)}s, ${ctx.meta.turns} turns` : ""
     }`,
     "",
-    v.summary.trim(),
+    esc(v.summary),
   ];
   if (v.blocking.length) {
     lines.push("", "#### Blocking", "");
     v.blocking.forEach((b, i) => {
       lines.push(
-        `${i + 1}. **[${b.category}]** \`${b.file}:${b.line}\` — ${b.problem.trim()}`,
-        `   - **Fix:** ${b.fix.trim()}`,
+        `${i + 1}. **[${b.category}]** \`${esc(b.file)}:${b.line}\` — ${esc(b.problem)}`,
+        `   - **Fix:** ${esc(b.fix)}`,
       );
     });
   } else if (outcome === "block") {
@@ -207,7 +216,7 @@ export function renderComment(v: Verdict, ctx: CommentCtx): string {
   }
   if (v.nits.length) {
     lines.push("", "<details><summary>Nits (non-blocking)</summary>", "");
-    for (const n of v.nits) lines.push(`- \`${n.file}:${n.line}\` — ${esc(n.note.trim())}`);
+    for (const n of v.nits) lines.push(`- \`${esc(n.file)}:${n.line}\` — ${esc(n.note)}`);
     lines.push("", "</details>");
   }
   if (outcome === "block") {
