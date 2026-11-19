@@ -168,6 +168,8 @@ export const CATALOG = [
     isAdmin: false,
     escotistaRamos: ["escoteiro"],
     onboardingComplete: true,
+    // false: hasGroup means the canonical grupo; this persona's groupId is its
+    // own "__TEST__ Grupo Criador Pendente".
     hasGroup: false,
     bannedAt: false,
   },

@@ -17,6 +17,7 @@
 
 import { spawnSync } from "node:child_process";
 import {
+  type CheckState,
   evaluate,
   type GuardrailsRun,
   type RequiredCheck,
@@ -59,7 +60,7 @@ async function wait() {
     const required = JSON.parse(
       gh(["pr", "checks", String(pr.number), "--required", "--json", "name,bucket,link"]) || "[]",
     ) as RequiredCheck[];
-    let review;
+    let review: CheckState;
     if (withReview) {
       const reviews = JSON.parse(
         gh([
@@ -87,7 +88,7 @@ async function wait() {
           .at(-1) ?? null;
       review = reviewState(reviews, guardrails, pr.isDraft, readyAt);
     } else {
-      review = { name: `${REVIEW_CHECK} (skipped: --no-review)`, state: "pass" as const, detail: "" };
+      review = { name: `${REVIEW_CHECK} (skipped: --no-review)`, state: "pass", detail: "" };
     }
     const result = evaluate(required, review);
     const table = result.checks.map((c) => `  ${c.state.padEnd(7)} ${c.name}  ${c.detail}`).join("\n");

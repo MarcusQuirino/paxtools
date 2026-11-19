@@ -78,7 +78,12 @@ export function firstFreePort(from = 3000, limit = 50): number {
     })();`;
   const r = spawnSync(process.execPath, ["-e", probe], { encoding: "utf8", timeout: 15_000 });
   const port = Number(r.stdout?.trim());
-  return Number.isInteger(port) && port > 0 ? port : from;
+  if (Number.isInteger(port) && port > 0) return port;
+  console.warn(
+    `e2e: no free localhost port found in ${from}-${from + limit - 1} (probe: ${r.error?.message ?? (r.stderr?.trim() || "nothing free")}); ` +
+      `falling back to ${from} — if the web server times out, set E2E_PORT.`,
+  );
+  return from;
 }
 
 /**
