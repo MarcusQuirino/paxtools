@@ -15,11 +15,11 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { affectedFeatures, FEATURE_MAP_PATH, parseFeatureMap, renderAffected } from "./lib/feature-map";
-import { EVIDENCE_BRANCH, evidenceDir, LOG_FILE, renderEvidenceLinks } from "./lib/verification-evidence";
+import { EVIDENCE_BRANCH, evidenceDir, IMAGE, LOG_FILE, renderEvidenceLinks } from "./lib/verification-evidence";
 
 function sh(cmd: string, args: string[], opts: { cwd?: string; allowFail?: boolean } = {}) {
   const r = spawnSync(cmd, args, { encoding: "utf8", cwd: opts.cwd, maxBuffer: 64 * 1024 * 1024 });
@@ -87,7 +87,9 @@ function publish() {
     console.error(`${dir}/${LOG_FILE} missing — run your scenario (verifySession().finish() writes it) first.`);
     process.exit(2);
   }
-  const files = readdirSync(dir).filter((f) => !f.startsWith("."));
+  // Only top-level images + text: the branch is public, so a stray .env,
+  // trace or video in the dir must never ride along.
+  const files = readdirSync(dir).filter((f) => !f.startsWith(".") && (IMAGE.test(f) || /\.(md|txt|log|json|tsv)$/i.test(f)));
   const repo = sh("gh", ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"]).out;
   const head = sh("git", ["rev-parse", "--short", "HEAD"]).out;
 
@@ -110,7 +112,8 @@ function publish() {
     try {
       const target = join(wt, evidenceDir(pr));
       rmSync(target, { recursive: true, force: true });
-      cpSync(dir, target, { recursive: true });
+      mkdirSync(target, { recursive: true });
+      for (const f of files) cpSync(join(dir, f), join(target, f));
       sh("git", ["add", "-A"], { cwd: wt });
       sh("git", ["commit", "-qm", `evidence: PR #${pr} @ ${head}`], { cwd: wt });
       const push = sh("git", ["push", "origin", `HEAD:refs/heads/${EVIDENCE_BRANCH}`], { cwd: wt, allowFail: true });

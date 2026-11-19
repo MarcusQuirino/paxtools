@@ -226,6 +226,7 @@ function fetchEvidence(prDir: string, pr: string, out: string) {
   const entries = parseLsTree(run("git", ["-C", prDir, "ls-tree", "-r", "-l", ref, "--", `${evidenceDir(pr)}/`]));
   const selection = selectEvidence(entries);
   for (const e of selection.take) {
+    if (e.path.split("/").some((seg) => seg === ".." || seg === "")) continue;
     const blob = spawnSync("git", ["-C", prDir, "cat-file", "blob", `${ref}:${e.path}`], { maxBuffer: 16 * 1024 * 1024 });
     if (blob.status !== 0) continue;
     const dst = join(out, e.path.slice(evidenceDir(pr).length + 1));

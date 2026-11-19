@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  isAllowedTarget,
   LIMITS,
   parseLsTree,
   renderEvidenceIndex,
@@ -65,5 +66,15 @@ describe("renderEvidenceLinks", () => {
     expect(md).toContain("https://raw.githubusercontent.com/o/r/0123456789/pr-5/01-a.png");
     expect(md.indexOf("01-a.png")).toBeLessThan(md.indexOf("02-b.png"));
     expect(md).toContain("/blob/0123456789/pr-5/log.md");
+  });
+});
+
+describe("isAllowedTarget", () => {
+  test("localhost and this project's previews/staging only", () => {
+    expect(isAllowedTarget("http://localhost:3217")).toBe(true);
+    expect(isAllowedTarget("https://paxtools-jphr0957y-marcusquirinos-projects.vercel.app")).toBe(true);
+    expect(isAllowedTarget("https://paxtools-git-master-marcusquirinos-projects.vercel.app")).toBe(true);
+    expect(isAllowedTarget("https://paxtools-xi.vercel.app")).toBe(false); // prod
+    expect(isAllowedTarget("https://evil.vercel.app")).toBe(false);
   });
 });

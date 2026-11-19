@@ -29,19 +29,9 @@ import { execSync } from "node:child_process";
 import { chromium, devices, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { personaBySlug } from "../../tests/utils/personas";
 import { submitSignIn } from "../../tests/utils/signin";
-import { LOG_FILE } from "./verification-evidence";
+import { isAllowedTarget, LOG_FILE } from "./verification-evidence";
 
 export type StepResult = { name: string; persona: string; result: "pass" | "fail"; shots: string[]; note: string };
-
-/**
- * Allowed targets: localhost or a Vercel preview / the staging alias. Prod
- * (paxtools-xi.vercel.app, docs/deploy.md) has no test personas and real data.
- */
-export function isAllowedTarget(baseUrl: string): boolean {
-  const host = new URL(baseUrl).hostname;
-  if (host === "localhost" || host === "127.0.0.1") return true;
-  return host.endsWith(".vercel.app") && host !== "paxtools-xi.vercel.app";
-}
 
 export async function verifySession(opts: { feature: string; out?: string; mobile?: boolean }) {
   const baseUrl = (process.env.VERIFY_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -63,6 +53,15 @@ export async function verifySession(opts: { feature: string; out?: string; mobil
       return "unknown";
     }
   })();
+
+  const pushed = (() => {
+    try {
+      return execSync("git rev-parse @{u}", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() === sha;
+    } catch {
+      return false;
+    }
+  })();
+  if (!pushed) console.warn(`WARNING: HEAD ${sha.slice(0, 7)} is not the pushed branch head — the preview may be a different build.`);
 
   const url = (path: string) => `${baseUrl}${path}`;
 
@@ -137,7 +136,7 @@ export async function verifySession(opts: { feature: string; out?: string; mobil
       `# Verification log — ${opts.feature}`,
       "",
       `- Target: ${baseUrl}`,
-      `- Commit verified: ${sha}`,
+      `- Commit verified: ${sha}${pushed ? "" : " (WARNING: not the pushed branch head)"}`,
       `- Date: ${new Date().toISOString()}`,
       `- Result: ${failed ? `**${failed} FAILED**` : "all passed"} (${steps.length} steps)`,
       "",

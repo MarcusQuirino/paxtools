@@ -12,6 +12,19 @@ export const LOG_FILE = "log.md";
 
 export const evidenceDir = (pr: number | string) => `pr-${pr}`;
 
+/**
+ * Allowed targets: localhost, this project's Vercel previews and the staging
+ * alias. Prod (paxtools-xi.vercel.app, docs/deploy.md) has real data and no
+ * test personas; it doesn't match.
+ */
+export function isAllowedTarget(baseUrl: string): boolean {
+  const host = new URL(baseUrl).hostname;
+  if (host === "localhost" || host === "127.0.0.1") return true;
+  // This project's previews + staging alias only (never a third-party host:
+  // the harness types persona credentials into whatever it opens).
+  return /^paxtools-[a-z0-9-]+-marcusquirinos-projects\.vercel\.app$/.test(host);
+}
+
 export type TreeEntry = { path: string; size: number };
 
 /** Parse `git ls-tree -r -l <ref> -- <dir>` output (blobs only). */
