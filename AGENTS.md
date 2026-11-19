@@ -8,12 +8,15 @@ this file.
 The rules agents most often break (all detailed in `CLAUDE.md`):
 
 - Never deploy to prod. Never commit to `master` — branch, then PR via `gh`.
-  `master` is protected: PR + passing `Lint, Test, Build` and
-  `E2E (Playwright)` required (`docs/agents/e2e.md`).
+  `master` is protected: PR + passing `Lint, Test, Build`, `E2E (Playwright)`,
+  `Changeset`, `Migration registry append-only`, `Convex codegen in sync` and
+  `Coverage floor (convex/)` required. What each enforces and how to fix it:
+  `docs/agents/ci-checks.md`.
 - Before committing: `bun test` and `bun run lint` pass, and a changeset is
-  added in `.changeset/`.
+  added in `.changeset/` (`bunx changeset --empty` if nothing user-facing).
 - Convex work: read `convex/_generated/ai/guidelines.md` first. Migrations are
-  append-only.
+  append-only (CI-enforced). Commit regenerated `convex/_generated`. Keep
+  convex/ coverage at or above the floor — add tests, never lower it.
 - Never put secrets or real passwords in the repo. `TEST_AUTH` /
   `TEST_AUTH_PASSWORD` must never be set on the prod Convex deployment.
 

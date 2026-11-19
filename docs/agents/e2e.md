@@ -14,7 +14,8 @@ reseeds the target's test data in global setup and again in teardown.
 
 Every PR against `master` runs the `E2E (Playwright)` job, and it is a
 **required status check** on `master` (ruleset 27609274), next to
-`Lint, Test, Build`. A red e2e run blocks the merge; there is no bypass.
+`Lint, Test, Build` and the guardrail checks (`docs/agents/ci-checks.md`). A
+red e2e run blocks the merge; there is no bypass.
 
 What the job does (both steps are the package scripts above, nothing else):
 
