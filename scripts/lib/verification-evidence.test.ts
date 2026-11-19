@@ -9,16 +9,18 @@ import {
 } from "./verification-evidence";
 
 describe("parseLsTree", () => {
-  test("reads blobs with sizes, ignores trees and junk", () => {
+  test("reads NUL-separated blobs with sizes (unquoted unicode paths), ignores trees and junk", () => {
     const out = [
       "100644 blob 1111111111111111111111111111111111111111    1234\tpr-7/log.md",
       "100644 blob 2222222222222222222222222222222222222222  500000\tpr-7/01-home.png",
       "040000 tree 3333333333333333333333333333333333333333       -\tpr-7/sub",
       "",
-    ].join("\n");
+      "100644 blob 4444444444444444444444444444444444444444      10\tpr-7/é tab.png",
+    ].join("\0");
     expect(parseLsTree(out)).toEqual([
       { path: "pr-7/log.md", size: 1234 },
       { path: "pr-7/01-home.png", size: 500000 },
+      { path: "pr-7/é tab.png", size: 10 },
     ]);
   });
 });

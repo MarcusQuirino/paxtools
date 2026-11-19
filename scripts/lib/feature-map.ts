@@ -77,7 +77,7 @@ export function featureFiles(f: Feature): string[] {
 
 /** Route files and top-level Convex modules that must each be mapped. */
 export function mustBeMapped(file: string): boolean {
-  if (/^src\/routes\/.+\.tsx?$/.test(file)) return file !== "src/routes/routeTree.gen.ts";
+  if (/^src\/routes\/.+\.tsx?$/.test(file)) return true;
   return /^convex\/[^/]+\.ts$/.test(file) && !/(\.test\.ts|\.testkit\.ts|\.d\.ts)$/.test(file);
 }
 

@@ -223,18 +223,27 @@ function fetchEvidence(prDir: string, pr: string, out: string) {
     return;
   }
   const commit = run("git", ["-C", prDir, "rev-parse", ref]).trim();
-  const entries = parseLsTree(run("git", ["-C", prDir, "ls-tree", "-r", "-l", ref, "--", `${evidenceDir(pr)}/`]));
+  const entries = parseLsTree(run("git", ["-C", prDir, "ls-tree", "-r", "-l", "-z", ref, "--", `${evidenceDir(pr)}/`]));
   const selection = selectEvidence(entries);
+  const written: typeof selection.take = [];
   for (const e of selection.take) {
-    if (e.path.split("/").some((seg) => seg === ".." || seg === "")) continue;
+    if (e.path.split("/").some((seg) => seg === ".." || seg === "")) {
+      selection.skipped.push({ path: e.path, reason: "unsafe path" });
+      continue;
+    }
     const blob = spawnSync("git", ["-C", prDir, "cat-file", "blob", `${ref}:${e.path}`], { maxBuffer: 16 * 1024 * 1024 });
-    if (blob.status !== 0) continue;
+    if (blob.status !== 0) {
+      selection.skipped.push({ path: e.path, reason: "could not read blob" });
+      continue;
+    }
     const dst = join(out, e.path.slice(evidenceDir(pr).length + 1));
     mkdirSync(dirname(dst), { recursive: true });
     writeFileSync(dst, blob.stdout);
+    written.push(e);
   }
-  writeFileSync(join(out, "INDEX.md"), renderEvidenceIndex({ pr, commit, selection }));
-  console.log(`Verification evidence: ${selection.take.length} files from ${EVIDENCE_BRANCH}@${commit.slice(0, 7)}`);
+  // INDEX lists what was actually written, not what was selected.
+  writeFileSync(join(out, "INDEX.md"), renderEvidenceIndex({ pr, commit, selection: { take: written, skipped: selection.skipped } }));
+  console.log(`Verification evidence: ${written.length} files from ${EVIDENCE_BRANCH}@${commit.slice(0, 7)}`);
 }
 
 function upsertComment(body: string) {

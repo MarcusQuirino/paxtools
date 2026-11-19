@@ -27,11 +27,11 @@ export function isAllowedTarget(baseUrl: string): boolean {
 
 export type TreeEntry = { path: string; size: number };
 
-/** Parse `git ls-tree -r -l <ref> -- <dir>` output (blobs only). */
+/** Parse `git ls-tree -r -l -z <ref> -- <dir>` output (blobs only; NUL-separated, so paths are unquoted). */
 export function parseLsTree(out: string): TreeEntry[] {
   const entries: TreeEntry[] = [];
-  for (const line of out.split("\n")) {
-    const m = /^\d+ blob [0-9a-f]+\s+(\d+)\t(.+)$/.exec(line);
+  for (const line of out.split("\0")) {
+    const m = /^\d+ blob [0-9a-f]+\s+(\d+)\t(.+)$/s.exec(line);
     if (m) entries.push({ path: m[2]!, size: Number(m[1]) });
   }
   return entries;
