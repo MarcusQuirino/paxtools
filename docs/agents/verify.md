@@ -58,12 +58,15 @@ fresh-agent re-check); the fresh agent here is the review gate.
    await v.finish(); // writes .verification/out/log.md; exits 1 if a step failed
    ```
    ```bash
-   VERIFY_BASE_URL=<preview url> TEST_AUTH_PASSWORD=... bun .verification/scenario.ts
+   VERIFY_BASE_URL=<preview url> bun .verification/scenario.ts
    ```
-   `TEST_AUTH_PASSWORD` is the target deployment's (the same value the e2e
-   job seeds previews with; locally in `.env.local`). A wrong one reads
-   "Registro ou senha incorretos" and ten misses lock the registro — stop
-   and ask Marcus rather than guess. Selector and hydration gotchas:
+   `TEST_AUTH_PASSWORD` must be the **target deployment's**. PR previews
+   are seeded with staging's value, which is *not* the one in your
+   `.env.local` (that's your dev deployment's):
+   `export TEST_AUTH_PASSWORD=$(bunx convex env get TEST_AUTH_PASSWORD --deployment staging)`
+   — keep it in the env, never echo or commit it. A wrong one reads
+   "Registro ou senha incorretos"; the harness stops at the first one
+   because ten misses an hour lock the registro. Selector and hydration gotchas:
    `docs/agents/running-locally.md`, `docs/agents/e2e.md`.
    Driving interactively instead (T3 preview tools, claude-in-chrome,
    `playwright-cli`) is fine for exploring; the evidence still has to end up
