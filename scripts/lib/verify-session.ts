@@ -86,6 +86,13 @@ export async function verifySession(opts: { feature: string; out?: string; mobil
         await page.waitForURL((u) => !u.pathname.startsWith("/signin"), { timeout: 20_000 });
         break;
       } catch (e) {
+        // Wrong password: retrying only burns attempts (10 misses/hour lock the registro).
+        if (await page.getByText("Registro ou senha incorretos").isVisible().catch(() => false)) {
+          throw new Error(
+            `sign-in as ${slug} (${persona.scoutId}) rejected: TEST_AUTH_PASSWORD is not this deployment's ` +
+              "(PR previews use staging's: `bunx convex env get TEST_AUTH_PASSWORD --deployment staging`). Not retrying.",
+          );
+        }
         if (attempt >= 3) throw new Error(`sign-in as ${slug} (${persona.scoutId}) failed: ${(e as Error).message}`);
       }
     }

@@ -65,7 +65,7 @@ features:
       - convex/lib/testAccounts.ts
       - convex/lib/legacyTestRegistro.ts
       - convex/lib/managedAccounts.ts
-    personas: [escoteiro-with-progression, admin, escoteiro-pending, banned-user, escoteiro-onboarding-incomplete]
+    personas: [escoteiro-with-progression, admin, escotista-pending, escoteiro-pending, banned-user, escoteiro-onboarding-incomplete]
     specs:
       - tests/e2e/readonly/smoke.spec.ts
       - tests/e2e/readonly/r1-auth-guards.spec.ts
@@ -74,8 +74,9 @@ features:
     check: |
       Open / signed out → lands on /signin ("BEM-VINDO DE VOLTA"). Wrong
       password → "Registro ou senha incorretos". Sign in 9900006 → escoteiro
-      home; sign out; sign in 9900001 → /escotista painel; 9900004 (pending)
-      → waiting screen; 9900008 → /onboarding. /trocar-senha only shows for a
+      home; sign out; sign in 9900001 → /escotista painel; 9900003 (pending
+      escotista) → "Aguardando aprovação"; 9900004 (pending escoteiro) → their
+      own dashboard, NOT parked; 9900008 → /onboarding. /trocar-senha only shows for a
       member with a temporary password (issue one via admin "Nova senha", see
       managed-accounts) — no e2e covers it.
 
