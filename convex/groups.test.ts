@@ -1704,3 +1704,160 @@ describe("getPendingMemberships: who may see the queue", () => {
     expect(await as(t, loner).query(api.groups.getPendingMemberships, {})).toEqual([]);
   });
 });
+
+describe("pending members see only the waiting screen's data (#107)", () => {
+  /** A grupo with one seção (and legacy ramoNames) plus a pending escoteiro and escotista. */
+  async function seedWithPendingMembers(t: TestConvex) {
+    const { adminId, groupId } = await seedGroup(t, {
+      ramoNames: { escoteiro: "Tropa Norte" },
+    });
+    await as(t, adminId).mutation(api.groups.addSection, {
+      name: "Tropa Norte",
+      ramo: "escoteiro",
+    });
+    await t.run((ctx) => ctx.db.patch(groupId, { regiao: "RS" }));
+    const pendingEscoteiro = await addEscoteiro(t, groupId, "escoteiro", {
+      membershipStatus: "pending",
+    });
+    const pendingEscotista = await addEscotista(t, groupId, ["escoteiro"], {
+      membershipStatus: "pending",
+    });
+    return { adminId, groupId, pendingEscoteiro, pendingEscotista };
+  }
+
+  test("getMyGroup gives a pending member only the grupo identity", async () => {
+    const t = newTest();
+    const { groupId, pendingEscoteiro, pendingEscotista } =
+      await seedWithPendingMembers(t);
+    for (const userId of [pendingEscoteiro, pendingEscotista]) {
+      const view = await as(t, userId).query(api.groups.getMyGroup, {});
+      expect(view).toEqual({
+        _id: groupId,
+        name: "Grupo A",
+        number: "100",
+        regiao: "RS",
+        password: null,
+        ramoNames: {},
+        isCreator: false,
+        isAdmin: false,
+        membershipStatus: "pending",
+      });
+    }
+  });
+
+  test("getMyGroup still gives approved members everything", async () => {
+    const t = newTest();
+    const { adminId, groupId } = await seedWithPendingMembers(t);
+    const escoteiro = await addEscoteiro(t, groupId, "escoteiro");
+    const chefe = await addEscotista(t, groupId, ["escoteiro"]);
+
+    const adminView = await as(t, adminId).query(api.groups.getMyGroup, {});
+    expect(adminView).toMatchObject({
+      name: "Grupo A",
+      password: "AAAAAA",
+      ramoNames: { escoteiro: "Tropa Norte" },
+      isCreator: true,
+      isAdmin: true,
+      membershipStatus: "approved",
+    });
+    expect((await as(t, chefe).query(api.groups.getMyGroup, {}))?.password).toBe(
+      "AAAAAA",
+    );
+    const escView = await as(t, escoteiro).query(api.groups.getMyGroup, {});
+    expect(escView?.ramoNames).toEqual({ escoteiro: "Tropa Norte" });
+    expect(escView?.membershipStatus).toBe("approved");
+  });
+
+  test("getMyGroup treats an unstamped (legacy) membershipStatus as approved", async () => {
+    const t = newTest();
+    const { groupId } = await seedWithPendingMembers(t);
+    const legacy = await insertUser(t, {
+      role: "escoteiro",
+      ramo: "escoteiro",
+      groupId,
+    });
+    const view = await as(t, legacy).query(api.groups.getMyGroup, {});
+    expect(view?.ramoNames).toEqual({ escoteiro: "Tropa Norte" });
+    expect(view?.membershipStatus).toBe("approved");
+    expect(await as(t, legacy).query(api.groups.listSections, {})).toHaveLength(1);
+  });
+
+  test("listSections is empty for a pending member, full once approved", async () => {
+    const t = newTest();
+    const { adminId, pendingEscoteiro, pendingEscotista } =
+      await seedWithPendingMembers(t);
+    expect(await as(t, pendingEscoteiro).query(api.groups.listSections, {})).toEqual([]);
+    expect(await as(t, pendingEscotista).query(api.groups.listSections, {})).toEqual([]);
+
+    await as(t, adminId).mutation(api.groups.approveMembership, {
+      userId: pendingEscoteiro,
+    });
+    const sections = await as(t, pendingEscoteiro).query(api.groups.listSections, {});
+    expect(sections.map((s) => s.name)).toEqual(["Tropa Norte"]);
+    expect(
+      (await as(t, adminId).query(api.groups.listSections, {})).map((s) => s.name),
+    ).toEqual(["Tropa Norte"]);
+  });
+
+  test("getGroupMembers is empty for a pending escotista", async () => {
+    const t = newTest();
+    const { pendingEscotista } = await seedWithPendingMembers(t);
+    expect(await as(t, pendingEscotista).query(api.groups.getGroupMembers, {})).toEqual([]);
+  });
+
+  /**
+   * The grupo's creator who left and rejoined with the password is pending
+   * like anyone else: the legacy createdBy admin fallback must not let them
+   * see the queue or approve themselves.
+   */
+  async function seedPendingCreator(t: TestConvex) {
+    const { adminId, groupId, pendingEscoteiro } = await seedWithPendingMembers(t);
+    const creator = await addEscotista(t, groupId, ["escoteiro"], {
+      membershipStatus: "pending",
+    });
+    await t.run((ctx) => ctx.db.patch(groupId, { createdBy: creator }));
+    return { adminId, groupId, creator, pendingEscoteiro };
+  }
+
+  test("a pending grupo creator is not treated as admin by getMyGroup", async () => {
+    const t = newTest();
+    const { creator } = await seedPendingCreator(t);
+    const view = await as(t, creator).query(api.groups.getMyGroup, {});
+    expect(view?.isAdmin).toBe(false);
+    expect(view?.password).toBeNull();
+    expect(view?.ramoNames).toEqual({});
+  });
+
+  test("a pending grupo creator gets no pending queue", async () => {
+    const t = newTest();
+    const { creator } = await seedPendingCreator(t);
+    expect(await as(t, creator).query(api.groups.getPendingMemberships, {})).toEqual([]);
+  });
+
+  test("a pending grupo creator cannot run admin mutations", async () => {
+    const t = newTest();
+    const { creator, pendingEscoteiro } = await seedPendingCreator(t);
+    await expect(
+      as(t, creator).mutation(api.groups.approveMembership, { userId: creator }),
+    ).rejects.toThrow("Sua entrada no grupo ainda não foi aprovada");
+    await expect(
+      as(t, creator).mutation(api.groups.approveMembership, {
+        userId: pendingEscoteiro,
+      }),
+    ).rejects.toThrow("Sua entrada no grupo ainda não foi aprovada");
+    await expect(
+      as(t, creator).mutation(api.groups.addSection, { name: "X", ramo: "escoteiro" }),
+    ).rejects.toThrow("Sua entrada no grupo ainda não foi aprovada");
+  });
+
+  test("once approved, the creator's admin fallback works again", async () => {
+    const t = newTest();
+    const { adminId, creator } = await seedPendingCreator(t);
+    await as(t, adminId).mutation(api.groups.approveMembership, { userId: creator });
+    const view = await as(t, creator).query(api.groups.getMyGroup, {});
+    expect(view?.isAdmin).toBe(true);
+    expect(
+      (await as(t, creator).query(api.groups.getPendingMemberships, {})).length,
+    ).toBe(2);
+  });
+});
