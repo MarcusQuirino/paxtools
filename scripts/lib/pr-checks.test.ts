@@ -62,5 +62,7 @@ describe("evaluate", () => {
     req[1]!.bucket = "fail";
     expect(evaluate(req, pass)).toMatchObject({ done: true, ok: false });
     expect(evaluate([{ name: "x", bucket: "skipping" }], pass).ok).toBe(true);
+    // Seconds after a push: no checks reported yet → still waiting.
+    expect(evaluate([], pass)).toMatchObject({ done: false, ok: false });
   });
 });

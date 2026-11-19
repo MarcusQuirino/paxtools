@@ -78,6 +78,8 @@ export function evaluate(required: RequiredCheck[], review: CheckState): Evaluat
       state: c.bucket === "pass" || c.bucket === "skipping" ? "pass" : c.bucket === "pending" ? "pending" : "fail",
       detail: `${c.bucket} ${c.link ?? ""}`.trim(),
     }));
+  // Nothing reported yet (seconds after a push) is not "all done".
+  if (!checks.length) checks.push({ name: "required checks", state: "pending", detail: "none reported on this head yet" });
   checks.push(review);
   const done = checks.every((c) => c.state !== "pending");
   return { done, ok: done && checks.every((c) => c.state === "pass"), checks };
