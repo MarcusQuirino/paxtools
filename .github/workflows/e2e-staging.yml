@@ -22,10 +22,9 @@ jobs:
       # The staging deploy key pins every `bunx convex run` to the staging
       # deployment (the CLI wrapper skips `--deployment` when a key is set).
       CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_STAGING }}
-      # Shared test-persona password. The fallback matches the repo-wide default
-      # (convex/lib/testAccounts.ts) and staging's TEST_AUTH_PASSWORD;
-      # set the TEST_AUTH_PASSWORD repo secret only if staging ever rotates it.
-      TEST_AUTH_PASSWORD: ${{ secrets.TEST_AUTH_PASSWORD || 'paxtools-test-only' }}
+      # Shared test-persona password. Must equal TEST_AUTH_PASSWORD on the
+      # staging Convex deployment (the seed hashes that one). No fallback.
+      TEST_AUTH_PASSWORD: ${{ secrets.TEST_AUTH_PASSWORD }}
       E2E_TARGET: staging
       TEST_AUTH: "1"
     steps:
@@ -48,6 +47,13 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-bun-
+
+      - name: Require TEST_AUTH_PASSWORD secret
+        run: |
+          if [ -z "$TEST_AUTH_PASSWORD" ]; then
+            echo "::error::TEST_AUTH_PASSWORD repo secret is not set (must match staging Convex env)."
+            exit 1
+          fi
 
       - name: Install dependencies
         run: bun install --frozen-lockfile

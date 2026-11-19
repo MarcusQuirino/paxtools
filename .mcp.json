@@ -2,13 +2,10 @@
   "mcpServers": {
     "convex": {
       "type": "stdio",
-      "command": "/opt/homebrew/bin/bunx",
+      "command": "sh",
       "args": [
-        "convex",
-        "mcp",
-        "start",
-        "--project-dir",
-        "/Users/marcusfilipus/Developer/projects/paxtools"
+        "-c",
+        "PATH=\"$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\" exec bunx convex mcp start --project-dir \"${CLAUDE_PROJECT_DIR:-$PWD}\""
       ],
       "env": {}
     }

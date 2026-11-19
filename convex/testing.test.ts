@@ -8,8 +8,10 @@ import { getRamoRules } from "../src/data/progression-rules";
 import { newTest } from "./fixtures.testkit";
 import { widenLegacyTestRegistro } from "./lib/legacyTestRegistro";
 import {
+  assertTestAuthAllowed,
   CANONICAL_SCOUT_IDS,
-  DEFAULT_TEST_PASSWORD,
+  PROD_CONVEX_DEPLOYMENT,
+  requireTestPassword,
   simScoutId,
   type SimKind,
   widenLegacyTestScoutId,
@@ -61,9 +63,13 @@ test("wipeTestData removes only test users (99xxxxx registros + legacy emails)",
   }
 });
 
+const SEED_PASSWORD = "seed-password-for-unit-tests";
+
 test("seedSimulatedTroop covers all four ramos: stats, especialidades, IRR, pendings, events, logins", async () => {
   const prev = process.env.TEST_AUTH;
+  const prevPassword = process.env.TEST_AUTH_PASSWORD;
   process.env.TEST_AUTH = "1";
+  process.env.TEST_AUTH_PASSWORD = SEED_PASSWORD;
   try {
     const t = newTest();
     await t.action(internal.testing.seedTestUsers, {});
@@ -175,7 +181,7 @@ test("seedSimulatedTroop covers all four ramos: stats, especialidades, IRR, pend
       const admin = users.find((u) => u.scoutId === CANONICAL_SCOUT_IDS.admin);
       const adminSecret = admin && accountByUser.get(admin._id)?.secret;
       if (!adminSecret) throw new Error("admin account missing");
-      expect(await new Scrypt().verify(adminSecret, DEFAULT_TEST_PASSWORD)).toBe(
+      expect(await new Scrypt().verify(adminSecret, SEED_PASSWORD)).toBe(
         true,
       );
 
@@ -205,7 +211,59 @@ test("seedSimulatedTroop covers all four ramos: stats, especialidades, IRR, pend
   } finally {
     if (prev === undefined) delete process.env.TEST_AUTH;
     else process.env.TEST_AUTH = prev;
+    if (prevPassword === undefined) delete process.env.TEST_AUTH_PASSWORD;
+    else process.env.TEST_AUTH_PASSWORD = prevPassword;
   }
+});
+
+test("seedTestUsers fails loudly without TEST_AUTH_PASSWORD (no hardcoded fallback)", async () => {
+  const prev = process.env.TEST_AUTH;
+  const prevPassword = process.env.TEST_AUTH_PASSWORD;
+  process.env.TEST_AUTH = "1";
+  delete process.env.TEST_AUTH_PASSWORD;
+  try {
+    const t = newTest();
+    await expect(t.action(internal.testing.seedTestUsers, {})).rejects.toThrow(
+      "TEST_AUTH_PASSWORD is not set",
+    );
+  } finally {
+    if (prev === undefined) delete process.env.TEST_AUTH;
+    else process.env.TEST_AUTH = prev;
+    if (prevPassword !== undefined) process.env.TEST_AUTH_PASSWORD = prevPassword;
+  }
+});
+
+test("test auth is refused on the prod deployment even with TEST_AUTH=1", () => {
+  const prodCloud = `https://${PROD_CONVEX_DEPLOYMENT}.convex.cloud`;
+  const prodSite = `https://${PROD_CONVEX_DEPLOYMENT}.convex.site`;
+  expect(() =>
+    assertTestAuthAllowed({ TEST_AUTH: "1", CONVEX_CLOUD_URL: prodCloud }),
+  ).toThrow("REFUSING");
+  expect(() =>
+    assertTestAuthAllowed({ TEST_AUTH: "1", CONVEX_SITE_URL: prodSite }),
+  ).toThrow("REFUSING");
+  // Prod is refused before TEST_AUTH is even consulted.
+  expect(() => assertTestAuthAllowed({ CONVEX_CLOUD_URL: prodCloud })).toThrow(
+    "REFUSING",
+  );
+  // Staging / dev with TEST_AUTH=1 pass; without it they're disabled.
+  expect(() =>
+    assertTestAuthAllowed({
+      TEST_AUTH: "1",
+      CONVEX_CLOUD_URL: "https://elated-goat-471.convex.cloud",
+    }),
+  ).not.toThrow();
+  expect(() =>
+    assertTestAuthAllowed({
+      CONVEX_CLOUD_URL: "https://elated-goat-471.convex.cloud",
+    }),
+  ).toThrow("TEST_AUTH != 1");
+});
+
+test("requireTestPassword has no fallback", () => {
+  expect(() => requireTestPassword({})).toThrow("TEST_AUTH_PASSWORD is not set");
+  expect(() => requireTestPassword({ TEST_AUTH_PASSWORD: "" })).toThrow();
+  expect(requireTestPassword({ TEST_AUTH_PASSWORD: "x" })).toBe("x");
 });
 
 test("updateName rejects unauthenticated callers", async () => {

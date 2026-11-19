@@ -12,8 +12,59 @@
 
 export const TEST_SCOUT_ID_PREFIX = "99";
 
-/** Fallback when TEST_AUTH_PASSWORD is unset (local dev, staging default). */
-export const DEFAULT_TEST_PASSWORD = "paxtools-test-only";
+/**
+ * The production Convex deployment (docs/deploy.md "Environments"). Test
+ * personas share one known password, so they must never exist there.
+ */
+export const PROD_CONVEX_DEPLOYMENT = "flexible-tiger-306";
+
+type Env = Record<string, string | undefined>;
+
+/** Does `url` (a `*.convex.cloud` / `*.convex.site` URL) point at prod? */
+export function isProdConvexUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    return new URL(url).hostname.split(".")[0] === PROD_CONVEX_DEPLOYMENT;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Gate for every test-only Convex function (seed/wipe/reset). Refuses on the
+ * production deployment no matter what TEST_AUTH says — a stray TEST_AUTH=1
+ * on prod must fail loudly, not quietly create known-password accounts.
+ * Pass `process.env`; Convex exposes CONVEX_CLOUD_URL / CONVEX_SITE_URL.
+ */
+export function assertTestAuthAllowed(env: Env): void {
+  if (isProdConvexUrl(env.CONVEX_CLOUD_URL) || isProdConvexUrl(env.CONVEX_SITE_URL)) {
+    throw new Error(
+      `REFUSING: test auth / test personas are never allowed on the production ` +
+        `Convex deployment (${PROD_CONVEX_DEPLOYMENT}). Unset TEST_AUTH and ` +
+        `TEST_AUTH_PASSWORD there immediately.`,
+    );
+  }
+  if (env.TEST_AUTH !== "1") {
+    throw new Error("convex/testing is disabled (TEST_AUTH != 1)");
+  }
+}
+
+/**
+ * The shared test-persona password. No fallback: it must be set explicitly on
+ * the deployment being seeded (Convex env) and in the shell/CI running e2e,
+ * and both must match.
+ */
+export function requireTestPassword(env: Env): string {
+  const password = env.TEST_AUTH_PASSWORD;
+  if (!password) {
+    throw new Error(
+      "TEST_AUTH_PASSWORD is not set. Set it on the target Convex deployment " +
+        "(`bunx convex env set TEST_AUTH_PASSWORD ...`) and in the environment " +
+        "running e2e — see docs/agents/running-locally.md.",
+    );
+  }
+  return password;
+}
 
 export const CANONICAL_SCOUT_IDS = {
   admin: "9900001",
