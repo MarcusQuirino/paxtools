@@ -1,21 +1,26 @@
 #!/usr/bin/env bun
 /**
  * I/O half of the independent review gate. Runs in .github/workflows/review.yml
- * from the TRUSTED (base-branch) checkout; never executes anything from the PR.
+ * from the TRUSTED checkout (master); never executes anything from the PR.
  *
+ *   bun scripts/review-gate.ts start      # resolve the PR, open the check run
  *   bun scripts/review-gate.ts context    # gather PR context into $WORKDIR/context
  *   bun scripts/review-gate.ts schema     # print the verdict JSON schema
  *   bun scripts/review-gate.ts finalize <claude-output.json>
+ *   bun scripts/review-gate.ts abort      # job died: fail the check if still open
  *
- * Env: REPO, PR_NUMBER, HEAD_SHA, BASE_SHA, WORKDIR (contains pr/ = PR head
- * checkout), RUN_URL, GH_TOKEN. Flow: docs/agents/review-gate.md.
+ * Env: REPO, HEAD_SHA, WORKDIR (contains pr/ = PR head checkout), RUN_URL,
+ * GH_TOKEN; `start` exports PR_NUMBER, BASE_SHA, CHECK_RUN_ID to $GITHUB_ENV.
+ * Flow: docs/agents/review-gate.md.
  */
 
 import { spawnSync } from "node:child_process";
 import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
+  choosePr,
   COMMENT_MARKER,
+  REVIEW_CHECK,
   type CheckRun,
   decide,
   leaksSecret,
@@ -48,6 +53,61 @@ function run(cmd: string, args: string[], input?: string): string {
 }
 
 const gh = (args: string[], input?: string) => run("gh", args, input);
+
+function exportEnv(vars: Record<string, string>) {
+  for (const [k, v] of Object.entries(vars)) {
+    process.env[k] = v;
+    if (process.env.GITHUB_ENV) appendFileSync(process.env.GITHUB_ENV, `${k}=${v}\n`);
+  }
+}
+
+type Conclusion = "success" | "failure";
+
+/** The required check: a check run on the PR head, created by GitHub Actions. */
+function completeCheck(conclusion: Conclusion, title: string, summary: string) {
+  const repo = env("REPO");
+  const payload = JSON.stringify({
+    status: "completed",
+    conclusion,
+    output: { title, summary: summary.slice(0, 65_000) },
+  });
+  gh(["api", "-X", "PATCH", `repos/${repo}/check-runs/${env("CHECK_RUN_ID")}`, "--input", "-"], payload);
+}
+
+/**
+ * Resolve the PR for HEAD_SHA, open the `Independent review` check run on it
+ * (in progress), and refuse forks/drafts by failing it. Exit 1 = stop the job.
+ */
+function start() {
+  const repo = env("REPO");
+  const head = env("HEAD_SHA");
+  const check = JSON.parse(
+    gh([
+      "api", "-X", "POST", `repos/${repo}/check-runs`, "--input", "-",
+    ], JSON.stringify({ name: REVIEW_CHECK, head_sha: head, status: "in_progress", details_url: env("RUN_URL") })),
+  ) as { id: number };
+  exportEnv({ CHECK_RUN_ID: String(check.id) });
+
+  const prs = JSON.parse(gh(["api", `repos/${repo}/commits/${head}/pulls`])) as Parameters<typeof choosePr>[0];
+  const pick = choosePr(prs, repo, head);
+  if (!pick.ok) {
+    completeCheck("failure", "Not reviewed", pick.reason);
+    console.error(`::error::${pick.reason}`);
+    process.exit(1);
+  }
+  exportEnv({ PR_NUMBER: String(pick.pr.number), BASE_SHA: pick.pr.base.sha });
+  console.log(`Reviewing PR #${pick.pr.number} at ${head} (check run ${check.id})`);
+}
+
+function abort() {
+  const repo = env("REPO");
+  const id = process.env.CHECK_RUN_ID;
+  if (!id) return;
+  const status = gh(["api", `repos/${repo}/check-runs/${id}`, "--jq", ".status"]).trim();
+  if (status !== "completed") {
+    completeCheck("failure", "Review job failed", `The review job ended without a verdict. [Run](${env("RUN_URL")}). Re-run it once fixed; it fails closed.`);
+  }
+}
 
 async function context() {
   const repo = env("REPO");
@@ -180,26 +240,35 @@ function finalize(outputPath: string) {
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, body);
 
   if (!parsed.ok) {
+    completeCheck("failure", "No verdict", body);
     console.error(`::error::${parsed.error}`);
     process.exit(1);
   }
   const outcome = decide(parsed.verdict);
+  const n = parsed.verdict.blocking.length;
+  completeCheck(
+    outcome === "pass" ? "success" : "failure",
+    outcome === "pass" ? "Pass" : `${n || "Unexplained"} blocking finding${n === 1 ? "" : "s"}`,
+    body,
+  );
   console.log(
     `Verdict: ${outcome} (${parsed.verdict.blocking.length} blocking, ${parsed.verdict.nits.length} nits) in ${Math.round(parsed.meta.durationMs / 1000)}s / ${parsed.meta.turns} turns`,
   );
   if (outcome === "block") {
     for (const b of parsed.verdict.blocking) {
-      console.error(`::error file=${b.file},line=${b.line}::[${b.category}] ${b.problem} — Fix: ${b.fix}`);
+      console.error(`::error::${b.file}:${b.line} [${b.category}] ${b.problem} — Fix: ${b.fix}`);
     }
     process.exit(1);
   }
 }
 
 const [cmd, arg] = process.argv.slice(2);
-if (cmd === "context") await context();
+if (cmd === "start") start();
+else if (cmd === "abort") abort();
+else if (cmd === "context") await context();
 else if (cmd === "schema") console.log(JSON.stringify(VERDICT_SCHEMA));
 else if (cmd === "finalize" && arg) finalize(arg);
 else {
-  console.error("usage: review-gate.ts context | schema | finalize <claude-output.json>");
+  console.error("usage: review-gate.ts start | context | schema | finalize <claude-output.json> | abort");
   process.exit(2);
 }

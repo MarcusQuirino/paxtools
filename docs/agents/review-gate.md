@@ -6,17 +6,20 @@ author never approves its own work.
 
 | | |
 |---|---|
-| Required check | `Independent review` (ruleset 27609274, GitHub Actions app 15368) |
-| Workflow | `.github/workflows/review.yml` (`pull_request_target`) |
+| Required check | `Independent review` (ruleset 27609274, GitHub Actions app 15368) — a check run the gate posts on the PR head |
+| Workflow | `.github/workflows/review.yml` (`workflow_run` after `Guardrails` completes; always runs from master) |
 | Reviewer | Claude Code CLI, `opus` / effort `high`, Marcus's subscription (`CLAUDE_CODE_OAUTH_TOKEN` secret) |
 | Rubric (the prompt) | [`docs/agents/review-rubric.md`](./review-rubric.md) — versioned, tune it by PR |
 | Glue | `scripts/review-gate.ts` + `scripts/lib/review-gate.ts` (tested) |
-| Typical time | ~1 min waiting for the fast checks + the review itself (see PR for measured runs); runs in parallel with `E2E (Playwright)` |
+| Typical time | starts when Guardrails finishes (~1–2 min after a push), review ~1.5–4 min; runs in parallel with `E2E (Playwright)` (5–10 min), so it rarely adds wall-clock |
 
 ## Flow
 
-1. PR opened / pushed / reopened / marked ready → the workflow runs **from
-   master** (not from the PR).
+1. PR opened / pushed / reopened / marked ready → `Guardrails` runs → when
+   it completes, `review.yml` runs **from master** (GitHub only runs
+   `workflow_run` workflows from the default branch), resolves the PR whose
+   head is that commit and opens an in-progress `Independent review` check
+   run on it.
 2. It gathers context into `review/context/`: PR title + body + linked
    issues (`pr.md`), the diff vs the merge base, the changed-file list, the
    conventions **from master** (`CLAUDE.md`, `AGENTS.md`, `docs/agents/`,
@@ -27,14 +30,19 @@ author never approves its own work.
    guardrail tampering, security/data loss, scope creep.
 4. It returns a schema-checked verdict: `pass`, or `block` with blocking
    findings (`file:line`, problem, concrete fix) plus non-blocking nits.
-5. The gate posts/updates one sticky PR comment and the job **fails if
-   anything blocks** — or if the reviewer produced no valid verdict (fails
-   closed: expired token, usage limit, malformed output).
+5. The gate completes the check run — `success` only on a clean pass,
+   `failure` on any blocking finding **or no valid verdict** (fails closed:
+   expired token, usage limit, malformed output, crash, cancel) — and
+   posts/updates one sticky PR comment with the findings.
 6. A new push = new head SHA = no review on it yet → master is blocked
    again until the new review passes. A stale in-flight review is cancelled.
 
-Drafts and fork PRs fail fast without spending a review (no skipping: a
-skipped job would count as passing). Mark the PR ready → it reviews.
+Drafts and fork PRs get a failed check without spending a review (never a
+skip/neutral: those count as passing). Mark the PR ready → it reviews.
+
+Why not `pull_request_target`: it does the same job but GitHub blocks it by
+default on public repos from 2026-12-02. `workflow_run` has the same
+"runs from master, has secrets" property without needing a repo exception.
 
 ## When the review blocks your PR (author agents read this)
 
@@ -63,15 +71,15 @@ Reproduce a review locally (same prompt, your subscription): see the
   settings from any directory), `--no-session-persistence`, and the only input
   is what the workflow hands it. The author's thread, memory and reasoning
   never reach it.
-- **The PR can't edit its reviewer.** `pull_request_target` runs the
-  workflow, `scripts/review-gate.ts` and the rubric from **master**; a PR that
+- **The PR can't edit its reviewer.** `workflow_run` runs the workflow,
+  `scripts/review-gate.ts` and the rubric from **master**; a PR that
   changes them only affects reviews after it merges (and the rubric tells the
   reviewer to scrutinise such PRs). Conventions are read from master too, so
   a PR can't loosen `CLAUDE.md` for its own review.
 - **A plain token can't post the check.** The required check is pinned to
-  the GitHub Actions app (integration 15368). A commit status or check run
-  posted with a PAT / `gh` token doesn't satisfy it (PATs can't create check
-  runs at all).
+  the GitHub Actions app (integration 15368). Check runs can only be created
+  by GitHub Apps (a PAT / `gh` token gets 403), and a commit status posted
+  with a PAT doesn't satisfy an app-pinned check.
 - **The reviewer can't be turned against the repo.** It runs with only
   Read/Grep/Glob, no GitHub token in its environment (`env -i`), no network
   tools, and nothing from the PR is executed. PR text is declared untrusted;
@@ -81,18 +89,19 @@ Reproduce a review locally (same prompt, your subscription): see the
 ## Remaining gaps (honest list)
 
 1. **Another Actions job can impersonate the check.** The ruleset can only
-   pin the *app* (GitHub Actions), not the workflow. A determined author with
-   push access can get a green `Independent review` from GitHub Actions by
-   (a) adding a `pull_request` workflow with a job of that name, or (b)
-   opening a PR against a non-master branch whose `review.yml` is fake
-   (`pull_request_target` uses the *base* branch's workflow), then opening
-   the PR to master — check runs belong to the commit. The rubric blocks (a)
-   when the real reviewer sees it, but a duplicate passing run may still
-   satisfy the ruleset. **Fix (needs Marcus):** a dedicated GitHub App whose
-   key lives in a `review-gate` environment restricted to `master`; the gate
-   posts the check as that App and the ruleset pins its integration ID.
-   Neither a PR-defined workflow nor a non-master base can read that
-   environment, so only master's `review.yml` can produce the check.
+   pin the *app* (GitHub Actions), not the workflow. A PR can add a
+   `pull_request` workflow (which runs the PR's own YAML) with a job named
+   `Independent review`, or one that posts a check run of that name with
+   `GITHUB_TOKEN` — both come from GitHub Actions on the PR head. The real
+   reviewer blocks such a PR (rubric §5), but a later passing duplicate may
+   still satisfy the ruleset. This is exactly how the step-4 PR bootstrapped
+   its own review (branch `review-gate/bootstrap`, deleted after merge).
+   **Fix (needs Marcus):** a dedicated GitHub App whose private key lives in
+   a `review-gate` environment restricted to `master`; the gate posts the
+   check as that App and the ruleset pins the App's integration ID.
+   `workflow_run` jobs are evaluated against master and can read it;
+   `pull_request` jobs are evaluated against the PR merge ref and can't, so
+   only master's `review.yml` can produce the check.
 2. **Re-run until green.** `gh run rerun` re-reviews the same commit; LLM
    output varies. Policy forbids it; nothing enforces it.
 3. **Agents hold Marcus's admin token.** Anything admin can do (edit the

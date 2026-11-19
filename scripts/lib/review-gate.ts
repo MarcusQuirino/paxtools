@@ -3,7 +3,10 @@
  * docs/agents/review-gate.md). The CLI in scripts/review-gate.ts does the I/O.
  */
 
-/** Job name of the gate = the required status check name in ruleset 27609274. */
+/**
+ * Name of the check run the gate posts on the PR head = the required status
+ * check in ruleset 27609274 (pinned to the GitHub Actions app).
+ */
 export const REVIEW_CHECK = "Independent review";
 
 /** Marker that identifies the gate's sticky PR comment. */
@@ -264,4 +267,31 @@ export function renderCi(runs: CheckRun[]): string {
     ...(rows.length ? rows : ["| (none reported yet) | |"]),
     "",
   ].join("\n");
+}
+
+export type PullSummary = {
+  number: number;
+  state: string;
+  draft?: boolean;
+  head: { sha: string; repo: { full_name: string } | null };
+  base: { ref: string; sha: string };
+};
+
+/**
+ * Pick the open PR whose head is `sha` (prefer one targeting master).
+ * Forks and drafts are refused — the gate fails rather than skips, because a
+ * skipped/neutral check would count as passing.
+ */
+export function choosePr(
+  prs: PullSummary[],
+  repo: string,
+  sha: string,
+): { ok: true; pr: PullSummary } | { ok: false; reason: string } {
+  const open = prs.filter((p) => p.state === "open" && p.head.sha === sha);
+  const pr = open.find((p) => p.base.ref === "master") ?? open[0];
+  if (!pr) return { ok: false, reason: `No open PR has ${sha.slice(0, 7)} as its head (pushed again since?).` };
+  if (pr.head.repo?.full_name !== repo)
+    return { ok: false, reason: "Fork PRs aren't auto-reviewed (secrets + subscription). Marcus: push the branch to this repo and open the PR from there." };
+  if (pr.draft) return { ok: false, reason: "Draft PR — the review runs when it's marked ready for review." };
+  return { ok: true, pr };
 }

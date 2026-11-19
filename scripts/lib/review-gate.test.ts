@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+  choosePr,
+  type PullSummary,
   COMMENT_MARKER,
   decide,
   leaksSecret,
@@ -136,5 +138,29 @@ describe("CI snapshot", () => {
     expect(md).toContain("| Changeset | failure |");
     expect(md).not.toContain("| Changeset | success |");
     expect(md).not.toContain("Independent review");
+  });
+});
+
+describe("choosePr", () => {
+  const repo = "o/r";
+  const pr = (n: number, over: Partial<PullSummary> = {}): PullSummary => ({
+    number: n,
+    state: "open",
+    draft: false,
+    head: { sha: "s1", repo: { full_name: repo } },
+    base: { ref: "master", sha: "b" },
+    ...over,
+  });
+
+  test("prefers the open PR to master for this exact head", () => {
+    const r = choosePr([pr(1, { base: { ref: "other", sha: "x" } }), pr(2), pr(3, { state: "closed" })], repo, "s1");
+    expect(r.ok && r.pr.number).toBe(2);
+  });
+
+  test("refuses stale heads, forks and drafts (fail, never skip)", () => {
+    expect(choosePr([pr(1, { head: { sha: "old", repo: { full_name: repo } } })], repo, "s1").ok).toBe(false);
+    expect(choosePr([pr(1, { head: { sha: "s1", repo: { full_name: "fork/r" } } })], repo, "s1").ok).toBe(false);
+    expect(choosePr([pr(1, { head: { sha: "s1", repo: null } })], repo, "s1").ok).toBe(false);
+    expect(choosePr([pr(1, { draft: true })], repo, "s1").ok).toBe(false);
   });
 });
