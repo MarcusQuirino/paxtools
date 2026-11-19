@@ -31,6 +31,13 @@ import {
   renderError,
   VERDICT_SCHEMA,
 } from "./lib/review-gate";
+import {
+  EVIDENCE_BRANCH,
+  evidenceDir,
+  parseLsTree,
+  renderEvidenceIndex,
+  selectEvidence,
+} from "./lib/verification-evidence";
 
 const TRUSTED = join(import.meta.dir, "..");
 
@@ -179,6 +186,8 @@ async function context() {
   }
   cpSync(join(TRUSTED, "docs/agents"), join(ctx, "conventions/docs/agents"), { recursive: true });
 
+  fetchEvidence(prDir, pr, join(ctx, "verification"));
+
   // CI: wait (bounded) for the fast checks, then snapshot everything.
   const deadline = Date.now() + 10 * 60_000;
   let runs: CheckRun[] = [];
@@ -196,6 +205,35 @@ async function context() {
   }
   writeFileSync(join(ctx, "ci.md"), renderCi(runs));
   console.log(`Context written to ${ctx}`);
+}
+
+/**
+ * The author's verification evidence (docs/agents/verify.md): branch
+ * `verification-evidence`, dir `pr-<n>/` → context/verification/ (log, text,
+ * images within LIMITS), plus INDEX.md saying what was or wasn't found.
+ * git only (anonymous fetch of a public repo, nothing executed); a missing
+ * branch/dir is not an error — the reviewer decides whether it was needed.
+ */
+function fetchEvidence(prDir: string, pr: string, out: string) {
+  mkdirSync(out, { recursive: true });
+  const ref = "refs/review/evidence";
+  const fetched = spawnSync("git", ["-C", prDir, "fetch", "--depth=1", "--no-tags", "origin", `+refs/heads/${EVIDENCE_BRANCH}:${ref}`], { encoding: "utf8" });
+  if (fetched.status !== 0) {
+    writeFileSync(join(out, "INDEX.md"), renderEvidenceIndex({ pr, commit: null, selection: null, note: `branch ${EVIDENCE_BRANCH} not found` }));
+    return;
+  }
+  const commit = run("git", ["-C", prDir, "rev-parse", ref]).trim();
+  const entries = parseLsTree(run("git", ["-C", prDir, "ls-tree", "-r", "-l", ref, "--", `${evidenceDir(pr)}/`]));
+  const selection = selectEvidence(entries);
+  for (const e of selection.take) {
+    const blob = spawnSync("git", ["-C", prDir, "cat-file", "blob", `${ref}:${e.path}`], { maxBuffer: 16 * 1024 * 1024 });
+    if (blob.status !== 0) continue;
+    const dst = join(out, e.path.slice(evidenceDir(pr).length + 1));
+    mkdirSync(dirname(dst), { recursive: true });
+    writeFileSync(dst, blob.stdout);
+  }
+  writeFileSync(join(out, "INDEX.md"), renderEvidenceIndex({ pr, commit, selection }));
+  console.log(`Verification evidence: ${selection.take.length} files from ${EVIDENCE_BRANCH}@${commit.slice(0, 7)}`);
 }
 
 function upsertComment(body: string) {

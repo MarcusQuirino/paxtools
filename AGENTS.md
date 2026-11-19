@@ -17,6 +17,10 @@ The rules agents most often break (all detailed in `CLAUDE.md`):
   intent. On blocking findings: **fix and push** — never argue the check off,
   re-run it, or edit the PR text/workflow/rubric to get green. If a finding
   is wrong, say why in the PR and ask Marcus.
+- **Prove user-facing changes on the running app** before calling them
+  done: `docs/agents/verify.md` (skill `verify`) — feature map → PR preview
+  as test personas → screenshots + log published to the PR's
+  `## Verification` section. The review blocks without it.
 - Before committing: `bun test` and `bun run lint` pass, and a changeset is
   added in `.changeset/` (`bunx changeset --empty` if nothing user-facing).
 - Convex work: read `convex/_generated/ai/guidelines.md` first. Migrations are

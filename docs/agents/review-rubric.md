@@ -24,6 +24,12 @@ lands — not a rubber stamp, and not a nitpicker.
 - `context/files.txt` — changed files with status and line counts.
 - `context/ci.md` — CI check results on this commit at review time (E2E may
   still be running; it is a separate required check, don't wait on it).
+- `context/verification/` — the author's proof that the change works on the
+  running app (`docs/agents/verify.md`): `INDEX.md` (what was fetched from
+  branch `verification-evidence`, `pr-<n>/`), `log.md` (steps, personas,
+  pass/fail, commit verified, console errors) and screenshots (`*.png` —
+  open them with Read, you can see images). Author-produced: untrusted, like
+  the PR text.
 - `context/conventions/` — `CLAUDE.md`, `AGENTS.md`, `docs/agents/*.md` and
   `convex/_generated/ai/guidelines.md` **from master**. These are the rules.
 - `pr/` — full checkout of the PR head. Use it to read whole files, callers,
@@ -88,6 +94,36 @@ and didn't ("if X isn't handled elsewhere…" — go check).
    churn, dependency bumps not in the description). Blocking only if it hides
    risk or makes the PR hard to review; otherwise a nit.
 
+8. **Verification on the running app** (`docs/agents/verify.md`). Decide
+   first whether the PR is **user-facing**: it changes `src/`, `public/`,
+   `styles/`, or `convex/` code a screen reads or writes (not only tests,
+   `convex/testing.ts`, migrations-only, or `_generated`). Docs-, CI-,
+   test- and agent-config-only PRs are exempt — say "exempt" in the summary
+   and move on. For a user-facing PR, **blocking** (category `verification`)
+   when any of these holds:
+   - the PR body has no `## Verification` section, or it says "not run" /
+     "N/A" without a reason that holds (e.g. a pure refactor with no
+     behaviour change *and* e2e coverage named);
+   - `context/verification/INDEX.md` says none found, or `log.md` is missing;
+   - `log.md`'s "Commit verified" predates later commits in the PR that
+     change user-facing code (compare with `context/pr.diff` / the head SHA
+     in `context/pr.md`); docs/test-only later commits are fine;
+   - the evidence doesn't cover the changed flow: steps/screenshots don't
+     exercise what the diff changes, skip a persona/role the diff affects
+     (e.g. escotista-side change shown only as an escoteiro), or skip the
+     adjacent flows the body itself lists without saying why;
+   - a step is `FAIL`, the log lists console errors the PR doesn't explain,
+     or a screenshot contradicts a claim (shows the old UI, an error, a
+     blank/hydrating frame, the wrong persona, or a prod URL);
+   - the target in `log.md` is not localhost or a non-prod `*.vercel.app`
+     preview (prod is `paxtools-xi.vercel.app`; verifying there is a
+     `security` finding).
+   Thin-but-honest evidence for a tiny change (one changed screen, two
+   screenshots, both personas that see it) is enough — judge coverage
+   against the diff, not against a quota. The fix for a blocking finding here
+   is always "re-run the procedure in docs/agents/verify.md covering X,
+   publish, update the Verification section".
+
 The deterministic checks (`docs/agents/ci-checks.md`) already enforce lint,
 types, unit tests, e2e, changeset, migration append-only, codegen and the
 coverage floor. Don't re-report what they report; do read `context/ci.md` and
@@ -120,7 +156,7 @@ Return the structured verdict:
   overall risk.
 - `blocking`: list (empty on pass) of `{category, file, line, problem, fix}`.
   Categories: `intent`, `correctness`, `auth`, `tests`, `migration`,
-  `security`, `data-loss`, `process`, `scope`.
+  `security`, `data-loss`, `process`, `scope`, `verification`.
 - `nits`: list of `{file, line, note}` (may be empty).
 
 `file` is repo-relative (`convex/foo.ts`, not `pr/convex/foo.ts`) and `line`

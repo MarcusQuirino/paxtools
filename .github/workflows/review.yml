@@ -98,7 +98,7 @@ jobs:
           env -i PATH="$PATH" HOME="$RUNNER_TEMP/claude-home" \
             CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
             timeout 25m claude -p \
-              "Review PR #$PR_NUMBER (head $HEAD_SHA) following your instructions. Start with context/pr.md, then context/files.txt and context/pr.diff." \
+              "Review PR #$PR_NUMBER (head $HEAD_SHA) following your instructions. Start with context/pr.md, then context/files.txt, context/pr.diff and context/verification/INDEX.md." \
               --safe-mode --strict-mcp-config \
               --tools "Read,Grep,Glob" --allowedTools "Read(./**)" "Grep(./**)" "Glob(./**)" \
               --permission-mode dontAsk \

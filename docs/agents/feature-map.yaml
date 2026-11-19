@@ -1,0 +1,449 @@
+# Paxtools feature map — what a change can break, and how to check it.
+#
+# Read by agents (docs/agents/verify.md) and by `bun scripts/verify.ts
+# affected`, which maps a diff to features. `scripts/lib/feature-map.test.ts`
+# (part of `bun test` → the required `Lint, Test, Build` check) FAILS when a
+# route file in src/routes/ or a module in convex/*.ts is in no feature and
+# not in `infra`, or when a listed path/spec/persona doesn't exist.
+#
+# Fields per feature:
+#   id        stable kebab-case id (used in PR Verification sections)
+#   name      human name (pt-BR UI terms as the app shows them)
+#   routes    URL paths → route files (src/routes/…)
+#   convex    convex/<module>.ts files this feature calls (top-level modules)
+#   paths     other source globs that belong to it (components, hooks, lib)
+#   personas  slugs from tests/utils/personas.ts (sign in with their registro;
+#             password = the deployment's TEST_AUTH_PASSWORD)
+#   specs     e2e specs covering it (tests/e2e/…); [] = no e2e coverage
+#   adjacent  feature ids that share state/UI with it — drive one of these too
+#   check     manual recipe on the running app: steps → what proves it works
+#
+# Personas marked "owned" in tests/utils/personas.ts belong to a mutating
+# spec; mutate them on a PR preview only (CI reseeds it), never on staging.
+
+infra:
+  # Files that are not a user-facing feature on their own. Changes here hit
+  # everything → `affected` returns the `core-smoke` feature set.
+  shared:
+    - src/routes/__root.tsx # app shell, head, toasts, tour provider mount
+    - convex/schema.ts # every table
+    - convex/users.ts # viewer query used by every guard
+    - convex/auth.ts # Convex Auth providers (Google + managed registro)
+    - src/hooks/use-auth-gate.ts
+    - src/router.tsx
+    - src/ssr.tsx
+    - src/entry-client.tsx
+    - src/components/ui/**
+    - src/lib/**
+    - src/data/**
+    - convex/lib/authHelpers.ts
+    - convex/lib/ramoVisibility.ts
+    - convex/lib/progression.ts
+    - convex/lib/especialidades.ts
+    - convex/lib/sections.ts
+    - styles/**
+  # Not user-facing; no browser verification needed (unit tests cover them).
+  none:
+    - convex/auth.config.ts # auth provider wiring
+    - convex/convex.config.ts # component registration
+    - convex/migrations.ts # data migrations (verify via check:migrations + unit tests)
+    - convex/testing.ts # test-persona seed/wipe, never on prod
+    - src/routeTree.gen.ts # generated
+  core-smoke: [auth-signin, escoteiro-progression, escotista-painel, approvals-queue]
+
+features:
+  - id: auth-signin
+    name: Entrar (registro + senha) / guards / Crie sua senha
+    routes:
+      /signin: src/routes/signin.tsx
+      /trocar-senha: src/routes/trocar-senha.tsx
+    convex: [convex/auth.ts, convex/http.ts, convex/users.ts, convex/managedAccounts.ts]
+    paths:
+      - src/components/auth/**
+      - src/hooks/use-auth-gate.ts
+      - src/components/footer.tsx
+      - convex/lib/testAccounts.ts
+      - convex/lib/legacyTestRegistro.ts
+      - convex/lib/managedAccounts.ts
+    personas: [escoteiro-with-progression, admin, escoteiro-pending, banned-user, escoteiro-onboarding-incomplete]
+    specs:
+      - tests/e2e/readonly/smoke.spec.ts
+      - tests/e2e/readonly/r1-auth-guards.spec.ts
+      - tests/e2e/readonly/r1-pending-routing.spec.ts
+    adjacent: [onboarding, escoteiro-progression, escotista-painel]
+    check: |
+      Open / signed out → lands on /signin ("BEM-VINDO DE VOLTA"). Wrong
+      password → "Registro ou senha incorretos". Sign in 9900006 → escoteiro
+      home; sign out; sign in 9900001 → /escotista painel; 9900004 (pending)
+      → waiting screen; 9900008 → /onboarding. /trocar-senha only shows for a
+      member with a temporary password (issue one via admin "Nova senha", see
+      managed-accounts) — no e2e covers it.
+
+  - id: onboarding
+    name: Onboarding (papel, ramo, criar/entrar no grupo)
+    routes:
+      /onboarding: src/routes/onboarding.tsx
+    convex: [convex/onboarding.ts, convex/groups.ts]
+    paths:
+      - src/components/onboarding/**
+    personas: [escoteiro-onboarding-incomplete, onboarding-m13]
+    specs:
+      - tests/e2e/mutating/m13-onboarding.spec.ts
+      - tests/e2e/readonly/r1-auth-guards.spec.ts
+    adjacent: [auth-signin, settings-group]
+    check: |
+      Sign in 9900008 → redirected to /onboarding; step through papel →
+      ramo → join-group screen and read each step (don't submit on a shared
+      backend). Full completion: m13 owns onboarding-m13 (9900009); on a PR
+      preview complete it as escoteiro joining the test grupo → lands on the
+      pending/waiting screen.
+
+  - id: escoteiro-progression
+    name: Progressão (home do escoteiro) — marcar ações, ação personalizada, IRR
+    routes:
+      /: src/routes/index.tsx
+    convex: [convex/progression.ts, convex/plan.ts]
+    paths:
+      - src/components/progression/**
+      - src/hooks/use-progression.ts
+      - convex/lib/badges.ts
+      - convex/lib/coverage.ts
+    personas: [escoteiro-with-progression, escoteiro-approved, escoteiro-lobinho, sim-troop-senior-9]
+    specs:
+      - tests/e2e/readonly/r2-escoteiro-dashboard.spec.ts
+      - tests/e2e/readonly/r2-approved-locked.spec.ts
+      - tests/e2e/readonly/r2-escoteiro-tab-bar.spec.ts
+      - tests/e2e/mutating/m01-mark-unmark.spec.ts
+      - tests/e2e/mutating-mobile/m01-mark-unmark.mobile.spec.ts
+      - tests/e2e/mutating/m05-acao-personalizada.spec.ts
+      - tests/e2e/mutating/m09-irr-completion.spec.ts
+    adjacent: [plan, especialidades, approvals-queue, revisao-rapida]
+    check: |
+      Sign in 9900006 → stage banner + overall progress render; expand a bloco
+      in an eixo, approved ações show locked (can't uncheck). Mark an unchecked
+      ação → it shows pending; unmark it. Bottom tab bar: Progressão / Plano /
+      Especialidades / Perfil. Repeat the read on a lobinho (9900007) — labels
+      differ per ramo. Desktop + mobile (390px) viewport.
+
+  - id: plan
+    name: Plano (estrelas, Por Área / lista, reordenar)
+    routes:
+      /plan: src/routes/plan.tsx
+    convex: [convex/plan.ts, convex/progression.ts, convex/specialties.ts]
+    paths:
+      - src/hooks/use-plan.ts
+      - src/hooks/use-resolved-plan.ts
+      - src/components/progression/plan-star.tsx
+      - convex/lib/planDemand.ts
+    personas: [escoteiro-with-progression, escoteiro-approved, sim-troop-senior-9]
+    specs:
+      - tests/e2e/readonly/r3-plan.spec.ts
+      - tests/e2e/readonly/r3-plan-por-area.spec.ts
+      - tests/e2e/mutating/m06-plan-lifecycle.spec.ts
+      - tests/e2e/mutating-mobile/m06-plan-lifecycle.mobile.spec.ts
+      - tests/e2e/mutating/m22-plan-especialidade.spec.ts
+    adjacent: [escoteiro-progression, especialidades, revisao-rapida, stats]
+    check: |
+      9900005 (empty plan) → /plan shows the empty state. 9900006 → starred
+      item renders in both views (toggle Por Área / lista). Star an ação on
+      the home view → appears on /plan; unstar → gone. Reorder by drag on a
+      PR preview only (owned personas in m06).
+
+  - id: especialidades
+    name: Especialidades e insígnias do escoteiro
+    routes:
+      /especialidades: src/routes/especialidades.tsx
+    convex: [convex/specialties.ts, convex/progression.ts, convex/badges.ts, convex/plan.ts]
+    paths:
+      - src/components/progression/specialty-section.tsx
+      - src/components/progression/insignias-view.tsx
+      - src/components/progression/badge-checklist.tsx
+      - src/components/progression/catalog-switch.tsx
+      - src/components/escotista/especialidades/**
+      - convex/lib/legacySpecialty.ts
+      - convex/lib/especialidades.ts
+    personas: [sim-troop-lobinho-11, sim-troop-senior-3, escoteiro-with-progression]
+    specs:
+      - tests/e2e/readonly/r4-especialidades.spec.ts
+      - tests/e2e/readonly/r4-especialidades-filters.spec.ts
+      - tests/e2e/mutating/m07-younger-especialidade.spec.ts
+      - tests/e2e/mutating/m08-older-etapa-report.spec.ts
+      - tests/e2e/mutating/m22-plan-especialidade.spec.ts
+    adjacent: [approvals-queue, plan, escotista-especialidades, ramo-advancement]
+    check: |
+      Younger (lobinho) → /especialidades lists catalog; search `?q=` and the
+      "minhas" chip filter; open one, check an item → pending. Older (sênior)
+      → three-etapa project (conhecer → fazer → compartilhar) states render.
+      Switch the catalog to Insígnias and read one.
+
+  - id: revisao-rapida
+    name: Revisão rápida (cartões de revisão do plano)
+    routes:
+      /revisao-rapida: src/routes/revisao-rapida.tsx
+    convex: [convex/plan.ts, convex/progression.ts, convex/groups.ts]
+    paths:
+      - src/components/revisao-rapida/**
+      - src/components/escotista/revisao-rapida-link.tsx
+    personas: [escoteiro-with-progression]
+    specs:
+      - tests/e2e/mutating-mobile/m24-revisao-rapida.mobile.spec.ts
+    adjacent: [escoteiro-progression, plan, approvals-queue]
+    check: |
+      Mobile viewport. 9900006 → home "Revisão rápida" card → swipe screen
+      shows cards; use the four buttons ("Já fiz (→)", "Não fiz (←)",
+      "Pro plano (↑)", "Desfazer (↓)") on a PR preview; escotista entry: open
+      an escoteiro from the painel → "Revisão rápida" link.
+
+  - id: escotista-painel
+    name: Painel do escotista (lista de escoteiros, busca, favoritos, seção observada)
+    routes:
+      /escotista: src/routes/escotista/index.tsx
+      /escotista (layout): src/routes/escotista/route.tsx
+    convex: [convex/approvals.ts, convex/groups.ts, convex/users.ts]
+    paths:
+      - src/components/escotista/pending-approval-screen.tsx
+      - convex/lib/statsCohort.ts
+    personas: [admin, escotista, sim-escotista-lobinho-1, sim-escotista-pioneiro-1, escotista-pending]
+    specs:
+      - tests/e2e/readonly/r5-escotista-painel.spec.ts
+      - tests/e2e/readonly/r5-ramo-visibility.spec.ts
+      - tests/e2e/readonly/r5-bottom-nav.spec.ts
+      - tests/e2e/readonly/r1-pending-routing.spec.ts
+      - tests/e2e/mutating/m15-pending-cancel.spec.ts
+    adjacent: [escoteiro-detail, approvals-queue, secoes]
+    check: |
+      9900001 (admin) → painel lists escoteiros of all ramos with unchecked
+      counts; search a name. 9900002 (escotista, escoteiro+sênior) → no
+      lobinho/pioneiro cards (ramo visibility). Bottom nav Painel / Pendentes
+      / Especialidades / Mais; "Mais" sheet shows Admin only for admin.
+      9900003 (pending escotista) → waiting screen.
+
+  - id: escoteiro-detail
+    name: Escotista vê/age como um escoteiro (impersonação, plano do escoteiro)
+    routes:
+      /escotista/escoteiro/$escoteiroId: src/routes/escotista/escoteiro.$escoteiroId.tsx
+    convex: [convex/plan.ts, convex/groups.ts, convex/progression.ts, convex/managedAccounts.ts]
+    paths:
+      - src/components/escotista/escoteiro-plano.tsx
+    personas: [admin, escotista]
+    specs:
+      - tests/e2e/mutating/m10-impersonation.spec.ts
+      - tests/e2e/readonly/r1-auth-guards.spec.ts
+    adjacent: [escotista-painel, escoteiro-progression, approvals-queue, managed-accounts]
+    check: |
+      Admin → painel → open an escoteiro card → their progression renders
+      with the escotista banner; marking an ação here is auto-approved (m10).
+      An invalid id in the URL → handled, no crash (r1-auth-guards).
+
+  - id: approvals-queue
+    name: Pendentes (aprovar / rejeitar / em lote; ações, especialidades, IRR)
+    routes:
+      /escotista/pending: src/routes/escotista/pending.tsx
+    convex: [convex/approvals.ts, convex/specialties.ts, convex/events.ts]
+    paths:
+      - convex/lib/review.ts
+    personas: [admin, escotista, sim-escotista-escoteiro-1, sim-escotista-lobinho-1]
+    specs:
+      - tests/e2e/readonly/r5-pendentes-queue.spec.ts
+      - tests/e2e/mutating/m02-approval-roundtrip.spec.ts
+      - tests/e2e/mutating-mobile/m02-approval-roundtrip.mobile.spec.ts
+      - tests/e2e/mutating/m03-reject-flow.spec.ts
+      - tests/e2e/mutating/m04-bulk-approve.spec.ts
+      - tests/e2e/mutating/m07-younger-especialidade.spec.ts
+      - tests/e2e/mutating/m08-older-etapa-report.spec.ts
+      - tests/e2e/mutating/m09-irr-completion.spec.ts
+    adjacent: [escoteiro-progression, especialidades, timeline, escotista-painel]
+    check: |
+      Two sessions: escoteiro marks an ação (home) → escotista of that ramo
+      sees a card on /escotista/pending → approve → escoteiro sees it locked;
+      reject path → escoteiro sees it unchecked. Bulk: select several →
+      "Aprovar". Read-only on staging; mutate on a PR preview.
+
+  - id: escotista-especialidades
+    name: Especialidades da tropa (resumo, roster, insígnias da tropa)
+    routes:
+      /escotista/especialidades: src/routes/escotista/especialidades.index.tsx
+      /escotista/especialidades/$specialtyId: src/routes/escotista/especialidades.$specialtyId.tsx
+    convex: [convex/specialties.ts, convex/badges.ts, convex/groups.ts]
+    paths:
+      - src/components/escotista/especialidades/**
+      - src/components/escotista/insignias-tropa.tsx
+    personas: [admin, escotista, sim-escotista-lobinho-1]
+    specs: []
+    adjacent: [especialidades, approvals-queue]
+    check: |
+      NO e2e coverage — drive it whenever specialties/badges change. Admin →
+      bottom nav "Especialidades" → summary lists especialidades with counts;
+      switch catalog to Insígnias; open one especialidade → roster of
+      escoteiros with level/etapa; approve/reject an item from the roster on
+      a PR preview.
+
+  - id: stats
+    name: Stats (cobertura, distribuição, planos da tropa, sugestões IA)
+    routes:
+      /escotista/stats: src/routes/escotista/stats.tsx
+    convex: [convex/stats.ts, convex/ai.ts, convex/aiHelpers.ts, convex/featureFlags.ts]
+    paths:
+      - src/components/escotista/stats/**
+      - src/components/escotista/ai-suggestions-card.tsx
+      - convex/lib/aiPrompt.ts
+      - convex/lib/statsCohort.ts
+      - convex/lib/planDemand.ts
+    personas: [admin, escotista, sim-escotista-lobinho-1]
+    specs:
+      - tests/e2e/readonly/r5-stats.spec.ts
+      - tests/e2e/mutating/m16-ai-smoke.spec.ts
+    adjacent: [plan, escotista-painel]
+    check: |
+      Admin → Mais → Stats: coverage bars, stage distribution, planos da
+      tropa, especialidades summary render with numbers; switch ramo.
+      Single-ramo escotista (lobinho-1) sees only their ramo. The AI card is
+      flag-gated and off on previews (expected).
+
+  - id: timeline
+    name: Histórico (timeline de eventos)
+    routes:
+      /escotista/timeline: src/routes/escotista/timeline.tsx
+    convex: [convex/events.ts]
+    paths:
+      - convex/lib/events.ts
+    personas: [admin, sim-escotista-lobinho-1]
+    specs:
+      - tests/e2e/readonly/r5-timeline.spec.ts
+      - tests/e2e/mutating/m11-membership.spec.ts
+      - tests/e2e/mutating/m12-admin-member-mgmt.spec.ts
+    adjacent: [approvals-queue, admin-members]
+    check: |
+      Admin → Mais → Histórico: events listed newest first, "carregar mais"
+      paginates. A lobinho escotista sees only lobinho events. After any
+      approval/admin action, the new event appears at the top.
+
+  - id: admin-members
+    name: Admin — membros (aprovar entrada, papel, admin, banir, ramo, seção)
+    routes:
+      /escotista/admin: src/routes/escotista/admin.tsx
+    convex: [convex/groups.ts, convex/managedAccounts.ts, convex/events.ts]
+    paths:
+      - src/components/escotista/managed-access.tsx
+      - src/components/onboarding/ramo-picker.tsx
+      - src/components/ui/confirm-dialog.tsx
+    personas: [admin, escotista]
+    specs:
+      - tests/e2e/readonly/r5-admin-lists.spec.ts
+      - tests/e2e/readonly/r5-admin-sees-pending.spec.ts
+      - tests/e2e/readonly/r1-non-admin-blocked.spec.ts
+      - tests/e2e/mutating/m11-membership.spec.ts
+      - tests/e2e/mutating/m12-admin-member-mgmt.spec.ts
+    adjacent: [timeline, escotista-painel, ramo-advancement, secoes, managed-accounts]
+    check: |
+      Admin (9900001) → Mais → Admin: pending requests (escotista-pending is
+      listed) and members list. 9900002 (non-admin) → /escotista/admin shows
+      "Acesso restrito". On a PR preview: approve/reject a sim-pending
+      persona, change a role, confirm dialog appears for destructive actions.
+
+  - id: ramo-advancement
+    name: Avançar de ramo (lobinho→escoteiro→sênior→pioneiro)
+    routes:
+      /escotista/admin: src/routes/escotista/admin.tsx
+    convex: [convex/groups.ts, convex/progression.ts, convex/specialties.ts]
+    paths:
+      - convex/lib/legacySpecialty.ts
+    personas: [admin]
+    specs:
+      - tests/e2e/mutating/m18-advance-lobinho-escoteiro.spec.ts
+      - tests/e2e/mutating/m19-advance-escoteiro-senior.spec.ts
+      - tests/e2e/mutating/m20-advance-senior-pioneiro.spec.ts
+    adjacent: [admin-members, escoteiro-progression, especialidades]
+    check: |
+      PR preview only. Admin → Admin → member → change ramo. Sign in as that
+      escoteiro: new ramo's progression starts fresh; especialidades carry
+      over within lobinho/escoteiro or sênior/pioneiro, start fresh across.
+
+  - id: managed-accounts
+    name: Contas gerenciadas (criar acesso, nova senha temporária, trocar senha)
+    routes:
+      /trocar-senha: src/routes/trocar-senha.tsx
+    convex: [convex/managedAccounts.ts]
+    paths:
+      - src/components/escotista/managed-access.tsx
+      - src/components/auth/change-password-form.tsx
+      - convex/lib/managedAccounts.ts
+    personas: [admin, escotista]
+    specs: []
+    adjacent: [auth-signin, admin-members, escoteiro-detail]
+    check: |
+      NO e2e coverage — drive it whenever managedAccounts or the auth form
+      changes. PR preview only: admin → painel "Criar acesso" → note the
+      temporary password → sign in with it → forced /trocar-senha → set a new
+      one → lands home. Admin → escoteiro → "Nova senha" ("Gerar nova senha") → old sessions end.
+
+  - id: settings-group
+    name: Ajustes / Perfil (nome, grupo, sair do grupo, excluir grupo)
+    routes:
+      /settings: src/routes/settings.tsx
+    convex: [convex/users.ts, convex/groups.ts]
+    paths:
+      - src/components/onboarding/regiao-input.tsx
+      - src/components/onboarding/ramo-names-inputs.tsx
+    personas: [admin, escotista, escoteiro-approved]
+    specs:
+      - tests/e2e/readonly/r6-settings.spec.ts
+      - tests/e2e/readonly/r7-group-identity.spec.ts
+      - tests/e2e/mutating/m14-profile-rename.spec.ts
+      - tests/e2e/mutating/m17-group-rename.spec.ts
+    adjacent: [secoes, guided-tour, escotista-painel]
+    check: |
+      Escoteiro (9900005) → Perfil tab: name, role, grupo "99999/RS" shown, no
+      admin section. Admin → Mais → Ajustes: "Gerenciar grupo" section
+      visible (name, região). Rename yourself on a PR preview → name updates
+      in the header.
+
+  - id: secoes
+    name: Seções (criar/renomear/remover, alocar escoteiro, seção observada)
+    routes:
+      /settings: src/routes/settings.tsx
+    convex: [convex/groups.ts]
+    paths:
+      - src/components/settings/sections-manager.tsx
+      - convex/lib/sections.ts
+    personas: [admin]
+    specs:
+      - tests/e2e/mutating/m21-secoes.spec.ts
+    adjacent: [escotista-painel, admin-members, settings-group]
+    check: |
+      PR preview only (seed has no seções). Admin → Ajustes → create a seção
+      → Admin → place an escoteiro in it → painel → pick it as observed seção
+      → only that seção's (and unplaced) escoteiros show. Clean up: unset
+      observed seção, remove the seção.
+
+  - id: guided-tour
+    name: Tour guiado
+    routes:
+      /settings: src/routes/settings.tsx
+    convex: [convex/users.ts]
+    paths:
+      - src/components/tour/**
+    personas: [escoteiro-approved, escotista]
+    specs:
+      - tests/e2e/mutating/m23-guided-tour.spec.ts
+    adjacent: [settings-group, escoteiro-progression, escotista-painel]
+    check: |
+      Perfil/Ajustes → "Ver tutorial" → steps highlight tab bar / bottom nav
+      targets for that role; close → doesn't reopen on reload.
+
+  - id: not-found
+    name: Página não encontrada (404 de qualquer URL desconhecida)
+    routes: {} # router-wide: defaultNotFoundComponent in src/router.tsx
+    convex: []
+    paths:
+      - src/components/not-found.tsx
+    personas: [escoteiro-with-progression, admin]
+    specs:
+      - tests/e2e/readonly/r8-not-found.spec.ts
+    adjacent: [auth-signin, escoteiro-progression, escotista-painel]
+    check: |
+      Signed out → /nao-existe shows "Página não encontrada" (pt-BR, no bare
+      "Not Found") → "Voltar ao início" → /signin. 9900006 → /pagina/x → 404
+      → link → Progressão home. Admin → /escotista/nao-existe → 404 → link →
+      painel. (An escoteiro under /escotista/* is sent home by the role guard
+      first — expected.)

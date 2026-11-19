@@ -23,11 +23,15 @@ author never approves its own work.
 2. It gathers context into `review/context/`: PR title + body + linked
    issues (`pr.md`), the diff vs the merge base, the changed-file list, the
    conventions **from master** (`CLAUDE.md`, `AGENTS.md`, `docs/agents/`,
-   Convex guidelines) and the CI results on that commit (waits ≤10 min for
-   the fast checks; E2E is reported as-is).
+   Convex guidelines), the author's **verification evidence** (`log.md` +
+   screenshots from branch `verification-evidence`, `pr-<n>/` →
+   `context/verification/`; `docs/agents/verify.md`) and the CI results on
+   that commit (waits ≤10 min for the fast checks; E2E is reported as-is).
 3. A new `claude -p` session reviews it against the rubric: intent vs diff,
    correctness, Convex auth/validation/migrations, missing or weakened tests,
-   guardrail tampering, security/data loss, scope creep.
+   guardrail tampering, security/data loss, scope creep, and — for
+   user-facing PRs — whether the running-app verification exists, is for the
+   head commit, and backs what the PR claims (it looks at the screenshots).
 4. It returns a schema-checked verdict: `pass`, or `block` with blocking
    findings (`file:line`, problem, concrete fix) plus non-blocking nits.
 5. The gate completes the check run — `success` only on a clean pass,

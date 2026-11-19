@@ -56,6 +56,11 @@ describe("parseClaudeResult", () => {
     expect(parseClaudeResult(out(pass, { subtype: "error_max_turns" })).ok).toBe(false);
   });
 
+  test("accepts a verification finding (rubric §8)", () => {
+    const r = parseClaudeResult(out({ ...block, blocking: [{ ...finding, category: "verification" }] }));
+    expect(r.ok).toBe(true);
+  });
+
   test("rejects malformed verdicts", () => {
     expect(parseClaudeResult(out(undefined)).ok).toBe(false);
     expect(parseClaudeResult(out({ ...pass, verdict: "lgtm" })).ok).toBe(false);
