@@ -1,14 +1,31 @@
 import { defineConfig, devices } from "@playwright/test";
-import { BASE_URL, IS_STAGING, LOCAL_PORT, LOCAL_URL } from "./tests/utils/target";
+import {
+  BASE_URL,
+  IS_PREVIEW,
+  IS_REMOTE_BACKEND,
+  LOCAL_PORT,
+  LOCAL_URL,
+  PREVIEW_BASE_URL,
+  TARGET,
+} from "./tests/utils/target";
+
+const LOCAL_WEB_SERVER = {
+  local: { command: "bun dev", timeout: 120_000 },
+  // Production build from `bun run e2e:deploy-preview` (node-server preset).
+  preview: { command: "node .output/server/index.mjs", timeout: 30_000 },
+} as const;
 
 /**
- * Unified e2e suite (PRD #58). One config, two targets:
+ * Unified e2e suite (PRD #58). One config, three targets (tests/utils/target.ts):
  *
  *   E2E_TARGET=local   (default) spawns the dev server, dev Convex, strict
  *                      timeouts, zero retries.
+ *   E2E_TARGET=preview the PR's own Convex preview deployment + a local
+ *                      production build — the PR merge gate (e2e.yml).
  *   E2E_TARGET=staging points at the staging Vercel alias + staging Convex,
- *                      no web server, 1 retry + relaxed timeouts (network
- *                      blips self-heal; local stays strict).
+ *                      no web server.
+ *   Remote backends (preview, staging) get 1 retry + relaxed timeouts
+ *   (network blips self-heal; local stays strict).
  *
  * Phases via project dependencies:
  *   setup                 reseed + storageState capture (tests/utils/personas.ts)
@@ -26,10 +43,12 @@ export default defineConfig({
   // enough that page hydration blows the expect timeout (staging tests are
   // network-bound, so modest oversubscription is still worthwhile).
   workers: process.env.CI ? 4 : 8,
-  retries: IS_STAGING ? 1 : 0,
-  reporter: [["list"], ["html", { open: "never" }]],
-  timeout: IS_STAGING ? 60_000 : 30_000,
-  expect: { timeout: IS_STAGING ? 15_000 : 5_000 },
+  retries: IS_REMOTE_BACKEND ? 1 : 0,
+  reporter: process.env.CI
+    ? [["list"], ["html", { open: "never" }], ["github"]]
+    : [["list"], ["html", { open: "never" }]],
+  timeout: IS_REMOTE_BACKEND ? 60_000 : 30_000,
+  expect: { timeout: IS_REMOTE_BACKEND ? 15_000 : 5_000 },
   globalTeardown: "./tests/e2e/global.teardown.ts",
   use: {
     baseURL: BASE_URL,
@@ -37,13 +56,14 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
-  webServer: IS_STAGING
-    ? undefined
-    : {
-        command: "bun dev",
+  webServer:
+    TARGET === "staging" || (IS_PREVIEW && PREVIEW_BASE_URL)
+      ? undefined
+      : {
+        ...LOCAL_WEB_SERVER[IS_PREVIEW ? "preview" : "local"],
         url: LOCAL_URL,
-        reuseExistingServer: true,
-        timeout: 120_000,
+        // CI must test the build it just made, never a leftover server.
+        reuseExistingServer: !process.env.CI,
         env: {
           TEST_AUTH: "1",
           PORT: String(LOCAL_PORT),

@@ -13,12 +13,11 @@ alias. Both are publicly reachable — deployment protection is off on purpose
 
 ```
 implement → bun test + bun run lint → changeset → branch → gh pr create
-          → wait for the preview → drive it → report → ask for review
+          → wait for the preview → drive it → E2E check green → report
+          → ask for review
 ```
 
-The step runs on the PR's own preview, once the deployment is `Ready`, and
-again on the staging alias after the merge when the skew rule sent backend
-work there. It is not a replacement for `bun test` or the Playwright suite —
+The step runs on the PR's own preview, once the deployment is `Ready`. It is not a replacement for `bun test` or the Playwright suite —
 it catches what those two structurally cannot: the built bundle, real network
 latency, real Convex data, and whatever the diff looks like to an actual
 person.
@@ -28,28 +27,24 @@ person.
 | Question | Where |
 |---|---|
 | Does the logic hold? | `bun test` (unit + convex) |
-| Does the flow still work end to end? | `bun run test:e2e` (local Playwright) |
+| Does the flow still work end to end? | `bun run test:e2e` locally; the `E2E (Playwright)` check on the PR (required to merge — `docs/agents/e2e.md`) |
 | Does the change look and feel right, built and deployed? | PR preview |
-| Do the new Convex functions behave against staging data? | staging alias, post-merge |
-| Is the whole suite still green on a deployed target? | `gh workflow run e2e-staging.yml` (manual) |
+| Do the new Convex functions behave? | PR preview (its own backend) |
+| Do they behave against staging's real-ish data? | staging alias, post-merge |
+| Is the whole suite still green on staging? | `gh workflow run e2e-staging.yml` (manual) |
 
-## The skew rule — decide this first
+## Each PR has its own backend
 
-A PR preview is the **branch's frontend against master's backend**. Convex
-only deploys on merge (`ci.yml` `deploy-staging`), so a branch's new functions
-do not exist on the deployment the preview talks to.
+A PR preview is the **branch's frontend against the branch's own Convex
+preview deployment** (named after the branch; `docs/deploy.md` "PR
+previews"). New functions, schema changes and migrations-in-progress are all
+live there, so backend changes are testable on the preview before merge. The
+deployment is seeded with the test personas on creation, and every e2e run
+reseeds it.
 
-```bash
-git diff master...HEAD --name-only | grep '^convex/'
-```
-
-**Hits** — the preview validates layout, routing, and anything the current
-backend already serves. Flows that call the new functions fail there in ways
-that are not bugs; test those locally (`docs/agents/running-locally.md`), and
-re-verify on the staging alias after the merge lands.
-
-**No hits** — the common case; the preview is the honest article. Test the
-change there.
+One preview deployment is shared by everything on that branch — the Vercel
+preview and the PR's e2e job. An e2e run wipes and reseeds it, so a manual
+session in progress loses its data when CI runs (on every push).
 
 ## Resolving the URL
 
@@ -92,7 +87,8 @@ deployed target:
 - PR previews take the **registro sign-in only**. The Google button renders,
   but its redirect URI is registered for the staging alias, not for a random
   preview URL, so it fails there.
-- Both targets read the same staging Convex data.
+- The PR preview reads its own preview deployment's data; the staging alias
+  reads staging's.
 
 ## Staging is shared — keep it read-only
 
@@ -101,7 +97,8 @@ specs own personas by name (`tests/utils/personas.ts`). Your mutations can
 break a run in flight; a run erases yours. Smoke-test by navigating and
 reading.
 
-When the change can only be shown by mutating, do it, then `bun run
+When the change can only be shown by mutating, do it on the **PR preview**
+instead (its data is the branch's own); on staging, do it, then `bun run
 staging:reset`, and say in the report that staging was written to.
 
 ## What a pass looks like
@@ -117,10 +114,6 @@ default.
 
 ## Deliberately out of scope
 
-- **Per-PR Convex deployments** (Convex preview deploy keys) would erase the
-  skew rule entirely — worth revisiting if backend-heavy PRs start piling up.
-- **Auto-running the Playwright suite against a PR preview** — the suite
-  reseeds shared staging data, so concurrent PRs would fight. It stays manual.
 - Posting preview findings as PR comments automatically; ask first.
 
 The `qa` agent is the natural consumer of this doc when a change is big

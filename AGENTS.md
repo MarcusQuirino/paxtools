@@ -8,7 +8,8 @@ this file.
 The rules agents most often break (all detailed in `CLAUDE.md`):
 
 - Never deploy to prod. Never commit to `master` — branch, then PR via `gh`.
-  `master` is protected: PR + passing `Lint, Test, Build` required.
+  `master` is protected: PR + passing `Lint, Test, Build` and
+  `E2E (Playwright)` required (`docs/agents/e2e.md`).
 - Before committing: `bun test` and `bun run lint` pass, and a changeset is
   added in `.changeset/`.
 - Convex work: read `convex/_generated/ai/guidelines.md` first. Migrations are

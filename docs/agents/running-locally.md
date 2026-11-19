@@ -58,7 +58,8 @@ Password for every seeded persona: the deployment's `TEST_AUTH_PASSWORD`
 Convex env var, which the seed hashes. There is no default — the seed throws if
 it's unset (`bunx convex env get TEST_AUTH_PASSWORD` to read it). Playwright
 reads the same value from the shell: `export TEST_AUTH_PASSWORD=...` before
-`bun run test:e2e`. A wrong password reads
+`bun run test:e2e`. E2E targets (local / PR preview / staging) and the CI
+merge gate: `docs/agents/e2e.md`. A wrong password reads
 "Registro ou senha incorretos", and ten misses in an hour lock the registro.
 
 Registro `9900006` (`progression`) is the default persona to reach for — an

@@ -14,9 +14,17 @@ import {
 /** Must match the TEST_AUTH_PASSWORD the target deployment was seeded with. */
 export const TEST_PASSWORD = requireTestPassword(process.env);
 
-/** Fill and submit the form on an already-open `/signin` page. */
-export async function submitSignIn(page: Page, scoutId: string): Promise<void> {
-  await page.getByTestId(SCOUT_SIGNIN_ID).fill(scoutId);
-  await page.getByTestId(SCOUT_SIGNIN_PASSWORD).fill(TEST_PASSWORD);
-  await page.getByTestId(SCOUT_SIGNIN_SUBMIT).click();
+/**
+ * Fill and submit the form on an already-open `/signin` page. Pass `timeout`
+ * when the form may vanish under you (a transient /signin bounce during the
+ * auth handshake) so the caller can recover instead of hanging.
+ */
+export async function submitSignIn(
+  page: Page,
+  scoutId: string,
+  opts: { timeout?: number } = {},
+): Promise<void> {
+  await page.getByTestId(SCOUT_SIGNIN_ID).fill(scoutId, opts);
+  await page.getByTestId(SCOUT_SIGNIN_PASSWORD).fill(TEST_PASSWORD, opts);
+  await page.getByTestId(SCOUT_SIGNIN_SUBMIT).click(opts);
 }

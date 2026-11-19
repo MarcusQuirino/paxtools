@@ -39,18 +39,26 @@ const ADMIN_HEADING = "Gerenciar grupo";
  * continue — the same pattern the mutating specs use.
  */
 async function gotoSettings(page: Page, scoutId: string): Promise<void> {
-  await page.goto("/settings");
   const heading = page.getByRole("heading", { name: "Seu nome" });
   const signinId = page.getByTestId(SCOUT_SIGNIN_ID);
-  await expect(heading.or(signinId).first()).toBeVisible({
-    timeout: 20_000,
-  });
-  if (await signinId.isVisible()) {
-    await submitSignIn(page, scoutId);
-    await expect(page).not.toHaveURL(/\/signin/, { timeout: 20_000 });
+  // A cold load can also flash /signin while the auth handshake settles; the
+  // form then vanishes mid-fill. Bounded fresh-navigation retries cover both
+  // that and a genuinely revoked session.
+  for (let attempt = 0; attempt < 3; attempt++) {
     await page.goto("/settings");
-    await expect(heading).toBeVisible({ timeout: 20_000 });
+    await expect(heading.or(signinId).first()).toBeVisible({
+      timeout: 20_000,
+    });
+    if (await heading.isVisible()) return;
+    try {
+      await submitSignIn(page, scoutId, { timeout: 10_000 });
+      await expect(page).not.toHaveURL(/\/signin/, { timeout: 20_000 });
+    } catch {
+      // Form vanished or the handshake stalled — renavigate and re-check.
+    }
   }
+  await page.goto("/settings");
+  await expect(heading).toBeVisible({ timeout: 20_000 });
 }
 
 // ── Escoteiro persona: escoteiro-approved (name "approved", not admin) ───────

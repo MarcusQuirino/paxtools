@@ -22,12 +22,20 @@ Always use the `gh` CLI to interface with GitHub (PRs, issues, releases, etc.). 
 2. Commit the changes to that branch.
 3. Open a PR targeting `master` using `gh pr create`.
 4. Verify the change on the PR's Vercel preview — `docs/agents/preview-testing.md`.
+   Each PR has its **own Convex preview backend** (branch's `convex/` deployed,
+   test personas seeded), so backend changes are live on the preview too.
+5. Watch CI until green. `master` requires both `Lint, Test, Build` and
+   `E2E (Playwright)` (full suite against the PR's own backend). A red or flaky
+   e2e run is yours to fix — never skip/weaken a test to get green. Details,
+   artifacts and local repro: `docs/agents/e2e.md`.
 
 ## Quality Checks
 
 After any code changes, always run:
 1. `bun test` — run the test suite
 2. `bun run lint` — check for lint errors
+3. For UI/flow/backend changes: `bun run test:e2e` (local Playwright) — CI runs
+   the same suite as a required merge gate (`docs/agents/e2e.md`)
 
 Fix any failures before considering the task done.
 

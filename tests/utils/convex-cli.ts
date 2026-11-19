@@ -12,16 +12,21 @@
  *                                    from `.env.local` (the dev deployment).
  *   - staging target               → `--deployment staging`, same as the
  *                                    `staging:*` package scripts.
- *   - CI (CONVEX_DEPLOY_KEY set)   → no flag; the deploy key pins the
+ *   - staging in CI (deploy key)   → no flag; the deploy key pins the
  *                                    deployment, exactly like `ci.yml` does.
+ *   - preview target               → `--preview-name $E2E_PREVIEW_NAME`. Works
+ *                                    with a preview deploy key (CI) or a
+ *                                    logged-in CLI (local). A preview key can
+ *                                    only reach preview deployments.
  */
 
 import { spawn } from "node:child_process";
-import { IS_STAGING } from "./target";
+import { IS_PREVIEW, IS_STAGING, previewName } from "./target";
 
 const CONVEX_BIN = "bunx";
 
 function deploymentArgs(): string[] {
+  if (IS_PREVIEW) return ["--preview-name", previewName()];
   if (!IS_STAGING) return [];
   // A deploy key (CI) already selects the deployment; the flag would fight it.
   if (process.env.CONVEX_DEPLOY_KEY) return [];

@@ -35,6 +35,7 @@
 
 import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { forceClickCentered } from "../../utils/click";
 
 export type PlanFlowParams = {
   /** Raw curriculum action id to star as the NEW plan item (a bloco that is
@@ -144,7 +145,7 @@ async function setStar(
   await expect(trigger).toBeVisible();
   for (let i = 0; i < 6; i++) {
     if ((await trigger.getAttribute("aria-expanded")) === "true") break;
-    await trigger.click({ force: true }).catch(() => {});
+    await forceClickCentered(trigger).catch(() => {});
     await page.waitForTimeout(400);
   }
   const star = page
