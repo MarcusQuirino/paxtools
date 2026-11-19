@@ -164,7 +164,11 @@ export function decide(v: Verdict): "pass" | "block" {
   return v.verdict === "pass" && v.blocking.length === 0 ? "pass" : "block";
 }
 
-/** True if any secret value (≥ 8 chars) appears in text. */
+/**
+ * True if any secret value (≥ 8 chars) appears verbatim in text. A last-line
+ * tripwire, not a general secret filter: the reviewer has no token in its env
+ * and can't read outside its working dir, so it shouldn't see one at all.
+ */
 export function leaksSecret(text: string, secrets: (string | undefined)[]): boolean {
   return secrets.some((s) => !!s && s.length >= 8 && text.includes(s));
 }

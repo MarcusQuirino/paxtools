@@ -117,6 +117,8 @@ jobs:
         run: bun trusted/scripts/review-gate.ts finalize "$RUNNER_TEMP/claude-output.json"
 
       # Any crash/timeout/cancel above: never leave the check green or hanging.
+      # always(): cancelled jobs only run always()/cancelled() steps; abort is
+      # a no-op when the check was already completed.
       - name: Fail the check if no verdict was posted
-        if: ${{ !success() }}
+        if: ${{ always() }}
         run: bun trusted/scripts/review-gate.ts abort
