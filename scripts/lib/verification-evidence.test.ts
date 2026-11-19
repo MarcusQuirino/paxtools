@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  assertQueryableDeployment,
+  convexOriginFromWsUrl,
   isAllowedTarget,
+  redactSecrets,
   LIMITS,
   parseLsTree,
   renderEvidenceIndex,
@@ -78,5 +81,38 @@ describe("isAllowedTarget", () => {
     expect(isAllowedTarget("https://paxtools-git-master-marcusquirinos-projects.vercel.app")).toBe(true);
     expect(isAllowedTarget("https://paxtools-xi.vercel.app")).toBe(false); // prod
     expect(isAllowedTarget("https://evil.vercel.app")).toBe(false);
+  });
+});
+
+describe("server-response capture", () => {
+  test("convexOriginFromWsUrl reads the sync socket only", () => {
+    expect(convexOriginFromWsUrl("wss://happy-otter-123.convex.cloud/api/1.46.0/sync")).toBe(
+      "https://happy-otter-123.convex.cloud",
+    );
+    expect(convexOriginFromWsUrl("ws://localhost:3000/?token=x")).toBeNull();
+    expect(convexOriginFromWsUrl("wss://evil.example/api/1/sync")).toBeNull();
+  });
+
+  test("assertQueryableDeployment refuses prod, non-Convex hosts and no connection", () => {
+    expect(() => assertQueryableDeployment("https://happy-otter-123.convex.cloud")).not.toThrow();
+    expect(() => assertQueryableDeployment("https://flexible-tiger-306.convex.cloud")).toThrow(/production/);
+    expect(() => assertQueryableDeployment("https://example.com")).toThrow(/not a Convex/);
+    expect(() => assertQueryableDeployment(null)).toThrow(/No Convex connection/);
+  });
+
+  test("redactSecrets masks set secrets deeply, keeps null/empty visible", () => {
+    expect(
+      redactSecrets({
+        name: "Grupo",
+        password: "hunter2",
+        nested: [{ token: "abc", senhaTemporaria: null, ok: 1 }],
+        secret: "",
+      }),
+    ).toEqual({
+      name: "Grupo",
+      password: "<redacted, set>",
+      nested: [{ token: "<redacted, set>", senhaTemporaria: null, ok: 1 }],
+      secret: "",
+    });
   });
 });

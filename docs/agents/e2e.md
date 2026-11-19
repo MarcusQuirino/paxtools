@@ -10,6 +10,22 @@ reseeds the target's test data in global setup and again in teardown.
 | `preview` | `bun run e2e:deploy-preview` then `bun run test:e2e:preview` | production build on localhost | the PR's own Convex preview deployment | **the merge gate** (`.github/workflows/e2e.yml`) |
 | `staging` | `bun run test:e2e:staging` | staging Vercel alias | staging | `gh workflow run e2e-staging.yml` (manual) |
 
+## Running locally (`bun run test:e2e`)
+
+Needs `bun run setup` once per worktree (deps, `.env.local`, chromium) and
+the personas seeded on your dev deployment (global setup reseeds them). No
+env to export — `tests/utils/target.ts` + `scripts/lib/e2e-local.ts` pick:
+
+- **Port:** the first free one from 3000 (another worktree's dev server or
+  an unrelated service on 3000 is skipped, never reused). `E2E_PORT=3000`
+  forces a port and reuses *your own* `bun run dev` if it is already there.
+- **Password:** `TEST_AUTH_PASSWORD` from `.env.local` when the shell has
+  none (local target only — that is the value your dev deployment was seeded
+  with; preview/staging need staging's, exported).
+- **Workers:** half the CPU cores, min 2 (8 on a 4-vCPU box flaked ~30
+  tests a run; all green at 2). `E2E_WORKERS=n` or `--workers=n` overrides;
+  CI uses 4, remote targets 8.
+
 ## The merge gate
 
 Every PR against `master` runs the `E2E (Playwright)` job, and it is a
@@ -59,7 +75,7 @@ export TEST_AUTH_PASSWORD=...            # same value as staging's
 bun run e2e:deploy-preview && bun run test:e2e:preview
 ```
 
-Port 3000 taken (another worktree's dev server)? `export E2E_PORT=3217`.
+Off CI the port is auto-picked (above); `E2E_PORT` forces one.
 To aim the preview target at an already-running frontend instead of a local
 build (e.g. the PR's Vercel preview URL), set `E2E_BASE_URL`; no server is
 spawned then.

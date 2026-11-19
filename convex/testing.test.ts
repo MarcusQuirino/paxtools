@@ -5,7 +5,7 @@ import { api, internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { snapshotProgression } from "./lib/progression";
 import { getRamoRules } from "../src/data/progression-rules";
-import { newTest } from "./fixtures.testkit";
+import { as, newTest } from "./fixtures.testkit";
 import { widenLegacyTestRegistro } from "./lib/legacyTestRegistro";
 import {
   assertTestAuthAllowed,
@@ -316,4 +316,41 @@ test("widenLegacyTestRegistro re-keys test personas only", async () => {
     const accounts = await ctx.db.query("authAccounts").collect();
     expect(accounts.map((a) => a.providerAccountId)).toEqual(["9900001"]);
   });
+});
+
+test("seedTestUsers: pending grupo creator owns a second test grupo, gets no admin powers, and wipes clean", async () => {
+  const prev = process.env.TEST_AUTH;
+  const prevPassword = process.env.TEST_AUTH_PASSWORD;
+  process.env.TEST_AUTH = "1";
+  process.env.TEST_AUTH_PASSWORD = SEED_PASSWORD;
+  try {
+    const t = newTest();
+    // Twice: the seed is idempotent (one creator grupo, still pending).
+    await t.action(internal.testing.seedTestUsers, {});
+    const { users } = await t.action(internal.testing.seedTestUsers, {});
+    const creatorId = users["escotista_pending_creator"]!;
+
+    const { creator, groups } = await t.run(async (ctx) => ({
+      creator: await ctx.db.get(creatorId),
+      groups: (await ctx.db.query("groups").collect()).filter((g) => g.createdBy === creatorId),
+    }));
+    expect(creator?.scoutId).toBe(CANONICAL_SCOUT_IDS.escotista_pending_creator);
+    expect(creator?.membershipStatus).toBe("pending");
+    expect(groups).toHaveLength(1);
+    expect(creator?.groupId).toBe(groups[0]!._id);
+
+    const myGroup = await as(t, creatorId).query(api.groups.getMyGroup, {});
+    expect(myGroup).toMatchObject({ isAdmin: false, isCreator: false, membershipStatus: "pending", password: null });
+    expect(await as(t, creatorId).query(api.groups.getPendingMemberships, {})).toEqual([]);
+    await expect(as(t, creatorId).mutation(api.groups.approveMembership, { userId: creatorId })).rejects.toThrow();
+
+    await t.action(internal.testing.wipeTestData, {});
+    const left = await t.run(async (ctx) => (await ctx.db.query("groups").collect()).length);
+    expect(left).toBe(0);
+  } finally {
+    if (prev === undefined) delete process.env.TEST_AUTH;
+    else process.env.TEST_AUTH = prev;
+    if (prevPassword === undefined) delete process.env.TEST_AUTH_PASSWORD;
+    else process.env.TEST_AUTH_PASSWORD = prevPassword;
+  }
 });

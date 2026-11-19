@@ -11,6 +11,23 @@ missing, stale or contradicted by its own screenshots
 (`docs/agents/review-rubric.md` §8). Docs-, CI-, test- and agent-config-only
 PRs are exempt — `bun scripts/verify.ts affected` tells you which you are.
 
+**When:** after your branch is pushed and its PR is open **as a draft** —
+never as a pre-commit step (the preview it drives only exists after a push).
+The whole sequence:
+
+```
+commit + push → gh pr create --draft → bun scripts/pr-checks.ts wait --no-review
+  → steps 1–6 below (publish + gh pr edit --body-file)
+  → gh pr ready → bun scripts/pr-checks.ts wait
+```
+
+`gh pr ready` is what starts the review (it re-runs Guardrails, whose
+completion triggers `Independent review`), and the review reads `pr-<n>/`
+when it starts — so evidence first, ready second. Asked to "verify before
+committing"? Do the part that needs no preview: step 1 (scope), the local
+quality checks, and optionally drive a frontend-only change on local dev;
+the running-app proof follows after the push.
+
 Inspired by Lauren Tan's pstack (verify-on-running-app, feature map,
 fresh-agent re-check); the fresh agent here is the review gate.
 
@@ -33,7 +50,8 @@ fresh-agent re-check); the fresh agent here is the review gate.
    ```
    The `E2E (Playwright)` job wipes and reseeds that backend on every push,
    so drive it **after** the E2E check for your head commit finishes
-   (`gh pr checks`), or your session loses its data mid-run.
+   (`bun scripts/pr-checks.ts wait --no-review` blocks until it has), or
+   your session loses its data mid-run.
    While iterating before a push, a frontend-only change can be driven on
    `bunx vite dev --port 3217` (your `.env.local` dev deployment); backend
    changes need the preview. Never prod (`paxtools-xi.vercel.app`) — the
@@ -62,12 +80,31 @@ fresh-agent re-check); the fresh agent here is the review gate.
    ```
    `TEST_AUTH_PASSWORD` must be the **target deployment's**. PR previews
    are seeded with staging's value, which is *not* the one in your
-   `.env.local` (that's your dev deployment's):
+   `.env.local` (that's your dev deployment's, right for a localhost target):
    `export TEST_AUTH_PASSWORD=$(bunx convex env get TEST_AUTH_PASSWORD --deployment staging)`
    — keep it in the env, never echo or commit it. A wrong one reads
    "Registro ou senha incorretos"; the harness stops at the first one
    because ten misses an hour lock the registro. Selector and hydration gotchas:
    `docs/agents/running-locally.md`, `docs/agents/e2e.md`.
+   **Capture what the server returns, not just the UI.** Access and
+   visibility fixes often render identically (the UI already hid the
+   field); prove the response itself with the persona's own session:
+   ```ts
+   await v.step("pending escotista gets no seções", "escotista-pending", async () => {
+     const data = await v.serverQuery(page, "groups:listSections");      // raw Convex result
+     if (!Array.isArray(data) || data.length) throw new Error(JSON.stringify(data));
+     await v.shotJson(page, "pending-escotista-api", { "groups:listSections": data });
+   });
+   ```
+   `serverQuery` is read-only (Convex `/api/query`, public queries), uses
+   the deployment the page is connected to, and refuses prod;
+   `shotJson` redacts password/secret/token/senha fields (the evidence
+   branch is public) but shows whether they were set.
+   Seeded data you may need: the test grupo has **no seções** (create one as
+   admin in Ajustes → Seções, PR preview only), and
+   `escotista-pending-creator` (9900011) is a pending escotista who
+   *created* their grupo (`__TEST__ Grupo Criador Pendente`) — for anything
+   touching the creator-is-admin fallback.
    Driving interactively instead (T3 preview tools, claude-in-chrome,
    `playwright-cli`) is fine for exploring; the evidence still has to end up
    as files in `.verification/out/` with a `log.md` in the same shape.
@@ -99,13 +136,16 @@ fresh-agent re-check); the fresh agent here is the review gate.
    bun scripts/verify.ts publish          # → branch verification-evidence, pr-<n>/
    ```
    It replaces the PR's previous evidence, pushes, and prints markdown with
-   commit-pinned image links. Paste it into the PR body's `## Verification`
+   commit-pinned image links. Idempotent: re-running with unchanged
+   evidence pushes nothing and prints the same markdown again. Paste it into the PR body's `## Verification`
    section ([template](../../.github/pull_request_template.md)): what you
    checked, the personas, results, and that markdown. Then
    `gh pr edit <n> --body-file …`. The review gate fetches `pr-<n>/` itself,
-   so publish **before** the push that triggers the review you want to pass
-   (or push an empty commit afterwards to re-review; editing the body alone
-   doesn't re-run it).
+   so publish **before** `gh pr ready` (or before the push, if the PR is
+   already ready). Already reviewed and blocked on verification? Publish,
+   then push an empty commit to re-review — editing the body alone doesn't
+   re-run it. Fixing code after review: `gh pr ready --undo` → push →
+   re-verify → publish → `gh pr ready`.
 
 ## Where evidence lives (and why)
 

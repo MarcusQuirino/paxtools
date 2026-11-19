@@ -11,7 +11,8 @@
  *   bun scripts/verify.ts publish [--pr N] [--dir .verification/out]
  *       Push the evidence dir to branch `verification-evidence` under
  *       `pr-<N>/` (replacing the previous run) and print the markdown for
- *       the PR's Verification section.
+ *       the PR's Verification section. Idempotent: re-running with the same
+ *       evidence pushes nothing and re-prints the same markdown.
  */
 
 import { spawnSync } from "node:child_process";
@@ -115,14 +116,22 @@ function publish() {
       mkdirSync(target, { recursive: true });
       for (const f of files) cpSync(join(dir, f), join(target, f));
       sh("git", ["add", "-A"], { cwd: wt });
-      sh("git", ["commit", "-qm", `evidence: PR #${pr} @ ${head}`], { cwd: wt });
-      const push = sh("git", ["push", "origin", `HEAD:refs/heads/${EVIDENCE_BRANCH}`], { cwd: wt, allowFail: true });
-      if (!push.ok) {
-        console.error(`push rejected (attempt ${attempt}), refetching: ${push.err.split("\n").at(-1)}`);
-        continue;
+      let commit: string;
+      if (!orphan && !sh("git", ["status", "--porcelain"], { cwd: wt }).out) {
+        // Same evidence as already published: nothing to commit. Re-print the
+        // links pinned to the commit that last wrote pr-<n>/ (idempotent).
+        commit = sh("git", ["log", "-1", "--format=%H", "--", evidenceDir(pr)], { cwd: wt }).out;
+        console.log(`Evidence unchanged — already on ${EVIDENCE_BRANCH}:${evidenceDir(pr)}/ (${commit.slice(0, 7)})\n`);
+      } else {
+        sh("git", ["commit", "-qm", `evidence: PR #${pr} @ ${head}`], { cwd: wt });
+        const push = sh("git", ["push", "origin", `HEAD:refs/heads/${EVIDENCE_BRANCH}`], { cwd: wt, allowFail: true });
+        if (!push.ok) {
+          console.error(`push rejected (attempt ${attempt}), refetching: ${push.err.split("\n").at(-1)}`);
+          continue;
+        }
+        commit = sh("git", ["rev-parse", "HEAD"], { cwd: wt }).out;
+        console.log(`Published ${files.length} files to ${EVIDENCE_BRANCH}:${evidenceDir(pr)}/ (${commit.slice(0, 7)})\n`);
       }
-      const commit = sh("git", ["rev-parse", "HEAD"], { cwd: wt }).out;
-      console.log(`Published ${files.length} files to ${EVIDENCE_BRANCH}:${evidenceDir(pr)}/ (${commit.slice(0, 7)})\n`);
       console.log("Paste into the PR's Verification section:\n");
       console.log(renderEvidenceLinks({ repo, commit, pr, files }));
       return;

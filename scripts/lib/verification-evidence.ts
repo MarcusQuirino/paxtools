@@ -7,6 +7,8 @@
  * Pure helpers; the I/O lives in scripts/verify.ts and scripts/review-gate.ts.
  */
 
+import { isProdConvexUrl } from "../../convex/lib/testAccounts";
+
 export const EVIDENCE_BRANCH = "verification-evidence";
 export const LOG_FILE = "log.md";
 
@@ -130,4 +132,53 @@ export function renderEvidenceLinks(opts: {
     out.push(`<details><summary>${f}</summary>\n\n![${f}](${raw(f)})\n</details>`);
   }
   return out.join("\n");
+}
+
+// ── Server-response capture (verify-session `serverQuery` / `shotJson`) ──────
+
+/**
+ * Convex deployment origin (`https://<name>.convex.cloud`) from the page's
+ * sync websocket URL (`wss://<name>.convex.cloud/api/<ver>/sync`); null for
+ * any other socket (Vite HMR, …).
+ */
+export function convexOriginFromWsUrl(wsUrl: string): string | null {
+  const m = /^wss?:\/\/([^/]+\.convex\.cloud)\/api\/[^/]+\/sync/.exec(wsUrl);
+  return m ? `https://${m[1]}` : null;
+}
+
+/**
+ * Gate for reading raw query results with a persona's session: only a
+ * `*.convex.cloud` deployment that is not prod. The page's own deployment is
+ * used, so this is a second line behind isAllowedTarget(VERIFY_BASE_URL).
+ */
+export function assertQueryableDeployment(origin: string | null | undefined): asserts origin is string {
+  if (!origin) {
+    throw new Error("No Convex connection seen on this page yet — sign in with v.signInAs() and load a page first.");
+  }
+  if (!/^https:\/\/[a-z0-9-]+\.convex\.cloud$/.test(origin)) {
+    throw new Error(`Refusing to query ${origin}: not a Convex cloud deployment.`);
+  }
+  if (isProdConvexUrl(origin)) {
+    throw new Error(`Refusing to query ${origin}: that is the production deployment.`);
+  }
+}
+
+const SECRET_KEY = /password|secret|token|senha/i;
+
+/**
+ * Deep copy with secret-looking fields replaced (evidence is public): a
+ * non-empty value becomes "<redacted, set>", so a screenshot still proves
+ * whether the server sent it. null/undefined/"" stay as they are.
+ */
+export function redactSecrets(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactSecrets);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [
+        k,
+        SECRET_KEY.test(k) && v !== null && v !== undefined && v !== "" ? "<redacted, set>" : redactSecrets(v),
+      ]),
+    );
+  }
+  return value;
 }

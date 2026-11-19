@@ -15,6 +15,15 @@
  *   });
  *   await v.finish();
  *
+ * Access/visibility fixes often look identical in the UI; capture what the
+ * server actually returns to that persona's session too:
+ *
+ *   const data = await v.serverQuery(page, "groups:listSections");
+ *   await v.shotJson(page, "pending-escotista-api", { "groups:listSections": data });
+ *
+ * serverQuery is read-only (Convex `/api/query`), uses the page's own session
+ * token and Convex deployment, and refuses the prod deployment.
+ *
  * Env: VERIFY_BASE_URL (the PR's Vercel preview URL, or http://localhost:3000),
  * TEST_AUTH_PASSWORD (the target deployment's), optional VERIFY_OUT,
  * VERIFY_HEADED=1. Never point it at prod: the helper only accepts localhost
@@ -29,7 +38,13 @@ import { execSync } from "node:child_process";
 import { chromium, devices, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { personaBySlug } from "../../tests/utils/personas";
 import { submitSignIn } from "../../tests/utils/signin";
-import { isAllowedTarget, LOG_FILE } from "./verification-evidence";
+import {
+  assertQueryableDeployment,
+  convexOriginFromWsUrl,
+  isAllowedTarget,
+  LOG_FILE,
+  redactSecrets,
+} from "./verification-evidence";
 
 export type StepResult = { name: string; persona: string; result: "pass" | "fail"; shots: string[]; note: string };
 
@@ -64,6 +79,8 @@ export async function verifySession(opts: { feature: string; out?: string; mobil
   if (!pushed) console.warn(`WARNING: HEAD ${sha.slice(0, 7)} is not the pushed branch head — the preview may be a different build.`);
 
   const url = (path: string) => `${baseUrl}${path}`;
+  /** Convex deployment each signed-in page talks to (from its sync socket). */
+  const convexOrigin = new WeakMap<Page, string>();
 
   /** Fresh browser context signed in as `slug` (tests/utils/personas.ts). */
   async function signInAs(slug: string, o: { mobile?: boolean } = {}): Promise<Page> {
@@ -77,6 +94,10 @@ export async function verifySession(opts: { feature: string; out?: string; mobil
       if (m.type() === "error") consoleErrors.push(`[${slug}] ${m.text().slice(0, 300)}`);
     });
     page.on("pageerror", (e) => consoleErrors.push(`[${slug}] pageerror: ${e.message.slice(0, 300)}`));
+    page.on("websocket", (ws) => {
+      const origin = convexOriginFromWsUrl(ws.url());
+      if (origin) convexOrigin.set(page, origin);
+    });
     // Hydration takes seconds and the auth handshake can bounce; retry the form.
     for (let attempt = 1; ; attempt++) {
       await page.goto(url("/signin"));
@@ -105,6 +126,56 @@ export async function verifySession(opts: { feature: string; out?: string; mobil
     await page.screenshot({ path: join(out, file), fullPage: o.fullPage ?? false });
     current?.shots.push(file);
     return file;
+  }
+
+  /**
+   * Raw result of a public Convex query as this page's persona sees it —
+   * `path` like "groups:getMyGroup". Read-only; refuses prod. Returns
+   * `{ error }` instead of throwing when the server rejects the call (a
+   * denial is often exactly what you are proving).
+   */
+  async function serverQuery(page: Page, path: string, args: Record<string, unknown> = {}): Promise<unknown> {
+    const origin = convexOrigin.get(page);
+    assertQueryableDeployment(origin);
+    if (!/^[\w/]+:\w+$/.test(path)) throw new Error(`serverQuery: "${path}" is not a module:function path`);
+    return await page.evaluate(
+      async ({ origin, path, args }) => {
+        const key = Object.keys(localStorage).find((k) => k.startsWith("__convexAuthJWT"));
+        const token = key ? localStorage.getItem(key) : null;
+        if (!token) return { error: "no session token in localStorage (signed out?)" };
+        const r = await fetch(`${origin}/api/query`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ path, args, format: "json" }),
+        });
+        const j = (await r.json().catch(() => ({ errorMessage: `HTTP ${r.status}` }))) as {
+          status?: string;
+          value?: unknown;
+          errorMessage?: string;
+        };
+        return j.status === "success" ? j.value : { error: j.errorMessage ?? `HTTP ${r.status}` };
+      },
+      { origin, path, args },
+    );
+  }
+
+  /**
+   * Screenshot `data` as pretty JSON (secret-looking fields redacted — the
+   * evidence branch is public) in a throwaway tab of `page`'s context.
+   */
+  async function shotJson(page: Page, name: string, data: unknown, o: { title?: string } = {}): Promise<string> {
+    const tab = await page.context().newPage();
+    const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const json = JSON.stringify(redactSecrets(data), null, 2) ?? "undefined";
+    await tab.setContent(
+      `<body style="font:13px ui-monospace,monospace;padding:16px;white-space:pre-wrap">` +
+        `<h3 style="font-family:sans-serif">${esc(o.title ?? name)}</h3><pre>${esc(json)}</pre></body>`,
+    );
+    try {
+      return await shot(tab, name, { fullPage: true });
+    } finally {
+      await tab.close();
+    }
   }
 
   /** One checked behaviour. A throw = fail (the run continues; finish() exits 1). */
@@ -158,7 +229,7 @@ export async function verifySession(opts: { feature: string; out?: string; mobil
     return steps;
   }
 
-  return { url, signInAs, shot, step, finish, out, baseUrl };
+  return { url, signInAs, shot, shotJson, serverQuery, step, finish, out, baseUrl };
 }
 
 /** Wipe a previous run's output (keeps runs from mixing evidence). */

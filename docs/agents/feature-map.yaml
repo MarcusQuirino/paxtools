@@ -72,13 +72,15 @@ features:
       - tests/e2e/readonly/r1-pending-routing.spec.ts
     adjacent: [onboarding, escoteiro-progression, escotista-painel]
     check: |
-      Open / signed out → lands on /signin ("BEM-VINDO DE VOLTA"). Wrong
-      password → "Registro ou senha incorretos". Sign in 9900006 → escoteiro
-      home; sign out; sign in 9900001 → /escotista painel; 9900003 (pending
-      escotista) → "Aguardando aprovação"; 9900004 (pending escoteiro) → their
-      own dashboard, NOT parked; 9900008 → /onboarding. /trocar-senha only shows for a
-      member with a temporary password (issue one via admin "Nova senha", see
-      managed-accounts) — no e2e covers it.
+      Open / signed out → lands on /signin (heading "Bem-vindo de volta",
+      CSS-uppercased). Wrong password → "Registro ou senha incorretos". Sign in
+      9900006 → escoteiro home; sign out (Perfil → "Sair da conta"); sign in
+      9900001 → /escotista painel; 9900003 (pending escotista) → "Aguardando
+      aprovação", no bottom nav; 9900004 (pending escoteiro) → their own
+      dashboard, NOT parked; 9900008 → /onboarding; 9900010 (banned) → stuck on
+      the loading skeleton, no dashboard/painel. /trocar-senha only shows for a
+      member with a temporary password (issue one with the key icon "Gerar
+      nova senha", see managed-accounts) — no e2e covers it.
 
   - id: onboarding
     name: Onboarding (papel, ramo, criar/entrar no grupo)
@@ -93,11 +95,14 @@ features:
       - tests/e2e/readonly/r1-auth-guards.spec.ts
     adjacent: [auth-signin, settings-group]
     check: |
-      Sign in 9900008 → redirected to /onboarding; step through papel →
-      ramo → join-group screen and read each step (don't submit on a shared
-      backend). Full completion: m13 owns onboarding-m13 (9900009); on a PR
-      preview complete it as escoteiro joining the test grupo → lands on the
-      pending/waiting screen.
+      Sign in 9900008 → redirected to /onboarding ("Bem-vindo ao Paxtools"),
+      papel step. Read only: picking a papel and "Continuar" on ramo each SAVE
+      to the user (resume-on-reload), so don't click through on a shared
+      backend. Full flow on a PR preview with onboarding-m13 (9900009, owned by
+      m13, reset via testing:resetOnboardingUser): Escoteiro → pick ramo →
+      "Continuar" → group code TESTQA → "Entrar no grupo" → lands on / (the
+      escoteiro home; membership pending, shows on Admin "Solicitações
+      pendentes").
 
   - id: escoteiro-progression
     name: Progressão (home do escoteiro) — marcar ações, ação personalizada, IRR
@@ -145,10 +150,12 @@ features:
       - tests/e2e/mutating/m22-plan-especialidade.spec.ts
     adjacent: [escoteiro-progression, especialidades, revisao-rapida, stats]
     check: |
-      9900005 (empty plan) → /plan shows the empty state. 9900006 → starred
-      item renders in both views (toggle Por Área / lista). Star an ação on
-      the home view → appears on /plan; unstar → gone. Reorder by drag on a
-      PR preview only (owned personas in m06).
+      9900005 (empty plan) → /plan shows "Seu plano está vazio". 9900006 (one
+      seeded star, Aprendizagem contínua) → starred item renders in both views
+      (toggle "Por Área" / "Minha Ordem"). Star an ação on the home view →
+      appears on /plan; unstar → gone. Reorder by drag ("Arrastar" handle in
+      Minha Ordem) on a PR preview only, as an m06-owned persona (Íris Campos
+      9921009).
 
   - id: especialidades
     name: Especialidades e insígnias do escoteiro
@@ -172,10 +179,12 @@ features:
       - tests/e2e/mutating/m22-plan-especialidade.spec.ts
     adjacent: [approvals-queue, plan, escotista-especialidades, ramo-advancement]
     check: |
-      Younger (lobinho) → /especialidades lists catalog; search `?q=` and the
-      "minhas" chip filter; open one, check an item → pending. Older (sênior)
-      → three-etapa project (conhecer → fazer → compartilhar) states render.
-      Switch the catalog to Insígnias and read one.
+      Younger: Kaique Neves (sim-troop-lobinho-11, 9911011) → /especialidades
+      lists catalog; search (`?q=`) and the "Minhas" chip (`?f=minhas`); open
+      one, check an item → pending (PR preview). Older: Rafael Bastos
+      (sim-troop-senior-3, 9931003, pending etapa) → three-etapa project
+      (Conhecer → Fazer → Compartilhar) states render. Switch the top
+      "Especialidades | Insígnias" switch to Insígnias and read one.
 
   - id: revisao-rapida
     name: Revisão rápida (cartões de revisão do plano)
@@ -190,10 +199,13 @@ features:
       - tests/e2e/mutating-mobile/m24-revisao-rapida.mobile.spec.ts
     adjacent: [escoteiro-progression, plan, approvals-queue]
     check: |
-      Mobile viewport. 9900006 → home "Revisão rápida" card → swipe screen
-      shows cards; use the four buttons ("Já fiz (→)", "Não fiz (←)",
-      "Pro plano (↑)", "Desfazer (↓)") on a PR preview; escotista entry: open
-      an escoteiro from the painel → "Revisão rápida" link.
+      Mobile viewport. 9900006 → home yellow "Revisão rápida" card → swipe
+      screen shows cards (read only). Mutate on a PR preview as m24's Lara
+      Fontes (9911012): the four icon buttons (aria-labels "Já fiz (→)",
+      "Não fiz (←)", "Pro plano (↑)", "Desfazer (↓)"). Escotista entry: painel
+      row's yellow 🃏 N button, or open an escoteiro (eye icon) → "Revisão
+      rápida · N ações" button; in escotista mode "Pro plano" is disabled
+      ("Plano indisponível para escotistas").
 
   - id: escotista-painel
     name: Painel do escotista (lista de escoteiros, busca, favoritos, seção observada)
@@ -204,7 +216,7 @@ features:
     paths:
       - src/components/escotista/pending-approval-screen.tsx
       - convex/lib/statsCohort.ts
-    personas: [admin, escotista, sim-escotista-lobinho-1, sim-escotista-pioneiro-1, escotista-pending]
+    personas: [admin, escotista, sim-escotista-lobinho-1, sim-escotista-pioneiro-1, escotista-pending, escotista-pending-creator]
     specs:
       - tests/e2e/readonly/r5-escotista-painel.spec.ts
       - tests/e2e/readonly/r5-ramo-visibility.spec.ts
@@ -213,11 +225,17 @@ features:
       - tests/e2e/mutating/m15-pending-cancel.spec.ts
     adjacent: [escoteiro-detail, approvals-queue, secoes]
     check: |
-      9900001 (admin) → painel lists escoteiros of all ramos with unchecked
-      counts; search a name. 9900002 (escotista, escoteiro+sênior) → no
-      lobinho/pioneiro cards (ramo visibility). Bottom nav Painel / Pendentes
-      / Especialidades / Mais; "Mais" sheet shows Admin only for admin.
-      9900003 (pending escotista) → waiting screen.
+      9900001 (admin) → painel lists escoteiros of all ramos (cards: "N
+      aprovadas", pending badge, 🃏 N or "em dia"); "Buscar escoteiro..." a
+      name; Escoteiros/Escotistas tabs on the group card. 9900002 (escotista,
+      escoteiro+sênior) → no lobinho/pioneiro cards (ramo visibility). Bottom
+      nav Painel / Pendentes / Especialidades / Mais; "Mais" sheet: Stats,
+      Histórico, Admin (admin only), Ajustes. 9900003 (pending escotista) →
+      "Aguardando aprovação", no bottom nav. 9900011 (escotista-pending-creator:
+      pending, but createdBy of its own "__TEST__ Grupo Criador Pendente") →
+      same waiting screen, no admin powers (getMyGroup isAdmin false,
+      getPendingMemberships [] — prove with v.serverQuery). The seção picker
+      is absent (seed has no seções) — see secoes.
 
   - id: escoteiro-detail
     name: Escotista vê/age como um escoteiro (impersonação, plano do escoteiro)
@@ -232,9 +250,12 @@ features:
       - tests/e2e/readonly/r1-auth-guards.spec.ts
     adjacent: [escotista-painel, escoteiro-progression, approvals-queue, managed-accounts]
     check: |
-      Admin → painel → open an escoteiro card → their progression renders
-      with the escotista banner; marking an ação here is auto-approved (m10).
-      An invalid id in the URL → handled, no crash (r1-auth-guards).
+      Admin → painel → eye icon ("Ver progressão") on an escoteiro card →
+      their progression renders under the blue banner "Visualizando como
+      escotista — ações são aprovadas automaticamente"; Progressão / Plano
+      toggle (`?view=plano`) shows their plano. Marking an ação here is
+      auto-approved (m10 owns Dante Meireles 9941002; PR preview only). An
+      invalid id in the URL → handled, no crash (r1-auth-guards).
 
   - id: approvals-queue
     name: Pendentes (aprovar / rejeitar / em lote; ações, especialidades, IRR)
@@ -255,16 +276,22 @@ features:
       - tests/e2e/mutating/m09-irr-completion.spec.ts
     adjacent: [escoteiro-progression, especialidades, timeline, escotista-painel]
     check: |
-      Two sessions: escoteiro marks an ação (home) → escotista of that ramo
-      sees a card on /escotista/pending → approve → escoteiro sees it locked;
-      reject path → escoteiro sees it unchecked. Bulk: select several →
-      "Aprovar". Read-only on staging; mutate on a PR preview.
+      Read: admin → Pendentes → one collapsible card per escoteiro with seeded
+      pendings (e.g. "progression" 9900006: 2 ações; empty queue = "Tudo em
+      dia!"). Two sessions: escoteiro marks an ação (home) → escotista of that
+      ramo (Renata 9922001 escoteiro / Marina 9912001 lobinho) expands their
+      card on /escotista/pending → items come pre-checked; uncheck to exclude
+      → "Aprovar (N)" → escoteiro sees it locked; "Rejeitar (N)" → escoteiro
+      sees it unchecked. Especialidade items / projetos have their own
+      Aprovar/Rejeitar inside the card. Read-only on staging; mutate on a PR
+      preview.
 
   - id: escotista-especialidades
     name: Especialidades da tropa (resumo, roster, insígnias da tropa)
     routes:
       /escotista/especialidades: src/routes/escotista/especialidades.index.tsx
       /escotista/especialidades/$specialtyId: src/routes/escotista/especialidades.$specialtyId.tsx
+      /especialidades?escoteiroId=&specialty= (ficha): src/routes/especialidades.tsx
     convex: [convex/specialties.ts, convex/badges.ts, convex/groups.ts]
     paths:
       - src/components/escotista/especialidades/**
@@ -274,9 +301,13 @@ features:
     adjacent: [especialidades, approvals-queue]
     check: |
       NO e2e coverage — drive it whenever specialties/badges change. Admin →
-      bottom nav "Especialidades" → summary lists especialidades with counts;
-      switch catalog to Insígnias; open one especialidade → roster of
-      escoteiros with level/etapa; approve/reject an item from the roster on
+      bottom nav "Especialidades" → tabs "Lobinhos e Escoteiros" / "Sêniores
+      e Pioneiros"; "Conquistadas na tropa" / "Em andamento" totals + "Na
+      tropa" list with counts; switch the top switch to Insígnias. Open an
+      especialidade → detail ("Requisitos" + "Quem tem" roster with Nível /
+      C·F·Co etapas). Approving is NOT on the roster page: tap a roster row →
+      ficha at /especialidades?escoteiroId=…&specialty=… → Aprovar / Rejeitar
+      a pending item (seeded: Cecília Moraes lobinho, Rafael Bastos sênior) on
       a PR preview.
 
   - id: stats
@@ -297,8 +328,9 @@ features:
     adjacent: [plan, escotista-painel]
     check: |
       Admin → Mais → Stats: coverage bars, stage distribution, planos da
-      tropa, especialidades summary render with numbers; switch ramo.
-      Single-ramo escotista (lobinho-1) sees only their ramo. The AI card is
+      tropa, especialidades summary render with numbers; switch ramo (admin
+      gets all four tabs, defaults to Lobinho). Single-ramo escotista (Marina
+      9912001) gets a plain "Lobinho" heading, no switcher. The AI card is
       flag-gated and off on previews (expected).
 
   - id: timeline
@@ -315,8 +347,9 @@ features:
       - tests/e2e/mutating/m12-admin-member-mgmt.spec.ts
     adjacent: [approvals-queue, admin-members]
     check: |
-      Admin → Mais → Histórico: events listed newest first, "carregar mais"
-      paginates. A lobinho escotista sees only lobinho events. After any
+      Admin → Mais → Histórico: events listed newest first, "Carregar mais"
+      paginates. Marina (9912001, lobinho) sees only lobinho ramo events
+      (e.g. "Conquistou a Cruzeiro do Sul" by Otto Vilela). After any
       approval/admin action, the new event appears at the top.
 
   - id: admin-members
@@ -337,10 +370,17 @@ features:
       - tests/e2e/mutating/m12-admin-member-mgmt.spec.ts
     adjacent: [timeline, escotista-painel, ramo-advancement, secoes, managed-accounts]
     check: |
-      Admin (9900001) → Mais → Admin: pending requests (escotista-pending is
-      listed) and members list. 9900002 (non-admin) → /escotista/admin shows
-      "Acesso restrito". On a PR preview: approve/reject a sim-pending
-      persona, change a role, confirm dialog appears for destructive actions.
+      Admin (9900001) → Mais → Admin: "Solicitações pendentes"
+      (escotista-pending, pending, sim-pending-* listed) and "Membros" (rows
+      show ramo, "· registro N", and "· <seção>/sem seção" once seções
+      exist). 9900002 (non-admin) → /escotista/admin shows "Acesso restrito".
+      Row actions are icon-only (use titles): ✓ / ✗ approve/reject on pending;
+      tree "Editar ramo e seção do escoteiro" (RamoPicker → "Salvar ramo" +
+      "Seção" select), key "Gerar nova senha", "Tornar admin", "Trocar papel",
+      "Banir do grupo". On a PR preview with spec-owned targets (m11: Ivan
+      Queiroga / Manu Setúbal; m12: Zeca Amorim, Eloá Pacheco, Bruno Valente,
+      Hugo Tavares): approve/reject, change a role → ConfirmDialog for papel /
+      admin / ban.
 
   - id: ramo-advancement
     name: Avançar de ramo (lobinho→escoteiro→sênior→pioneiro)
@@ -356,14 +396,19 @@ features:
       - tests/e2e/mutating/m20-advance-senior-pioneiro.spec.ts
     adjacent: [admin-members, escoteiro-progression, especialidades]
     check: |
-      PR preview only. Admin → Admin → member → change ramo. Sign in as that
-      escoteiro: new ramo's progression starts fresh; especialidades carry
-      over within lobinho/escoteiro or sênior/pioneiro, start fresh across.
+      PR preview only, on a spec-owned escoteiro (m18 Helena Braga 9911008,
+      m19 Gabriela Pinto 9921007, m20 Vitor Sampaio 9931007). Admin → Mais →
+      Admin → member row tree icon ("Editar ramo e seção do escoteiro") → pick
+      next ramo → "Salvar ramo" (no confirm dialog). Sign in as that
+      escoteiro: new ramo's progression starts fresh (e.g. "0/18 blocos");
+      especialidades carry over within lobinho/escoteiro or sênior/pioneiro,
+      start fresh across; their old seção is dropped.
 
   - id: managed-accounts
     name: Contas gerenciadas (criar acesso, nova senha temporária, trocar senha)
     routes:
       /trocar-senha: src/routes/trocar-senha.tsx
+      /escotista: src/routes/escotista/index.tsx # "Criar novo usuário/escotista"
     convex: [convex/managedAccounts.ts]
     paths:
       - src/components/escotista/managed-access.tsx
@@ -374,9 +419,15 @@ features:
     adjacent: [auth-signin, admin-members, escoteiro-detail]
     check: |
       NO e2e coverage — drive it whenever managedAccounts or the auth form
-      changes. PR preview only: admin → painel "Criar acesso" → note the
-      temporary password → sign in with it → forced /trocar-senha → set a new
-      one → lands home. Admin → escoteiro → "Nova senha" ("Gerar nova senha") → old sessions end.
+      changes. PR preview only: admin → painel (Escoteiros tab) "Criar novo
+      usuário" (Escotistas tab: "Criar novo escotista", admin only) → Nome,
+      unused registro in the test range (e.g. 9990001, wiped on reseed), ramo
+      → "Criar acesso" → "Acesso criado" shows registro + "Senha temporária"
+      once → sign out, sign in with it → forced /trocar-senha ("Crie sua
+      senha") → set a new one → lands home. Reset: key icon (title "Gerar
+      nova senha", no text) on the escoteiro page banner or Admin member row
+      → "Gerar nova senha" → "Nova senha gerada"; old sessions end.
+      Voluntary change: Ajustes/Perfil → "Acesso" section.
 
   - id: settings-group
     name: Ajustes / Perfil (nome, grupo, sair do grupo, excluir grupo)
@@ -394,15 +445,21 @@ features:
       - tests/e2e/mutating/m17-group-rename.spec.ts
     adjacent: [secoes, guided-tour, escotista-painel]
     check: |
-      Escoteiro (9900005) → Perfil tab: name, role, grupo "99999/RS" shown, no
-      admin section. Admin → Mais → Ajustes: "Gerenciar grupo" section
-      visible (name, região). Rename yourself on a PR preview → name updates
-      in the header.
+      Escoteiro (9900005) → Perfil tab: "Seu nome", "Seu papel" (Escoteiro),
+      "Grupo" card "__TEST__ Grupo QA 99999/RS" + password TESTQA, no
+      "Gerenciar grupo"/"Seções". Admin → Mais → Ajustes (page titled
+      "Configurações"): "Gerenciar grupo" (Nome do grupo, Região escoteira
+      (UF), "Excluir grupo" — never click) + "Seções". "Sair do grupo" is
+      hidden for contas gerenciadas, so no test persona can see it. Rename on
+      a PR preview as m14's Gael Monteiro (9911007) → "Salvar nome" →
+      "Salvo." → persists on reload; restore it.
 
   - id: secoes
     name: Seções (criar/renomear/remover, alocar escoteiro, seção observada)
     routes:
-      /settings: src/routes/settings.tsx
+      /settings: src/routes/settings.tsx # create/rename/remove
+      /escotista/admin: src/routes/escotista/admin.tsx # place an escoteiro (SectionPicker)
+      /escotista: src/routes/escotista/index.tsx # observed-seção picker
     convex: [convex/groups.ts]
     paths:
       - src/components/settings/sections-manager.tsx
@@ -412,10 +469,17 @@ features:
       - tests/e2e/mutating/m21-secoes.spec.ts
     adjacent: [escotista-painel, admin-members, settings-group]
     check: |
-      PR preview only (seed has no seções). Admin → Ajustes → create a seção
-      → Admin → place an escoteiro in it → painel → pick it as observed seção
-      → only that seção's (and unplaced) escoteiros show. Clean up: unset
-      observed seção, remove the seção.
+      PR preview only — seed has no seções (m21 creates/removes its own).
+      Create: admin → Mais → Ajustes (/settings) → "Seções" section → "Nova
+      seção" name + "Ramo da nova seção" = Escoteiro → "Adicionar"; rename
+      inline → "Salvar". Place (on /escotista/admin, NOT Ajustes): Mais →
+      Admin → João Mendes (9921010, m21-owned) row → tree icon "Editar ramo e
+      seção do escoteiro" → "Seção" select (only seções of the escoteiro's
+      ramo). Observe: Painel → green group card "Seção" select (only rendered
+      once a seção exists) → pick it → only that seção's escoteiros plus
+      unplaced ones (badge "sem seção") show. Clean up: select "Todas as
+      seções", Admin → Seção "Sem seção", Ajustes → trash "Remover <nome>" →
+      confirm "Remover".
 
   - id: guided-tour
     name: Tour guiado
@@ -429,8 +493,12 @@ features:
       - tests/e2e/mutating/m23-guided-tour.spec.ts
     adjacent: [settings-group, escoteiro-progression, escotista-painel]
     check: |
-      Perfil/Ajustes → "Ver tutorial" → steps highlight tab bar / bottom nav
-      targets for that role; close → doesn't reopen on reload.
+      Escoteiro 9900005 → Perfil → "Tutorial" → "Ver tutorial" → jumps to /
+      ("Passo 1 de N", "Vamos lá" → "Próximo" … "Concluir"); steps highlight
+      tab bar targets. Escotista 9900002 → Mais → Ajustes → "Ver tutorial" →
+      jumps to /escotista, highlights group card / bottom nav; "Pular" or Esc
+      closes. Closed → doesn't reopen on reload (seed pre-stamps tourSeenAt,
+      so it never auto-opens).
 
   - id: not-found
     name: Página não encontrada (404 de qualquer URL desconhecida)

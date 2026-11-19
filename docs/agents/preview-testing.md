@@ -16,9 +16,10 @@ alias. Both are publicly reachable — deployment protection is off on purpose
 ## Where the step sits
 
 ```
-implement → bun test + bun run lint → changeset → branch → gh pr create
-          → wait for the preview → drive it → E2E check green → report
-          → ask for review
+implement → bun run test + bun run lint → changeset → branch → commit + push
+          → gh pr create --draft → bun scripts/pr-checks.ts wait --no-review
+          → drive the preview → verify.ts publish → gh pr ready
+          → bun scripts/pr-checks.ts wait
 ```
 
 The step runs on the PR's own preview, once the deployment is `Ready`. It is not a replacement for `bun test` or the Playwright suite —

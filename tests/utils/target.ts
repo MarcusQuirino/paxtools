@@ -18,6 +18,8 @@
  * never branch on the target themselves.
  */
 
+import { fillFromDotenv, firstFreePort } from "../../scripts/lib/e2e-local";
+
 export type E2eTarget = "local" | "preview" | "staging";
 
 function readTarget(): E2eTarget {
@@ -40,7 +42,19 @@ export const IS_REMOTE_BACKEND = TARGET !== "local";
 export const STAGING_URL =
   "https://paxtools-git-master-marcusquirinos-projects.vercel.app";
 
-/** E2E_PORT overrides (e.g. a parallel worktree already holds 3000). */
+// Local target: the personas were seeded with the dev deployment's password,
+// which lives in .env.local — read it so nobody has to export it by hand.
+// (Preview/staging use staging's value; .env.local would be the wrong one.)
+if (TARGET === "local") fillFromDotenv(process.env, ["TEST_AUTH_PASSWORD"]);
+
+// Off CI, an unset E2E_PORT means "first free port from 3000": another
+// worktree's dev server or an unrelated service on 3000 must neither time
+// out the web server nor be reused as ours. Written back to the env so
+// Playwright's workers (forked with this env) agree on the port. An explicit
+// E2E_PORT pointing at your own running `bun run dev` is reused.
+if (!process.env.E2E_PORT && !process.env.CI) {
+  process.env.E2E_PORT = String(firstFreePort(3000));
+}
 export const LOCAL_PORT = Number(process.env.E2E_PORT ?? 3000);
 export const LOCAL_URL = `http://localhost:${LOCAL_PORT}`;
 
