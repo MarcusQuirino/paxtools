@@ -6,6 +6,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import {
   getAuthenticatedUser,
   assertAdmin,
+  isApprovedMember,
   maybeBackfillUser,
 } from "./lib/authHelpers";
 import { logGroupEvent } from "./lib/events";
@@ -299,23 +300,36 @@ export const getMyGroup = query({
     if (!user || !user.groupId) return null;
     const group = await ctx.db.get(user.groupId);
     if (!group || group.deletedAt) return null;
+    const identity = {
+      _id: group._id,
+      name: group.name,
+      number: group.number ?? null,
+      regiao: group.regiao ?? null,
+    };
+    // A pending member gets only what the "Aguardando aprovação" screen shows:
+    // the grupo they typed the code for. No senha, no seção/ramo names, no
+    // admin rights — not even as the grupo's creator rejoining (#107).
+    if (!isApprovedMember(user)) {
+      return {
+        ...identity,
+        password: null,
+        ramoNames: {},
+        isCreator: false,
+        isAdmin: false,
+        membershipStatus: "pending" as const,
+      };
+    }
     const isCreator = group.createdBy === user._id;
     // Fallback: a legacy group creator is admin even if the field
     // has not been backfilled yet.
     const computedAdmin = user.isAdmin === true || isCreator;
     return {
-      _id: group._id,
-      name: group.name,
-      number: group.number ?? null,
-      regiao: group.regiao ?? null,
-      password:
-        user.role === "escotista" && user.membershipStatus !== "pending"
-          ? group.password
-          : null,
+      ...identity,
+      password: user.role === "escotista" ? group.password : null,
       ramoNames: group.ramoNames ?? {},
       isCreator,
       isAdmin: computedAdmin,
-      membershipStatus: user.membershipStatus ?? "approved",
+      membershipStatus: "approved" as const,
     };
   },
 });
@@ -354,6 +368,7 @@ export const getPendingMemberships = query({
     if (!userId) return [];
     const user = await ctx.db.get(userId);
     if (!user || !user.groupId) return [];
+    if (!isApprovedMember(user)) return [];
     if (!user.isAdmin) {
       const group = await ctx.db.get(user.groupId);
       if (!group || group.createdBy !== user._id) return [];
@@ -628,7 +643,10 @@ async function loadOwnSection(ctx: MutationCtx, sectionId: Id<"sections">) {
   return { admin, section };
 }
 
-/** The seções of the caller's grupo, oldest first. Empty when they have none. */
+/**
+ * The seções of the caller's grupo, oldest first. Empty when they have none
+ * or are still waiting for approval.
+ */
 export const listSections = query({
   args: {},
   handler: async (ctx) => {
@@ -637,6 +655,8 @@ export const listSections = query({
     const user = await ctx.db.get(userId);
     const groupId = user?.groupId;
     if (!groupId) return [];
+    // Waiting for approval: the seções are not theirs to see yet (#107).
+    if (!isApprovedMember(user)) return [];
     const sections = await listSectionsOfGroup(ctx, groupId);
     return sections.map((s) => ({ _id: s._id, name: s.name, ramo: s.ramo }));
   },

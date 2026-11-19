@@ -36,12 +36,28 @@ export async function maybeBackfillUser(
   return { ...user, ...patch };
 }
 
+/**
+ * Whether `user` is an approved member of their grupo. An unstamped
+ * (undefined) membershipStatus counts as approved: mutations backfill it to
+ * "approved", and queries (which cannot write) must agree. A pending member
+ * sees only what the "Aguardando aprovação" screen needs (#107).
+ */
+export function isApprovedMember(user: Pick<Doc<"users">, "membershipStatus">) {
+  return (user.membershipStatus ?? "approved") === "approved";
+}
+
 export async function assertAdmin(ctx: QueryCtx | MutationCtx) {
   const caller = await getAuthenticatedUser(ctx);
   if (caller.role !== "escotista") {
     throw new Error("Apenas administradores podem realizar esta ação");
   }
   if (!caller.groupId) throw new Error("Você não está em nenhum grupo");
+  // A pending member is never an admin — not even the grupo's creator who
+  // left and rejoined, whom the legacy fallback below would otherwise let
+  // approve themselves.
+  if (!isApprovedMember(caller)) {
+    throw new Error("Sua entrada no grupo ainda não foi aprovada");
+  }
   if (!caller.isAdmin) {
     // Legacy creators may not have the flag set yet.
     const group = await ctx.db.get(caller.groupId);
