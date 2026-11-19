@@ -12,10 +12,15 @@ with the same command, so run it before pushing.
 | `Migration registry append-only` | `guardrails.yml` | `bun run check:migrations` | `REGISTRY` entries removed/reordered/renamed, or a registered migration's body edited |
 | `Convex codegen in sync` | `guardrails.yml` | `bun run check:codegen` | `convex/_generated` differs from what codegen produces |
 | `Coverage floor (convex/)` | `guardrails.yml` | `bun run test:coverage` | convex/ line or function coverage below the floor, or a convex/ module no test loads |
+| `Independent review` | `review.yml` | see `docs/agents/review-gate.md` | a fresh reviewer agent finds blocking issues (intent not delivered, bug, missing auth/test, weakened check, security/data-loss risk), or produced no verdict |
 
 The local `check:changeset` / `check:migrations` compare your **committed**
 HEAD against `origin/master` (`git fetch` first; `BASE_REF=` overrides).
 Every failure prints a "How to fix" block — read it before changing anything.
+
+`Independent review` is the only judgment-based check: flow, how to respond
+to blocking findings, and the threat model are in `docs/agents/review-gate.md`;
+the reviewer's prompt is `docs/agents/review-rubric.md`.
 
 Never make a check pass by weakening it (lowering the floor, adding to an
 exemption list without a reason, editing the checker). If a check is wrong,

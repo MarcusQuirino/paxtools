@@ -27,10 +27,14 @@ Always use the `gh` CLI to interface with GitHub (PRs, issues, releases, etc.). 
 5. Watch CI until green. `master` requires `Lint, Test, Build`,
    `E2E (Playwright)` (full suite against the PR's own backend) and the
    guardrails: `Changeset`, `Migration registry append-only`,
-   `Convex codegen in sync`, `Coverage floor (convex/)`. A red or flaky run is
-   yours to fix — never skip/weaken a test or check to get green. What each
-   check enforces and how to fix it: `docs/agents/ci-checks.md`; e2e details,
-   artifacts and local repro: `docs/agents/e2e.md`.
+   `Convex codegen in sync`, `Coverage floor (convex/)`, plus
+   `Independent review` — a fresh reviewer agent checks the diff against your
+   PR description (`docs/agents/review-gate.md`). A red or flaky run is
+   yours to fix — never skip/weaken a test or check to get green. On blocking
+   review findings: fix and push; never argue the check off or re-run it for a
+   different answer. What each check enforces and how to fix it:
+   `docs/agents/ci-checks.md`; e2e details, artifacts and local repro:
+   `docs/agents/e2e.md`.
 
 ## Quality Checks
 
