@@ -7,7 +7,7 @@
  *   bun scripts/review-gate.ts context    # gather PR context into $WORKDIR/context
  *   bun scripts/review-gate.ts schema     # print the verdict JSON schema
  *   bun scripts/review-gate.ts finalize <claude-output.json>
- *   bun scripts/review-gate.ts abort      # job died: fail the check if still open
+ *   bun scripts/review-gate.ts abort      # fail the check unless this job completed it
  *
  * Env: REPO, HEAD_SHA, WORKDIR (contains pr/ = PR head checkout), RUN_URL,
  * GH_TOKEN; `start` exports PR_NUMBER, BASE_SHA, CHECK_RUN_ID to $GITHUB_ENV.
