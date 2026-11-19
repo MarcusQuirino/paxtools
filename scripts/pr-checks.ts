@@ -9,9 +9,9 @@
  * 1 = something failed (links printed), 2 = usage/timeout.
  * --no-review: skip the review (a draft waiting for E2E before `verify`).
  *
- * Unlike `gh pr checks --watch`, it ignores the draft's stale "Not reviewed"
- * failure and waits for the review that belongs to the latest Guardrails run
- * on the head (scripts/lib/pr-checks.ts). If a new commit lands mid-wait it
+ * Unlike `gh pr checks --watch`, it ignores the draft's stale review failure
+ * and waits for the review that belongs to the latest Guardrails run on the
+ * head created since the PR was last marked ready (scripts/lib/pr-checks.ts). If a new commit lands mid-wait it
  * follows the new head.
  */
 
@@ -72,7 +72,20 @@ async function wait() {
       const guardrails = JSON.parse(
         gh(["run", "list", "--workflow", "guardrails.yml", "--commit", pr.headRefOid, "--json", "createdAt,status", "--limit", "20"]),
       ) as GuardrailsRun[];
-      review = reviewState(reviews, guardrails, pr.isDraft);
+      const readyAt =
+        gh([
+          "api",
+          "--paginate",
+          `repos/${repo}/issues/${pr.number}/timeline?per_page=100`,
+          "--jq",
+          '.[] | select(.event == "ready_for_review") | .created_at',
+        ])
+          .trim()
+          .split("\n")
+          .filter(Boolean)
+          .sort()
+          .at(-1) ?? null;
+      review = reviewState(reviews, guardrails, pr.isDraft, readyAt);
     } else {
       review = { name: `${REVIEW_CHECK} (skipped: --no-review)`, state: "pass" as const, detail: "" };
     }

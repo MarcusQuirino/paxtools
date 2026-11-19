@@ -30,9 +30,11 @@ Foreground, polls every 20 s, follows the head if you push again; exit 0 =
 all green, 1 = something failed (links printed). Prefer it to
 `gh pr checks --watch`: marking a draft ready re-runs Guardrails on the
 *same* commit and the review starts only after that (~1–2 min), so until
-then the head still shows the draft's "Not reviewed" failure and `--watch`
-returns at once on that stale result. The script only counts a review that
-started after the head's latest Guardrails run.
+then the head still shows the draft's failed review (titled "Review job
+failed") and `--watch` returns at once on that stale result. The script only
+counts a review that started after the head's latest Guardrails run created
+since the PR's last `ready_for_review` event (the new run appears a few
+seconds after the flip, so "latest run" alone races).
 
 The local `check:changeset` / `check:migrations` compare your **committed**
 HEAD against `origin/master` (`git fetch` first; `BASE_REF=` overrides).

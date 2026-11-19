@@ -5,11 +5,22 @@ const draftFail: ReviewRun = {
   started_at: "2026-11-19T17:57:00Z",
   status: "completed",
   conclusion: "failure",
-  output: { title: "Not reviewed", summary: "Draft PR — the review runs when it's marked ready for review." },
+  // review.yml's fail-closed step retitles the draft refusal (PR #158).
+  output: { title: "Review job failed", summary: "The review job ended without a verdict." },
 };
 const g = (createdAt: string, status = "completed") => ({ createdAt, status });
 
 describe("reviewState", () => {
+  test("PR #158 race: polled right after `gh pr ready`, before the new Guardrails run exists", () => {
+    const readyAt = "2026-11-19T19:36:33Z";
+    const drafted = [g("2026-11-19T19:26:55Z")]; // only the draft-era run is listed yet
+    const stale: ReviewRun = { ...draftFail, started_at: "2026-11-19T19:27:43Z" };
+    expect(reviewState([stale], drafted, false, readyAt).state).toBe("pending");
+    expect(reviewState([stale], [...drafted, g("2026-11-19T19:36:36Z", "in_progress")], false, readyAt).state).toBe("pending");
+    const fresh: ReviewRun = { started_at: "2026-11-19T19:38:10Z", status: "completed", conclusion: "success" };
+    expect(reviewState([stale, fresh], [...drafted, g("2026-11-19T19:36:36Z")], false, readyAt).state).toBe("pass");
+  });
+
   test("after `gh pr ready`, the draft's stale failure is not the answer", () => {
     // Guardrails re-ran at 18:07 (ready_for_review); review not started yet.
     expect(reviewState([draftFail], [g("2026-11-19T17:55:00Z"), g("2026-11-19T18:07:40Z")], false).state).toBe("pending");
