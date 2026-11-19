@@ -6,7 +6,7 @@ with the same command, so run it before pushing.
 
 | Required check | Workflow | Local command | Fails when |
 |---|---|---|---|
-| `Lint, Test, Build` | `ci.yml` | `bun run lint && bun run test && bun run build` | lint/type error, failing unit test, broken build |
+| `Lint, Test, Build` | `ci.yml` | `bun run lint && bun run test && bun run build` | lint/type error, failing unit test, broken build, a route/Convex module missing from the feature map |
 | `E2E (Playwright)` | `e2e.yml` | `bun run test:e2e` | any e2e spec fails — `docs/agents/e2e.md` |
 | `Changeset` | `guardrails.yml` | `bun run check:changeset` | shipped code changed without a changeset |
 | `Migration registry append-only` | `guardrails.yml` | `bun run check:migrations` | `REGISTRY` entries removed/reordered/renamed, or a registered migration's body edited |
@@ -25,6 +25,18 @@ the reviewer's prompt is `docs/agents/review-rubric.md`.
 Never make a check pass by weakening it (lowering the floor, adding to an
 exemption list without a reason, editing the checker). If a check is wrong,
 say so in the PR and ask Marcus.
+
+## Feature map (inside `Lint, Test, Build`)
+
+`scripts/lib/feature-map.test.ts` fails when a file in `src/routes/` or a
+top-level `convex/*.ts` module belongs to no feature in
+[`feature-map.yaml`](./feature-map.yaml), or when the map names a file,
+spec, persona or feature id that doesn't exist. Fix: add the file to the
+feature it belongs to (or a new feature with routes, personas, specs and a
+`check` recipe); purely internal modules go in `infra.none`. It is a hard
+failure, not a warning: a stale map silently sends the next agent's
+verification to the wrong screens, and the fix is one YAML entry. It runs in
+`bun test`, so no new required check was needed.
 
 ## Changeset
 

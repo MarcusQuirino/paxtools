@@ -21,9 +21,13 @@ Always use the `gh` CLI to interface with GitHub (PRs, issues, releases, etc.). 
 1. Create a new branch with a descriptive name.
 2. Commit the changes to that branch.
 3. Open a PR targeting `master` using `gh pr create`.
-4. Verify the change on the PR's Vercel preview — `docs/agents/preview-testing.md`.
-   Each PR has its **own Convex preview backend** (branch's `convex/` deployed,
-   test personas seeded), so backend changes are live on the preview too.
+4. **Verify on the running app** (user-facing changes) — `docs/agents/verify.md`
+   (skill `verify`): `bun scripts/verify.ts affected` maps the diff to
+   features via `docs/agents/feature-map.yaml`; drive the PR's Vercel
+   preview (its **own Convex preview backend**, test personas seeded) as
+   every affected persona; publish screenshots + log with
+   `bun scripts/verify.ts publish` into the PR's `## Verification` section.
+   `Independent review` blocks user-facing PRs without it.
 5. Watch CI until green. `master` requires `Lint, Test, Build`,
    `E2E (Playwright)` (full suite against the PR's own backend) and the
    guardrails: `Changeset`, `Migration registry append-only`,
@@ -119,3 +123,7 @@ Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root (created lazily). See `docs/agents/domain.md`.
+
+### Feature map
+
+`docs/agents/feature-map.yaml`: every feature's routes, Convex modules, personas, e2e specs, neighbours and a manual check recipe. Read it to know what else a change can break; add new routes/Convex modules to it (a `bun test` check fails otherwise — `docs/agents/ci-checks.md`).

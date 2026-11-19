@@ -1,5 +1,9 @@
 # Preview Testing
 
+> The step-by-step "prove it and publish evidence" procedure is
+> [`verify.md`](./verify.md); this doc is the background on which
+> environment answers what.
+
 When an agent should drive a deployed environment instead of trusting a green
 CI run, which environment answers which question, and how to drive it. The
 environment table lives in `docs/deploy.md`; local browser mechanics in

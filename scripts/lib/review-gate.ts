@@ -35,6 +35,7 @@ const CATEGORIES = [
   "data-loss",
   "process",
   "scope",
+  "verification",
 ] as const;
 
 /** JSON schema passed to `claude --json-schema`; the verdict must match it. */
