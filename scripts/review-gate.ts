@@ -11,13 +11,17 @@
  *
  * Env: REPO, HEAD_SHA, WORKDIR (contains pr/ = PR head checkout), RUN_URL,
  * GH_TOKEN; `start` exports PR_NUMBER, BASE_SHA, CHECK_RUN_ID to $GITHUB_ENV.
+ * Completing the check records its id in $RUNNER_TEMP/review-gate-completed;
+ * `abort` keeps the check only if that record matches (abortAction).
  * Flow: docs/agents/review-gate.md.
  */
 
 import { spawnSync } from "node:child_process";
 import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  abortAction,
   choosePr,
   COMMENT_MARKER,
   REVIEW_CHECK,
@@ -70,15 +74,22 @@ function exportEnv(vars: Record<string, string>) {
 
 type Conclusion = "success" | "failure";
 
+/**
+ * Record that this job completed the check run (written only after the PATCH
+ * succeeded). A file, not $GITHUB_ENV: it exists the instant it's written, so
+ * a cancel landing between the PATCH and the end of the step still sees it.
+ */
+const COMPLETED_MARKER = join(process.env.RUNNER_TEMP ?? tmpdir(), "review-gate-completed");
+
+const completePayload = (conclusion: Conclusion, title: string, summary: string) =>
+  JSON.stringify({ status: "completed", conclusion, output: { title, summary: summary.slice(0, 65_000) } });
+
 /** The required check: a check run on the PR head, created by GitHub Actions. */
 function completeCheck(conclusion: Conclusion, title: string, summary: string) {
   const repo = env("REPO");
-  const payload = JSON.stringify({
-    status: "completed",
-    conclusion,
-    output: { title, summary: summary.slice(0, 65_000) },
-  });
-  gh(["api", "-X", "PATCH", `repos/${repo}/check-runs/${env("CHECK_RUN_ID")}`, "--input", "-"], payload);
+  const id = env("CHECK_RUN_ID");
+  gh(["api", "-X", "PATCH", `repos/${repo}/check-runs/${id}`, "--input", "-"], completePayload(conclusion, title, summary));
+  writeFileSync(COMPLETED_MARKER, id);
 }
 
 /**
@@ -106,13 +117,34 @@ function start() {
   console.log(`Reviewing PR #${pick.pr.number} at ${head} (check run ${check.id})`);
 }
 
-function abort() {
-  const repo = env("REPO");
+/**
+ * Always-run last step: unless this job already completed the check (verdict
+ * or refusal), fail it. Never re-reads the check's status — that read can lag
+ * the PATCH and overwrote a pass on PR #158. Retries so a transient API error
+ * doesn't leave the check in progress.
+ */
+async function abort() {
   const id = process.env.CHECK_RUN_ID;
-  if (!id) return;
-  const status = gh(["api", `repos/${repo}/check-runs/${id}`, "--jq", ".status"]).trim();
-  if (status !== "completed") {
-    completeCheck("failure", "Review job failed", `The review job ended without a verdict. [Run](${env("RUN_URL")}). Re-run it once fixed; it fails closed.`);
+  const completed = existsSync(COMPLETED_MARKER) ? readFileSync(COMPLETED_MARKER, "utf8") : null;
+  const action = abortAction(id, completed);
+  if (action !== "fail") {
+    console.log(action === "keep" ? `Check run ${id} already has this job's verdict; leaving it.` : "No check run was opened.");
+    return;
+  }
+  const payload = completePayload(
+    "failure",
+    "Review job failed",
+    `The review job ended without a verdict. [Run](${env("RUN_URL")}). Re-run it once fixed; it fails closed.`,
+  );
+  for (let attempt = 1; ; attempt++) {
+    const r = spawnSync("gh", ["api", "-X", "PATCH", `repos/${env("REPO")}/check-runs/${id}`, "--input", "-"], { encoding: "utf8", input: payload });
+    if (r.status === 0) {
+      console.log(`Failed check run ${id}: no verdict from this job.`);
+      return;
+    }
+    console.error(`::warning::failing check run ${id} (attempt ${attempt}/3): ${r.stderr}`);
+    if (attempt === 3) process.exit(2);
+    await Bun.sleep(5_000 * attempt);
   }
 }
 
@@ -316,7 +348,7 @@ function finalize(outputPath: string) {
 
 const [cmd, arg] = process.argv.slice(2);
 if (cmd === "start") start();
-else if (cmd === "abort") abort();
+else if (cmd === "abort") await abort();
 else if (cmd === "context") await context();
 else if (cmd === "schema") console.log(JSON.stringify(VERDICT_SCHEMA));
 else if (cmd === "finalize" && arg) finalize(arg);
