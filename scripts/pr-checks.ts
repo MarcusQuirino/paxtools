@@ -29,7 +29,7 @@ import {
 function gh(args: string[]): string {
   const r = spawnSync("gh", args, { encoding: "utf8" });
   // Just after a push nothing is reported yet — that's "pending", not an error.
-  if (r.status !== 0 && /no checks reported/.test(r.stderr)) return "[]";
+  if (r.status !== 0 && /no (required )?checks reported/.test(r.stderr)) return "[]";
   // `gh pr checks` exits 8 while checks are pending and 1 when one failed;
   // its JSON is still on stdout.
   if (r.status !== 0 && !r.stdout) throw new Error(`gh ${args.join(" ")}: ${r.stderr.trim()}`);
