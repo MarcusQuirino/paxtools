@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useConvexAuth } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,9 +44,14 @@ function SettingsPage() {
     convexQuery(api.groups.getMyGroup, {}),
   );
 
+  const { isAuthenticated, isLoading } = useConvexAuth();
+
+  // Only bounce once auth has settled: on a cold load `viewer` is null until
+  // the client's token is confirmed, and redirecting then sent signed-in
+  // users to /signin (which forwards them to their home, not back here).
   useEffect(() => {
-    if (user === null) void navigate({ to: "/signin" });
-  }, [user, navigate]);
+    if (!isLoading && !isAuthenticated) void navigate({ to: "/signin" });
+  }, [isLoading, isAuthenticated, navigate]);
 
   const [joinPassword, setJoinPassword] = useState("");
   const [newGroupName, setNewGroupName] = useState("");

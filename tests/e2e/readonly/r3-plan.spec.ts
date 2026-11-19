@@ -30,6 +30,7 @@
 
 import type { Page, TestInfo, Locator } from "@playwright/test";
 import { approvedTest, testAs, expect } from "../../fixtures/auth";
+import { forceClickCentered } from "../../utils/click";
 
 const xavierTest = testAs("sim-troop-senior-9");
 
@@ -86,7 +87,7 @@ async function expandBloco(page: Page, name: RegExp): Promise<void> {
   await expect(trigger).toBeVisible();
   for (let i = 0; i < 6; i++) {
     if ((await trigger.getAttribute("aria-expanded")) === "true") return;
-    await trigger.click({ force: true }).catch(() => {});
+    await forceClickCentered(trigger).catch(() => {});
     await page.waitForTimeout(400);
   }
 }

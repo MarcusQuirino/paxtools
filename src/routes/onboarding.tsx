@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { convexQuery, useConvexMutation } from "@convex-dev/react-query";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useConvexAuth } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,9 +56,13 @@ function OnboardingPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState("");
 
-  // Not signed in? Bounce to signin. Already onboarded? Send them home.
+  const { isAuthenticated, isLoading } = useConvexAuth();
+
+  // Not signed in? Bounce to signin — only once auth has settled (viewer is
+  // null on a cold load until the token is confirmed). Already onboarded?
+  // Send them home.
   useEffect(() => {
-    if (user === null) {
+    if (!isLoading && !isAuthenticated) {
       void navigate({ to: "/signin" });
       return;
     }
@@ -66,7 +71,7 @@ function OnboardingPage() {
         to: user.role === "escotista" ? "/escotista" : "/",
       });
     }
-  }, [user, navigate]);
+  }, [isLoading, isAuthenticated, user, navigate]);
 
   const setRoleFn = useConvexMutation(api.onboarding.setRole);
   const { mutate: setRole, isPending: settingRole } = useMutation({

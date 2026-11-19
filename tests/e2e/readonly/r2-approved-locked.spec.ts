@@ -13,6 +13,7 @@
  */
 
 import { progressionTest as test, expect } from "../../fixtures/auth";
+import { forceClickCentered } from "../../utils/click";
 
 const APPROVED_ACTION_ID = "escoteiro:aprendizagem-continua:fixed:0";
 const BLOCO_TRIGGER_TEXT = /Aprendizagem Contínua/i;
@@ -36,7 +37,7 @@ test("approved fixed action renders disabled and stays checked when clicked", as
   // Force-click anyway. A disabled button MUST NOT toggle off, and there
   // should be no console error mentioning the approved-lock error string
   // (clicks on disabled controls should be swallowed entirely).
-  await checkbox.click({ force: true }).catch(() => {});
+  await forceClickCentered(checkbox).catch(() => {});
   await expect(checkbox).toHaveAttribute("data-state", "checked");
   await expect(checkbox).toBeDisabled();
 });

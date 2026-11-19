@@ -21,6 +21,7 @@ import { test as setup, expect } from "@playwright/test";
 import type { Browser } from "@playwright/test";
 import { resetTestData } from "../utils/convex-cli";
 import { LOGIN_PERSONAS, authFile } from "../utils/personas";
+import { SCOUT_SIGNIN_ID } from "../utils/selectors";
 import { submitSignIn } from "../utils/signin";
 
 const CAPTURE_BATCH = 6;
@@ -33,10 +34,30 @@ async function captureState(
   const ctx = await browser.newContext();
   try {
     const page = await ctx.newPage();
-    await page.goto("/signin");
-    await submitSignIn(page, scoutId);
-    // Destination differs per role state — assert we left signin, nothing more.
-    await expect(page).not.toHaveURL(/\/signin/, { timeout: 15_000 });
+    // Under the concurrent capture batches the auth handshake can stall after
+    // a correct submit (page stuck on /signin) — it never self-heals by
+    // waiting, only a fresh navigation re-attempts it. Bounded retries; the
+    // session from a stalled attempt is reused when it did land.
+    for (let attempt = 1; ; attempt++) {
+      await page.goto("/signin");
+      const form = page.getByTestId(SCOUT_SIGNIN_ID);
+      await Promise.race([
+        form.waitFor({ state: "visible", timeout: 15_000 }),
+        page.waitForURL((u) => !u.pathname.startsWith("/signin"), {
+          timeout: 15_000,
+        }),
+      ]).catch(() => {});
+      try {
+        if (/\/signin/.test(page.url())) {
+          await submitSignIn(page, scoutId, { timeout: 10_000 });
+        }
+        // Destination differs per role state — assert we left signin only.
+        await expect(page).not.toHaveURL(/\/signin/, { timeout: 15_000 });
+        break;
+      } catch (err) {
+        if (attempt >= 3) throw err;
+      }
+    }
     await ctx.storageState({ path: authFile(slug) });
   } finally {
     await ctx.close();

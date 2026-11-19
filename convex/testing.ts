@@ -1,6 +1,7 @@
 import {
   internalAction,
   internalMutation,
+  internalQuery,
 } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -1496,5 +1497,37 @@ export const seedSimulatedTroop = internalAction({
       });
     }
     return { wipedUsers: wipedRows, perRamo };
+  },
+});
+
+/** True once the canonical admin persona exists (i.e. the target is seeded). */
+export const hasTestData = internalQuery({
+  args: {},
+  handler: async (ctx): Promise<boolean> => {
+    assertTestEnv();
+    const admin = await ctx.db
+      .query("users")
+      .withIndex("by_scoutId", (q) => q.eq("scoutId", CANONICAL_SCOUT_IDS.admin))
+      .first();
+    return admin !== null;
+  },
+});
+
+/**
+ * Per-PR Convex preview deployments: `convex deploy --preview-run` target of
+ * the Vercel preview build (scripts/vercel-build.ts). Seeds the personas +
+ * simulated troop ONLY when the deployment is empty — the PR's e2e job may
+ * already own the data (it wipes + reseeds in global setup), and a full seed
+ * mid-run would wipe the sim troop out from under its captured sessions.
+ */
+export const seedPreview = internalAction({
+  args: {},
+  handler: async (ctx): Promise<{ seeded: boolean }> => {
+    assertTestEnv();
+    const seeded: boolean = await ctx.runQuery(internal.testing.hasTestData, {});
+    if (seeded) return { seeded: false };
+    await ctx.runAction(internal.testing.seedTestUsers, {});
+    await ctx.runAction(internal.testing.seedSimulatedTroop, {});
+    return { seeded: true };
   },
 });
