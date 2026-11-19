@@ -659,7 +659,11 @@ export const seedCatalog = internalMutation({
         deletedAt: undefined,
         ramoNames: {},
       };
-      const existing = allGroups.find((g) => g.name === CREATOR_GROUP_NAME);
+      // Match on creator too: never patch some other grupo that happens to
+      // share the name.
+      const existing = allGroups.find(
+        (g) => g.name === CREATOR_GROUP_NAME && g.createdBy === creatorId,
+      );
       let creatorGroupId: Id<"groups">;
       if (existing) {
         await ctx.db.patch(existing._id, fields);

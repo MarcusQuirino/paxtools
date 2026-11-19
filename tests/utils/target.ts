@@ -47,13 +47,18 @@ export const STAGING_URL =
 // (Preview/staging use staging's value; .env.local would be the wrong one.)
 if (TARGET === "local") fillFromDotenv(process.env, ["TEST_AUTH_PASSWORD"]);
 
+// No local web server for staging or a preview aimed at E2E_BASE_URL.
+const PREVIEW_BASE_URL_SET = IS_PREVIEW && Boolean(process.env.E2E_BASE_URL);
+
 // Off CI, an unset E2E_PORT means "first free port from 3000": another
 // worktree's dev server or an unrelated service on 3000 must neither time
 // out the web server nor be reused as ours. Written back to the env so
 // Playwright's workers (forked with this env) agree on the port. An explicit
 // E2E_PORT pointing at your own running `bun run dev` is reused.
-if (!process.env.E2E_PORT && !process.env.CI) {
-  process.env.E2E_PORT = String(firstFreePort(3000));
+if (!process.env.E2E_PORT && !process.env.CI && !IS_STAGING && !PREVIEW_BASE_URL_SET) {
+  const port = firstFreePort(3000);
+  if (port !== 3000) console.log(`e2e: localhost:3000 is taken — serving on ${port} (E2E_PORT=3000 to reuse your own dev server there).`);
+  process.env.E2E_PORT = String(port);
 }
 export const LOCAL_PORT = Number(process.env.E2E_PORT ?? 3000);
 export const LOCAL_URL = `http://localhost:${LOCAL_PORT}`;
