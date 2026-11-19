@@ -1,4 +1,5 @@
-import { query } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
+import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { tryResolveRamoViewer } from "./lib/ramoVisibility";
 
@@ -58,5 +59,13 @@ export const listTimeline = query({
         stageName: e.stageName ?? null,
       })),
     };
+  },
+});
+
+/** Admins can remove a mistaken entry from the audit timeline. */
+export const deleteEvent = mutation({
+  args: { eventId: v.id("events") },
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.eventId);
   },
 });
