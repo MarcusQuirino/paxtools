@@ -11,6 +11,9 @@ name: Guardrails
 on:
   pull_request:
     branches: [master]
+    # ready_for_review: its completion triggers the independent review
+    # (review.yml, workflow_run), which refuses drafts.
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

@@ -1,0 +1,124 @@
+# Independent review gate: a fresh Claude Code session (no shared context with
+# the PR's author) reviews every PR against its stated intent, using the rubric
+# in docs/agents/review-rubric.md. It posts the check run `Independent review`
+# on the PR head — a required status check on master (ruleset 27609274,
+# GitHub Actions app). Flow, threat model and gaps: docs/agents/review-gate.md.
+#
+# SECURITY — `workflow_run`, deliberately:
+#   * GitHub only runs workflow_run workflows from the DEFAULT branch, so the
+#     workflow, the rubric and scripts/review-gate.ts always come from master.
+#     A PR can't edit its own reviewer or rubric.
+#   * Not `pull_request_target`: GitHub blocks that event by default on public
+#     repos from 2026-12-02, and it adds nothing here.
+#   * It has secrets, so it must NEVER run code from the PR: the PR head is
+#     checked out as plain files (no install, no scripts, no build), and the
+#     reviewer gets only Read/Grep/Glob, with no GitHub token and no network
+#     tools.
+# Triggered when Guardrails finishes for a PR commit (~1-2 min), so the
+# reviewer sees the fast CI results; it runs in parallel with E2E. Every new
+# push re-runs Guardrails → a fresh review of the new head.
+name: Independent review
+
+on:
+  workflow_run:
+    workflows: [Guardrails]
+    types: [completed]
+
+# One review per branch at a time; a newer commit cancels the stale review.
+concurrency:
+  group: independent-review-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write # the `Independent review` check run on the PR head
+  pull-requests: write # sticky verdict comment
+  issues: read # linked issues
+
+jobs:
+  review:
+    name: review
+    # Cancelled Guardrails = superseded by a newer push; that push gets its own
+    # review. (This job's own status never lands on the PR — only the check run
+    # it posts does — so skipping here can't pass anything.)
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion != 'cancelled'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      REPO: ${{ github.repository }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      WORKDIR: ${{ github.workspace }}/review
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # Trusted: master — workflow logic, rubric, conventions.
+      - name: Checkout master (trusted)
+        uses: actions/checkout@v7
+        with:
+          path: trusted
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      # Opens the check run (in progress) on the PR head; fails it for forks,
+      # drafts and stale commits.
+      - name: Resolve PR + open check
+        run: bun trusted/scripts/review-gate.ts start
+
+      # Untrusted: PR head as plain files for the reviewer to read. Full history
+      # for the merge base. Nothing in here is ever executed.
+      - name: Checkout PR head (read-only, never executed)
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          path: review/pr
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Gather PR context (title, body, issues, diff, CI)
+        run: bun trusted/scripts/review-gate.ts context
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code@2.1.328
+
+      # Fresh session, subscription auth. --safe-mode: no CLAUDE.md/hooks/MCP/
+      # skills/settings from any directory (the PR's .claude/ can't run code).
+      # Only read tools, pre-approved only inside review/ (dontAsk denies the
+      # rest, e.g. /proc/self/environ). `env -i`: the reviewer process sees no GitHub token.
+      - name: Review
+        working-directory: review
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          set +e
+          start=$(date +%s)
+          env -i PATH="$PATH" HOME="$RUNNER_TEMP/claude-home" \
+            CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
+            timeout 25m claude -p \
+              "Review PR #$PR_NUMBER (head $HEAD_SHA) following your instructions. Start with context/pr.md, then context/files.txt and context/pr.diff." \
+              --safe-mode --strict-mcp-config \
+              --tools "Read,Grep,Glob" --allowedTools "Read(./**)" "Grep(./**)" "Glob(./**)" \
+              --permission-mode dontAsk \
+              --model opus --effort high \
+              --no-session-persistence \
+              --append-system-prompt "$(cat ../trusted/docs/agents/review-rubric.md)" \
+              --json-schema "$(bun ../trusted/scripts/review-gate.ts schema)" \
+              --output-format json > "$RUNNER_TEMP/claude-output.json" 2> "$RUNNER_TEMP/claude-stderr.log"
+          echo "claude exit $? after $(( $(date +%s) - start ))s"
+          tail -n 50 "$RUNNER_TEMP/claude-stderr.log"
+          exit 0
+
+      - name: Verdict (check run + comment)
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: bun trusted/scripts/review-gate.ts finalize "$RUNNER_TEMP/claude-output.json"
+
+      # Any crash/timeout/cancel above: never leave the check green or hanging.
+      # always(): cancelled jobs only run always()/cancelled() steps; abort is
+      # a no-op when the check was already completed.
+      - name: Fail the check if no verdict was posted
+        if: ${{ always() }}
+        run: bun trusted/scripts/review-gate.ts abort

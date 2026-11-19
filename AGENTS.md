@@ -9,9 +9,14 @@ The rules agents most often break (all detailed in `CLAUDE.md`):
 
 - Never deploy to prod. Never commit to `master` — branch, then PR via `gh`.
   `master` is protected: PR + passing `Lint, Test, Build`, `E2E (Playwright)`,
-  `Changeset`, `Migration registry append-only`, `Convex codegen in sync` and
-  `Coverage floor (convex/)` required. What each enforces and how to fix it:
-  `docs/agents/ci-checks.md`.
+  `Changeset`, `Migration registry append-only`, `Convex codegen in sync`,
+  `Coverage floor (convex/)` and `Independent review` required. What each
+  enforces and how to fix it: `docs/agents/ci-checks.md`.
+- `Independent review` is a fresh agent reviewing your PR against its
+  description (`docs/agents/review-gate.md`). Write a PR body that states the
+  intent. On blocking findings: **fix and push** — never argue the check off,
+  re-run it, or edit the PR text/workflow/rubric to get green. If a finding
+  is wrong, say why in the PR and ask Marcus.
 - Before committing: `bun test` and `bun run lint` pass, and a changeset is
   added in `.changeset/` (`bunx changeset --empty` if nothing user-facing).
 - Convex work: read `convex/_generated/ai/guidelines.md` first. Migrations are
