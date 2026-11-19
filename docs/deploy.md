@@ -98,7 +98,12 @@ For a realistic dataset before a scary migration:
 ## Where credentials live
 
 - GitHub Actions secrets: `CONVEX_DEPLOY_KEY_STAGING`, `CONVEX_DEPLOY_KEY_PROD`,
-  `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
+  `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `TEST_AUTH_PASSWORD`
+  (e2e-staging.yml; must equal staging's Convex `TEST_AUTH_PASSWORD`).
 - Staging Convex env: same Google OAuth client as dev/prod (its
   `https://elated-goat-471.convex.site/api/auth/callback/google` redirect URI
-  is registered on the client), staging-only JWT keypair, `TEST_AUTH=1`.
+  is registered on the client), staging-only JWT keypair, `TEST_AUTH=1`,
+  `TEST_AUTH_PASSWORD` (shared test-persona password; no code default).
+- Prod Convex env: **never** `TEST_AUTH` / `TEST_AUTH_PASSWORD`. Test functions
+  refuse to run on `flexible-tiger-306`, and `deploy-prod.yml` aborts the
+  release if either is set.

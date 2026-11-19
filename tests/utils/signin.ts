@@ -4,7 +4,7 @@
  */
 
 import type { Page } from "@playwright/test";
-import { DEFAULT_TEST_PASSWORD } from "../../convex/lib/testAccounts";
+import { requireTestPassword } from "../../convex/lib/testAccounts";
 import {
   SCOUT_SIGNIN_ID,
   SCOUT_SIGNIN_PASSWORD,
@@ -12,8 +12,7 @@ import {
 } from "./selectors";
 
 /** Must match the TEST_AUTH_PASSWORD the target deployment was seeded with. */
-export const TEST_PASSWORD =
-  process.env.TEST_AUTH_PASSWORD || DEFAULT_TEST_PASSWORD;
+export const TEST_PASSWORD = requireTestPassword(process.env);
 
 /** Fill and submit the form on an already-open `/signin` page. */
 export async function submitSignIn(page: Page, scoutId: string): Promise<void> {

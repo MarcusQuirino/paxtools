@@ -28,11 +28,12 @@ import {
 } from "./lib/events";
 import { MANAGED_PROVIDER } from "./lib/managedAccounts";
 import {
+  assertTestAuthAllowed,
   CANONICAL_SCOUT_IDS,
-  DEFAULT_TEST_PASSWORD,
   isSimScoutId,
   isTestScoutId,
   simScoutId,
+  requireTestPassword,
   type CanonicalSlug,
 } from "./lib/testAccounts";
 
@@ -48,9 +49,7 @@ const TEST_GROUP_REGIAO = "RS";
 const TEST_GROUP_PASSWORD = "TESTQA";
 
 function assertTestEnv(): void {
-  if (process.env.TEST_AUTH !== "1") {
-    throw new Error("convex/testing is disabled (TEST_AUTH != 1)");
-  }
+  assertTestAuthAllowed(process.env);
 }
 
 function isTestUser(u: Doc<"users">): boolean {
@@ -71,12 +70,11 @@ function isSimUser(u: Doc<"users">): boolean {
 /**
  * Hash the shared test password once per seed, with the same Scrypt the
  * `managed` provider verifies against (the salt is embedded in the hash, so
- * every persona can share it). TEST_AUTH_PASSWORD overrides the default.
+ * every persona can share it). TEST_AUTH_PASSWORD must be set on the
+ * deployment — there is no fallback.
  */
 async function hashTestPassword(): Promise<string> {
-  return await new Scrypt().hash(
-    process.env.TEST_AUTH_PASSWORD || DEFAULT_TEST_PASSWORD,
-  );
+  return await new Scrypt().hash(requireTestPassword(process.env));
 }
 
 type Ramo = "lobinho" | "escoteiro" | "senior" | "pioneiro";
@@ -441,8 +439,8 @@ export const wipeTestData = internalAction({
  * test registros) so the Google onboarding flow can be re-tested
  * from scratch. Seeded test users and the test group are untouched.
  *
- * Cannot run on prod: `assertTestEnv` throws unless TEST_AUTH=1, which prod
- * never sets. Invoke via `bun run staging:wipe-real`.
+ * Cannot run on prod: `assertTestEnv` refuses the prod deployment outright
+ * and throws unless TEST_AUTH=1. Invoke via `bun run staging:wipe-real`.
  */
 export const wipeRealUsers = internalMutation({
   args: {},

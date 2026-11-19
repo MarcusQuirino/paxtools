@@ -67,6 +67,18 @@ jobs:
       - name: Test
         run: bun run test
 
+      # Test personas share one known password; they must never exist on prod.
+      # convex/testing.ts also refuses at runtime — this fails the release first.
+      # `env get` prints only the named value (never the whole env) to stdout.
+      - name: Assert test auth is disabled on prod
+        run: |
+          for var in TEST_AUTH TEST_AUTH_PASSWORD; do
+            if [ -n "$(bunx convex env get "$var" 2>/dev/null)" ]; then
+              echo "::error::$var is set on the prod Convex deployment. Unset it before releasing."
+              exit 1
+            fi
+          done
+
       - name: Snapshot prod data (restore point)
         run: bunx convex export --path prod-snapshot-${{ inputs.tag }}.zip
 
