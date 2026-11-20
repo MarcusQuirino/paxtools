@@ -309,3 +309,23 @@ export function choosePr(
   if (pr.draft) return { ok: false, reason: "Draft PR — the review runs when it's marked ready for review." };
   return { ok: true, pr };
 }
+
+/**
+ * What the always-run `abort` step does with the check run.
+ *
+ * `completed` = the check run id this job recorded right after its own PATCH
+ * completed the check (a verdict, or start's fork/draft/stale refusal), or
+ * null. Only a match keeps the check. Everything else — no verdict, a crash,
+ * cancel, timeout, or a marker from another check run — fails it.
+ *
+ * Deliberately NOT a re-read of the check's status: `GET check-runs/{id}`
+ * right after the PATCH can still say `in_progress` (seen on PR #158), and
+ * that stale read overwrote a pass with "Review job failed".
+ */
+export function abortAction(
+  checkRunId: string | undefined,
+  completed: string | null,
+): "no-check" | "keep" | "fail" {
+  if (!checkRunId) return "no-check";
+  return completed?.trim() === checkRunId ? "keep" : "fail";
+}

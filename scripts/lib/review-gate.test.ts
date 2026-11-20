@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  abortAction,
   choosePr,
   esc,
   type PullSummary,
@@ -184,5 +185,26 @@ describe("esc (model text in comments)", () => {
       { sha: "abcdef1234", runUrl: "r", rubricUrl: "u" },
     );
     expect(c).toContain("line1 2. fake item @​octocat");
+  });
+});
+
+describe("abortAction (always-run fail-closed step)", () => {
+  test("keeps the check only when this job recorded completing that check run", () => {
+    expect(abortAction("123", "123")).toBe("keep");
+    expect(abortAction("123", "123\n")).toBe("keep");
+  });
+
+  test("no record = no verdict (crash, timeout, cancel, usage limit before finalize) → fail", () => {
+    expect(abortAction("123", null)).toBe("fail");
+    expect(abortAction("123", "")).toBe("fail");
+  });
+
+  test("a record for another check run never keeps this one", () => {
+    expect(abortAction("123", "999")).toBe("fail");
+  });
+
+  test("no check run opened → nothing to complete", () => {
+    expect(abortAction(undefined, null)).toBe("no-check");
+    expect(abortAction("", "123")).toBe("no-check");
   });
 });

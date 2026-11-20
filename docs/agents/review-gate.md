@@ -44,6 +44,34 @@ author never approves its own work.
 Drafts and fork PRs get a failed check without spending a review (never a
 skip/neutral: those count as passing). Mark the PR ready → it reviews.
 
+## Outcomes → check state (fails closed)
+
+Whatever step completes the check (`start`'s refusal or `finalize`'s
+verdict) records the check run id in `$RUNNER_TEMP/review-gate-completed`
+right after its PATCH succeeds. The always-run `abort` step keeps the check
+only when that record matches `CHECK_RUN_ID`; otherwise it fails the check,
+without re-reading its status (`abortAction` in `scripts/lib/review-gate.ts`,
+unit-tested). Re-reading was the old design: `GET check-runs/{id}` a few ms
+after the PATCH could still say `in_progress`, so `abort` overwrote a pass
+(and a draft refusal) with "Review job failed" — PR #158.
+
+| Outcome | Completed by | `Independent review` |
+|---|---|---|
+| Reviewer `pass` | `finalize` | ✅ success "Pass" |
+| Reviewer `block`, or `pass` with blocking findings | `finalize` | ❌ failure "N blocking findings" |
+| No valid verdict: usage limit, expired token, `claude` crash or 25 min timeout, malformed output | `finalize` | ❌ failure "No verdict" |
+| Output contains a secret | `finalize` | ❌ failure "No verdict" (withheld) |
+| Draft, fork, or head no longer an open PR's head | `start` | ❌ failure "Not reviewed" |
+| Step fails before a verdict is posted (context, install, a `gh` error in `finalize`) | `abort` | ❌ failure "Review job failed" |
+| Job cancelled (newer push, manual) or 40 min job timeout before a verdict | `abort` | ❌ failure "Review job failed" |
+| Cancelled between the verdict PATCH and writing the record (ms window) | `abort` | ❌ failure "Review job failed" (fail closed; re-run) |
+| `abort`'s own PATCH fails | `abort` retries 3× | ❌ if any retry lands; else stays in progress — blocks merge, re-run the job |
+| Runner lost, or the job dies before `abort` can run bun | nobody | stays in progress — blocks merge, re-run the job |
+| Check run never opened (`start`'s POST failed) | nobody | no check — required check missing, blocks merge; re-run |
+| Guardrails cancelled (superseded) | job skipped | none for that commit; the newer push gets its own review |
+
+Nothing but a clean `pass` from `finalize` ever produces success.
+
 Why not `pull_request_target`: it does the same job but GitHub blocks it by
 default on public repos from 2026-12-02. `workflow_run` has the same
 "runs from master, has secrets" property without needing a repo exception.
